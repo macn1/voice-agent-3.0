@@ -24,7 +24,7 @@ import {
   Users,
   Workflow,
 } from 'lucide-react';
-import { AppShell, Sidebar, UserMenu } from '../../components/Shell';
+import { AppShell, Sidebar, ThemeToggle, UserMenu } from '../../components/Shell';
 import { NotificationsBell } from '../../components/NotificationsBell';
 import { Badge } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
@@ -195,6 +195,7 @@ export function CustomerLayout() {
           <>
             <UsageMeter />
             <NotificationsBell />
+            <ThemeToggle />
             <UserMenu
               subtitle={<TenantBadge />}
               links={[

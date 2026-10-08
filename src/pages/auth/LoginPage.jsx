@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { loginErrorMessage, useAuth } from '../../lib/auth';
-import { Button, Field, Input } from '../../components/ui';
+import { Button, Input } from '../../components/ui';
+import { ThemeToggle } from '../../components/Shell';
+import { useTheme } from '../../lib/theme';
 import { HeroArt, LogoMark } from '../../components/Logo';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,6 +46,36 @@ export function AuthLayout({ children }) {
   );
 }
 
+/** Two-column brand frame shared by sign-in and sign-up; `children` is the card. */
+export function BrandAuthLayout({ title, soft, lead, children }) {
+  const { theme } = useTheme();
+  return (
+    <div className="login">
+      <img className="login-art" src={theme === 'dark' ? '/dark.png' : '/hero.png'} alt="" aria-hidden="true" draggable="false" />
+      <section className="login-intro">
+        <div className="login-brand">
+          <LogoMark size={40} />
+          <span className="brand-word">AURLYNN</span>
+        </div>
+        <div className="login-copy">
+          <h1>
+            {title} <span className="soft">{soft}</span>
+          </h1>
+          <p className="lead">{lead}</p>
+        </div>
+        <div className="muted small login-foot">© {new Date().getFullYear()} Aurlynn · Voice agents for India</div>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-theme">
+          <ThemeToggle />
+        </div>
+        {children}
+      </section>
+    </div>
+  );
+}
+
 export function LoginPage() {
   const { realm, status, login } = useAuth();
   const navigate = useNavigate();
@@ -55,6 +87,8 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  // One page for both sessions: /login signs in a customer, /admin/login the
+  // platform console. Self-serve links only exist for customers.
   const isAdmin = realm === 'admin';
   const home = isAdmin ? '/admin' : '/';
   const from = location.state?.from;
@@ -82,23 +116,12 @@ export function LoginPage() {
   };
 
   return (
-    <AuthLayout>
-      <form className="auth-form" onSubmit={submit} noValidate>
-        <div className="realm-switch" role="tablist" aria-label="Account type">
-          <Link to="/login" className={!isAdmin ? 'active' : ''}>
-            Customer
-          </Link>
-          <Link to="/admin/login" className={isAdmin ? 'active' : ''}>
-            Platform admin
-          </Link>
-        </div>
-        <div className="eyebrow" style={{ marginTop: 32 }}>
-          {isAdmin ? 'Aurlynn console' : 'Welcome back'}
-        </div>
-        <h1>{isAdmin ? 'Sign in to the console' : 'Sign in to Aurlynn'}</h1>
-        <p className="lead">{isAdmin ? 'Manage customers, plans, staff and roles.' : "Build, deploy and monitor your company's voice agents."}</p>
+    <BrandAuthLayout title="Welcome" soft="back." lead="Sign in to continue building and managing your voice agents.">
+      <form className="login-card" onSubmit={submit} noValidate>
+        <h2>Sign in to AURLYNN</h2>
+        <p className="muted">Use your work email and password.</p>
 
-        <div className="stack" style={{ marginTop: 32 }}>
+        <div className="stack" style={{ marginTop: 28 }}>
           {notice && !error && (
             <div className="banner info" style={{ margin: 0 }}>
               {notice}
@@ -109,52 +132,68 @@ export function LoginPage() {
               {error}
             </div>
           )}
-          <Field label="Work email" error={emailErr}>
+          <div className="field">
+            <label htmlFor="login-email">Email</label>
             <Input
+              id="login-email"
               type="email"
               autoComplete="email"
               autoFocus
               placeholder="you@company.com"
               value={email}
               invalid={!!emailErr}
+              aria-invalid={!!emailErr}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </Field>
-          <Field label="Password" error={pwErr}>
+            {emailErr && <span className="error-text">{emailErr}</span>}
+          </div>
+          <div className="field">
+            <div className="row between">
+              <label htmlFor="login-password" className="field-label">
+                Password
+              </label>
+              {!isAdmin && (
+                <Link to="/forgot-password" className="small login-link">
+                  Forgot password?
+                </Link>
+              )}
+            </div>
             <div className="input-wrap">
               <Input
+                id="login-password"
                 type={show ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 invalid={!!pwErr}
+                aria-invalid={!!pwErr}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <button type="button" className="input-icon" onClick={() => setShow((s) => !s)} aria-label={show ? 'Hide password' : 'Show password'}>
                 {show ? <EyeOff /> : <Eye />}
               </button>
             </div>
-          </Field>
-          {!isAdmin && (
-            <div style={{ textAlign: 'right', marginTop: -6 }}>
-              <Link to="/forgot-password" className="small" style={{ fontWeight: 500 }}>
-                Forgot password?
-              </Link>
-            </div>
-          )}
-          <Button type="submit" variant="primary" size="lg" block loading={busy}>
+            {pwErr && <span className="error-text">{pwErr}</span>}
+          </div>
+          <Button type="submit" variant="primary" size="lg" block loading={busy} style={{ marginTop: 6 }}>
             Sign in <ArrowRight />
           </Button>
-          {!isAdmin && (
-            <p className="small muted" style={{ textAlign: 'center' }}>
-              New to Aurlynn? <Link to="/signup">Create an account</Link>
-            </p>
-          )}
-          <div className="row muted small" style={{ justifyContent: 'center', gap: 6 }}>
-            <ShieldCheck size={14} /> Sessions refresh automatically and end when you sign out.
-          </div>
         </div>
+
+        {!isAdmin && (
+          <>
+            <div className="login-divider">
+              <span>or</span>
+            </div>
+            <p className="small muted" style={{ textAlign: 'center' }}>
+              Don&apos;t have an account?{' '}
+              <Link to="/signup" className="login-link">
+                Create account
+              </Link>
+            </p>
+          </>
+        )}
       </form>
-    </AuthLayout>
+    </BrandAuthLayout>
   );
 }

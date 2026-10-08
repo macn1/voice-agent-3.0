@@ -190,7 +190,7 @@
   padding: 8px 10px;
   border-radius: 10px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 12px;
   line-height: 1.5;
   box-shadow: var(--shadow-md);
@@ -275,7 +275,7 @@
 .bubble.me {
   align-self: flex-end;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   border-bottom-right-radius: 4px;
 }
 
@@ -356,7 +356,7 @@
 .steps .step.on b {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .steps .bar-sep {

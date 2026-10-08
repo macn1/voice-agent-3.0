@@ -8,6 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Aurlynn</title>
+    <script>
+      // Apply the saved theme before first paint (see src/lib/theme.js). Default: light.
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('aurlynn.theme') === 'dark' ? 'dark' : 'light';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

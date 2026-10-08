@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
+import { useTheme } from '../lib/theme';
 import { Brand } from './Logo';
 
 function SideNavItem({ item }) {
@@ -43,6 +44,16 @@ export function Sidebar({ sections, footer, brandSub }) {
         ))}
       </div>
     </aside>
+  );
+}
+
+export function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const dark = theme === 'dark';
+  return (
+    <button className="icon-btn" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'} onClick={toggle}>
+      {dark ? <Sun /> : <Moon />}
+    </button>
   );
 }
 
@@ -133,7 +144,7 @@ export function AppShell({ sidebar, topbarRight, children }) {
 export function FullPageLoader() {
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-      <span className="spinner" style={{ width: 26, height: 26, color: '#111' }} />
+      <span className="spinner" style={{ width: 26, height: 26, color: 'var(--ink)' }} />
     </div>
   );
 }

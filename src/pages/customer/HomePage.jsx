@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, AudioLines, ChevronDown, Sparkles } from 'lucide-react';
 import { errMsg, useToast } from '../../components/ui';
+import { useTheme } from '../../lib/theme';
 import { useLazyListAgentsQuery } from '../../store/api/flowApi';
 import { HomeDashboard } from './HomeDashboard';
 import { CATEGORIES, USE_CASES } from './useCases';
@@ -12,6 +13,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [loadLiveAgents] = useLazyListAgentsQuery();
+  const { theme } = useTheme();
   const [prompt, setPrompt] = useState('');
   const [category, setCategory] = useState('All');
   const [expanded, setExpanded] = useState(false);
@@ -28,7 +30,7 @@ export function HomePage() {
 
   return (
     <>
-      <img className="hero-image" src="/hero.png" alt="" aria-hidden="true" draggable="false" />
+      <img className="hero-image" src={theme === 'dark' ? '/dark.png' : '/hero.png'} alt="" aria-hidden="true" draggable="false" />
       <section className="hero">
         <div className="eyebrow">
           Welcome to <b>Aurlynn</b>

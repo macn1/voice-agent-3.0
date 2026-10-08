@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, Circle, MailCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Circle, Eye, EyeOff, MailCheck } from 'lucide-react';
 import {
   useAcceptInviteMutation,
   useForgotPasswordMutation,
@@ -13,7 +13,7 @@ import { useListAgentsQuery, useGetCompanyProfileQuery } from '../../store/api/f
 import { useListCallsQuery, useListNumbersQuery } from '../../store/api/callsApi';
 import { useAuth } from '../../lib/auth';
 import { Button, errMsg, Field, Input, PageHeader, Skeleton } from '../../components/ui';
-import { AuthLayout } from './LoginPage';
+import { AuthLayout, BrandAuthLayout } from './LoginPage';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const strong = (p) => p.length >= 8 && /\d/.test(p) && /[A-Za-z]/.test(p);
@@ -95,9 +95,9 @@ export function ForgotPasswordPage() {
   const [sent, setSent] = useState(null);
   const [error, setError] = useState(null);
   return (
-    <AuthLayout>
+    <BrandAuthLayout title="Forgot your" soft="password?" lead="It happens. We'll email you a secure link to choose a new one.">
       <form
-        className="auth-form"
+        className="login-card"
         noValidate
         onSubmit={async (e) => {
           e.preventDefault();
@@ -114,42 +114,63 @@ export function ForgotPasswordPage() {
           }
         }}
       >
-        <div className="eyebrow">Account access</div>
-        <h1>Reset your password</h1>
+        <h2>{sent ? 'Check your email' : 'Reset your password'}</h2>
+        <p className="muted">{sent ? 'Follow the link in the email to choose a new password.' : "Enter your work email and we'll send you a link."}</p>
         {sent ? (
-          <div className="stack" style={{ marginTop: 24 }}>
+          <div className="stack" style={{ marginTop: 28 }}>
             <div className="banner info" style={{ margin: 0 }}>
               <MailCheck />
               <span className="grow">If an account exists for {email}, a reset link is on its way. Check your inbox.</span>
             </div>
             {sent.link && (
               <p className="small muted">
-                Email isn't connected yet, so here's the link: <Link to={new URL(sent.link, window.location.origin).pathname}>open reset page</Link>
+                Email isn't connected yet, so here's the link:{' '}
+                <Link to={new URL(sent.link, window.location.origin).pathname} className="login-link">
+                  open reset page
+                </Link>
               </p>
             )}
-            <Link to="/login" className="btn primary lg block">
+            <Link to="/login" className="btn primary lg block" style={{ marginTop: 6 }}>
               Back to sign in
             </Link>
           </div>
         ) : (
-          <div className="stack" style={{ marginTop: 24 }}>
-            <p className="lead" style={{ marginTop: 0 }}>
-              Enter your work email and we'll send you a link.
+          <>
+            <div className="stack" style={{ marginTop: 28 }}>
+              {error && (
+                <div className="alert-inline" role="alert">
+                  {error}
+                </div>
+              )}
+              <div className="field">
+                <label htmlFor="forgot-email">Work email</label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  autoFocus
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <Button type="submit" variant="primary" size="lg" block loading={busy} style={{ marginTop: 6 }}>
+                Send reset link <ArrowRight />
+              </Button>
+            </div>
+            <div className="login-divider">
+              <span>or</span>
+            </div>
+            <p className="small muted" style={{ textAlign: 'center' }}>
+              Remembered it?{' '}
+              <Link to="/login" className="login-link">
+                Back to sign in
+              </Link>
             </p>
-            {error && <div className="alert-inline">{error}</div>}
-            <Field label="Work email">
-              <Input type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-            <Button type="submit" variant="primary" size="lg" block loading={busy}>
-              Send reset link
-            </Button>
-            <Link to="/login" className="small" style={{ textAlign: 'center' }}>
-              Back to sign in
-            </Link>
-          </div>
+          </>
         )}
       </form>
-    </AuthLayout>
+    </BrandAuthLayout>
   );
 }
 
@@ -160,12 +181,13 @@ export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
+  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   return (
-    <AuthLayout>
+    <BrandAuthLayout title="Almost" soft="there." lead="Choose a new password, then sign in to pick up where you left off.">
       <form
-        className="auth-form"
+        className="login-card"
         noValidate
         onSubmit={async (e) => {
           e.preventDefault();
@@ -188,22 +210,57 @@ export function ResetPasswordPage() {
           }
         }}
       >
-        <div className="eyebrow">Account access</div>
-        <h1>Choose a new password</h1>
-        <div className="stack" style={{ marginTop: 24 }}>
-          {error && <div className="alert-inline">{error}</div>}
-          <Field label="New password" hint={RULES}>
-            <Input type="password" autoFocus autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
-          </Field>
-          <Field label="Confirm password">
-            <Input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
-          </Field>
-          <Button type="submit" variant="primary" size="lg" block loading={busy}>
-            Update password
+        <h2>Choose a new password</h2>
+        <p className="muted">You&apos;ll use it the next time you sign in.</p>
+        <div className="stack" style={{ marginTop: 28 }}>
+          {error && (
+            <div className="alert-inline" role="alert">
+              {error}
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="reset-password">New password</label>
+            <div className="input-wrap">
+              <Input
+                id="reset-password"
+                type={show ? 'text' : 'password'}
+                autoFocus
+                autoComplete="new-password"
+                placeholder="••••••••"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+              />
+              <button type="button" className="input-icon" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide passwords' : 'Show passwords'}>
+                {show ? <EyeOff /> : <Eye />}
+              </button>
+            </div>
+            <span className="hint">{RULES}</span>
+          </div>
+          <div className="field">
+            <label htmlFor="reset-password-2">Confirm password</label>
+            <Input
+              id="reset-password-2"
+              type={show ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={pw2}
+              onChange={(e) => setPw2(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="primary" size="lg" block loading={busy} style={{ marginTop: 6 }}>
+            Update password <ArrowRight />
           </Button>
         </div>
+        <div className="login-divider">
+          <span>or</span>
+        </div>
+        <p className="small muted" style={{ textAlign: 'center' }}>
+          <Link to="/login" className="login-link">
+            Back to sign in
+          </Link>
+        </p>
       </form>
-    </AuthLayout>
+    </BrandAuthLayout>
   );
 }
 
@@ -216,14 +273,15 @@ export function SignupPage() {
     company: '',
     password: '',
   });
+  const [show, setShow] = useState(false);
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [error, setError] = useState(null);
   return (
-    <AuthLayout>
+    <BrandAuthLayout title="Start" soft="building." lead="Create, deploy and scale voice agents for India — with natural, multilingual conversations.">
       <form
-        className="auth-form"
+        className="login-card"
         noValidate
         onSubmit={async (e) => {
           e.preventDefault();
@@ -248,51 +306,89 @@ export function SignupPage() {
           }
         }}
       >
-        <div className="eyebrow">Start free</div>
-        <h1>Create your Aurlynn account</h1>
+        <h2>{done ? 'Check your email' : 'Create your AURLYNN account'}</h2>
+        <p className="muted">{done ? 'One more step to start your trial.' : 'Start free — no card required.'}</p>
         {done ? (
-          <div className="stack" style={{ marginTop: 24 }}>
+          <div className="stack" style={{ marginTop: 28 }}>
             <div className="banner info" style={{ margin: 0 }}>
               <MailCheck />
               <span className="grow">We sent a verification link to {f.email}. Open it to start your trial.</span>
             </div>
             {done.link && (
               <p className="small muted">
-                Email isn't connected yet: <Link to={new URL(done.link, window.location.origin).pathname}>verify now</Link>
+                Email isn't connected yet:{' '}
+                <Link to={new URL(done.link, window.location.origin).pathname} className="login-link">
+                  verify now
+                </Link>
               </p>
             )}
           </div>
         ) : (
-          <div className="stack" style={{ marginTop: 24 }}>
-            {error && <div className="alert-inline">{error}</div>}
+          <div className="stack" style={{ marginTop: 28 }}>
+            {error && (
+              <div className="alert-inline" role="alert">
+                {error}
+              </div>
+            )}
             <div className="form-grid">
-              <Field label="Your name">
-                <Input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-              </Field>
-              <Field label="Company">
-                <Input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
-              </Field>
+              <div className="field">
+                <label htmlFor="signup-name">Your name</label>
+                <Input id="signup-name" autoFocus autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+              </div>
+              <div className="field">
+                <label htmlFor="signup-company">Company</label>
+                <Input id="signup-company" autoComplete="organization" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
+              </div>
             </div>
-            <Field label="Work email">
-              <Input type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-            </Field>
-            <Field label="Password" hint={RULES}>
-              <Input type="password" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
-            </Field>
+            <div className="field">
+              <label htmlFor="signup-email">Work email</label>
+              <Input
+                id="signup-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={f.email}
+                onChange={(e) => setF({ ...f, email: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="signup-password">Password</label>
+              <div className="input-wrap">
+                <Input
+                  id="signup-password"
+                  type={show ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  value={f.password}
+                  onChange={(e) => setF({ ...f, password: e.target.value })}
+                />
+                <button type="button" className="input-icon" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'}>
+                  {show ? <EyeOff /> : <Eye />}
+                </button>
+              </div>
+              <span className="hint">{RULES}</span>
+            </div>
             <label className="check small">
               <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} />
               <span>I agree to the Terms of Service and Privacy Policy.</span>
             </label>
-            <Button type="submit" variant="primary" size="lg" block loading={busy}>
+            <Button type="submit" variant="primary" size="lg" block loading={busy} style={{ marginTop: 6 }}>
               Create account <ArrowRight />
             </Button>
-            <p className="small muted" style={{ textAlign: 'center' }}>
-              Already have an account? <Link to="/login">Sign in</Link>
-            </p>
           </div>
         )}
+
+        <div className="login-divider">
+          <span>or</span>
+        </div>
+        <p className="small muted" style={{ textAlign: 'center' }}>
+          Already have an account?{' '}
+          <Link to="/login" className="login-link">
+            Sign in
+          </Link>
+        </p>
       </form>
-    </AuthLayout>
+    </BrandAuthLayout>
   );
 }
 
