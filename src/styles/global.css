@@ -39,6 +39,8 @@
   --shadow-glow: 0 18px 40px -22px rgba(242, 106, 33, 0.55);
 
   --sidebar-w: 252px;
+  --sidebar-w-collapsed: 88px;
+  --sidebar-ease: 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --gutter-left: 76px;
   --gutter-right: 40px;
 
@@ -56,6 +58,16 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* Hide the page's vertical scrollbar; scrolling (wheel, touch, keys) still works. */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -216,6 +228,69 @@ p {
   background: var(--border);
 }
 
+/* Desktop: icon-only rail that expands on hover (or keyboard focus).
+   The grid column animates, so .main keeps the same gutter and simply
+   grows/shrinks with the sidebar instead of being overlapped. */
+@media (min-width: 961px) {
+  .app {
+    grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr);
+    transition: grid-template-columns var(--sidebar-ease);
+  }
+
+  .app:has(.sidebar:hover),
+  .app:has(.sidebar :focus-visible) {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    overflow-x: hidden;
+    padding-left: 12px;
+    padding-right: 12px;
+    transition: padding var(--sidebar-ease);
+  }
+
+  .sidebar:hover,
+  .sidebar:has(:focus-visible) {
+    padding-left: 24px;
+    padding-right: 20px;
+  }
+
+  .sidebar .nav-item {
+    overflow: hidden;
+    padding-left: 22px;
+    transition: background 0.15s ease, color 0.15s ease, padding var(--sidebar-ease);
+  }
+
+  .sidebar:hover .nav-item,
+  .sidebar:has(:focus-visible) .nav-item {
+    padding-left: 19px;
+  }
+
+  .sidebar .nav-item > span,
+  .sidebar .nav-label,
+  .sidebar .brand-word,
+  .sidebar .brand-sub {
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .sidebar:hover :is(.nav-item > span, .nav-label, .brand-word, .brand-sub),
+  .sidebar:has(:focus-visible) :is(.nav-item > span, .nav-label, .brand-word, .brand-sub) {
+    opacity: 1;
+    transition: opacity 200ms ease 90ms;
+  }
+}
+
+@media (min-width: 961px) and (prefers-reduced-motion: reduce) {
+  .app,
+  .sidebar,
+  .sidebar * {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
 .main {
   position: relative;
   min-width: 0;
@@ -225,7 +300,8 @@ p {
 .main-inner {
   position: relative;
   z-index: 1;
-  max-width: 1240px;
+  width: 100%;
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -422,6 +498,25 @@ p {
 
 .main-inner > .hero-art {
   top: -124px;
+}
+
+/* Marble arch render (public/hero.png) — sits behind the hero copy on the right */
+.hero-image {
+  position: absolute;
+  top: -124px;
+  right: -40px;
+  width: min(64vw, 980px);
+  height: auto;
+  aspect-ratio: 1684 / 934;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  mix-blend-mode: multiply;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%), linear-gradient(to bottom, #000 72%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 0%, #000 22%), linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-composite: intersect;
 }
 
 .hero h1 {
@@ -1962,6 +2057,10 @@ p {
   .main .hero-art {
     display: none;
   }
+  .hero-image {
+    width: 76vw;
+    opacity: 0.55;
+  }
 }
 
 @media (max-width: 960px) {
@@ -1971,6 +2070,12 @@ p {
   }
   .app {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-image {
+    top: -72px;
+    right: calc(-1 * var(--gutter-right));
+    width: 100vw;
+    opacity: 0.35;
   }
   .sidebar {
     position: fixed;

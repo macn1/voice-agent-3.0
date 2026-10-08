@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, AudioLines, ChevronDown, Sparkles } from 'lucide-react';
-import { HeroArt } from '../../components/Logo';
 import { errMsg, useToast } from '../../components/ui';
 import { useLazyListAgentsQuery } from '../../store/api/flowApi';
 import { HomeDashboard } from './HomeDashboard';
@@ -29,7 +28,7 @@ export function HomePage() {
 
   return (
     <>
-      <HeroArt />
+      <img className="hero-image" src="/hero.png" alt="" aria-hidden="true" draggable="false" />
       <section className="hero">
         <div className="eyebrow">
           Welcome to <b>Aurlynn</b>
