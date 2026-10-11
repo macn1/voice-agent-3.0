@@ -5,7 +5,7 @@ import { loginErrorMessage, useAuth } from '../../lib/auth';
 import { Button, Input } from '../../components/ui';
 import { ThemeToggle } from '../../components/Shell';
 import { useTheme } from '../../lib/theme';
-import { HeroArt, LogoMark } from '../../components/Logo';
+import { HeroArt, LogoMark, Wordmark } from '../../components/Logo';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,9 +15,7 @@ export function AuthLayout({ children }) {
       <div className="auth-form-side">
         <div className="row" style={{ gap: 12 }}>
           <LogoMark size={34} />
-          <span className="brand-word" style={{ fontSize: 13 }}>
-            AURLYNN
-          </span>
+          <Wordmark height={10} />
         </div>
         {children}
         <div className="muted small">© {new Date().getFullYear()} Aurlynn · Voice agents for India</div>
@@ -26,16 +24,8 @@ export function AuthLayout({ children }) {
         <HeroArt />
         <div className="quote">
           <div className="eyebrow">Voice AI platform</div>
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 20,
-              fontWeight: 500,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.3,
-            }}
-          >
-            Turn conversations into <span style={{ color: '#8d8c89' }}>real outcomes.</span>
+          <div className="quote-title">
+            Turn conversations into <span className="text-muted">real outcomes.</span>
           </div>
           <div className="muted small" style={{ marginTop: 8 }}>
             Create, deploy and scale voice agents with natural, multilingual conversations.
@@ -54,8 +44,8 @@ export function BrandAuthLayout({ title, soft, lead, children }) {
       <img className="login-art" src={theme === 'dark' ? '/dark.png' : '/hero.png'} alt="" aria-hidden="true" draggable="false" />
       <section className="login-intro">
         <div className="login-brand">
-          <LogoMark size={40} />
-          <span className="brand-word">AURLYNN</span>
+          <LogoMark size={44} />
+          <Wordmark height={11} />
         </div>
         <div className="login-copy">
           <h1>

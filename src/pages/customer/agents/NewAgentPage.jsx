@@ -48,7 +48,7 @@ export function NewAgentPage({ hub = false }) {
 
       {hub && (
         <div style={{ marginTop: 36 }}>
-          <div className="card-title" style={{ fontSize: 18, marginBottom: 14 }}>
+          <div className="card-title text-title" style={{ marginBottom: 14 }}>
             Shared building blocks
           </div>
           <div className="grid-3">

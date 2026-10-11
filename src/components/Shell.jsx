@@ -10,11 +10,64 @@ function SideNavItem({ item }) {
   const { pathname } = useLocation();
   const Icon = item.icon;
   const extra = item.match?.some((p) => pathname.startsWith(p)) ?? false;
-  return (
+  const link = (
     <NavLink to={item.to} end={item.end} className={({ isActive }) => `nav-item ${isActive || extra ? 'active' : ''}`}>
       <Icon />
       <span>{item.label}</span>
     </NavLink>
+  );
+  return item.groups ? <SideNavFlyout item={item}>{link}</SideNavFlyout> : link;
+}
+
+/**
+ * Nav item with a grouped submenu, laid out like the sidebar's own sections
+ * (.nav-label + .nav-item). Desktop: a full-height panel beside the sidebar,
+ * opened on hover or keyboard focus. Small screens (drawer): listed inline
+ * under the item while one of its pages is open.
+ */
+function SideNavFlyout({ item, children }) {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef(0);
+  const inSection = item.match?.some((p) => pathname.startsWith(p)) ?? false;
+
+  const show = () => {
+    clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  // Short delay so the pointer can cross from the item to the panel.
+  const hide = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 160);
+  };
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => setOpen(false), [pathname]);
+
+  return (
+    <div
+      className="nav-flyout-wrap"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && hide()}
+      onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+    >
+      {children}
+      <nav className={`nav-flyout ${open ? 'open' : ''} ${inSection ? 'in-section' : ''}`} aria-label={item.label}>
+        {item.groups.map((g) => (
+          <div key={g.label} className="nav">
+            <div className="nav-label">{g.label}</div>
+            {g.items.map((it) => (
+              <NavLink key={it.to} to={it.to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                <it.icon />
+                <span>{it.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </nav>
+    </div>
   );
 }
 
@@ -81,7 +134,7 @@ export function UserMenu({ links, subtitle }) {
       {open && (
         <div className="dropdown" role="menu">
           <div className="dropdown-head">
-            <div style={{ fontWeight: 600 }}>{name}</div>
+            <div className="fw-semibold">{name}</div>
             <div className="muted small">{profile?.email}</div>
             {subtitle && <div style={{ marginTop: 8 }}>{subtitle}</div>}
           </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Hand, MessageCircle, MessageSquare, Plus, Send, Smartphone, Trash2, Undo2, Unplug } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BookOpen, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Smartphone, Trash2, Undo2, Unplug } from 'lucide-react';
 import {
   useConnectSmsMutation,
   useConnectWhatsappMutation,
@@ -37,12 +37,39 @@ import {
 } from '../../../components/ui';
 import { Select, Textarea } from '../../../components/forms';
 import { ShareBar, SERIES } from '../../../components/charts';
+import { PixelHero } from '../../../components/PixelHero';
+import { asList } from '../../../lib/normalize';
 import { useAgentOptions } from '../shared';
 
 /** P-26 WhatsApp setup (WA-01, WA-02, WA-03, WA-06.1). */
 export function WhatsAppPage() {
   const [tab, setTab] = useState('connection');
+  const [setup, setSetup] = useState(false);
   const accounts = useListWhatsappAccountsQuery();
+  const none = accounts.isError || (accounts.isSuccess && asList(accounts.data).length === 0);
+
+  if (none && !setup) {
+    return (
+      <PixelHero
+        icon={MessageCircle}
+        motion="ring"
+        warm
+        title="Follow up with every caller on WhatsApp & SMS"
+        description="Connect a WhatsApp Business number to send follow-ups, run broadcasts and let your agents answer chats."
+        actions={
+          <>
+            <Link to="/docs" className="btn">
+              <BookOpen /> Read docs
+            </Link>
+            <Button variant="primary" icon={<Plus />} onClick={() => setSetup(true)}>
+              Connect WhatsApp
+            </Button>
+          </>
+        }
+      />
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -565,6 +592,7 @@ function SmsTab() {
 
 /** P-27 Inbox with human takeover (WA-04). */
 export function InboxPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [filter, setFilter] = useState('');
   const list = useListConversationsQuery({ status: filter || undefined }, { pollingInterval: 10000 });
@@ -580,6 +608,28 @@ export function InboxPage() {
 
   const windowClosed = active?.window_expires_at ? Date.parse(active.window_expires_at) < Date.now() : false;
   const update = (c) => setActive(c); // the list refetches via cache invalidation
+  const empty = !filter && (list.isError || (list.isSuccess && asList(list.data).length === 0));
+
+  if (empty) {
+    return (
+      <PixelHero
+        icon={InboxIcon}
+        motion="pulse"
+        title="Every customer chat, in one inbox"
+        description="Connect WhatsApp so customers can message you. Agents reply automatically, and you can take over any time."
+        actions={
+          <>
+            <Link to="/docs" className="btn">
+              <BookOpen /> Read docs
+            </Link>
+            <Button variant="primary" icon={<MessageCircle />} onClick={() => navigate('/channels/whatsapp')}>
+              Set up WhatsApp
+            </Button>
+          </>
+        }
+      />
+    );
+  }
 
   return (
     <>
@@ -611,7 +661,7 @@ export function InboxPage() {
                     {cs.map((c) => (
                       <button key={c.id} className={`inbox-item ${active?.id === c.id ? 'active' : ''}`} onClick={() => setActive(c)}>
                         <div className="row between">
-                          <b style={{ fontSize: 14 }}>{c.contact_name ?? c.contact_address}</b>
+                          <b className="text-body-sm">{c.contact_name ?? c.contact_address}</b>
                           {c.unread_count > 0 && <span className="badge orange plain">{c.unread_count}</span>}
                         </div>
                         <div
@@ -628,9 +678,7 @@ export function InboxPage() {
                           <Badge tone={c.status === 'needs_human' ? 'red' : c.status === 'human' ? 'blue' : ''}>
                             {c.status === 'needs_human' ? 'Needs human' : titleCase(c.status)}
                           </Badge>
-                          <span className="muted" style={{ fontSize: 11.5 }}>
-                            {dateTime(c.last_message_at)}
-                          </span>
+                          <span className="muted text-overline">{dateTime(c.last_message_at)}</span>
                         </div>
                       </button>
                     ))}

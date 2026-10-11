@@ -1,18 +1,25 @@
-export function LogoMark({ size = 64 }) {
+// Brand artwork lives in public/brand/ (made from public/light-theme.png and
+// public/logo-dark.jpeg). Each slot renders both versions; global.css shows the
+// one for the current theme, so switching themes swaps them with no flash.
+function Themed({ light, dark, className, ...rest }) {
   return (
-    <svg className="brand-mark" width={size} height={size} viewBox="0 0 64 64" aria-hidden>
-      <defs>
-        <linearGradient id="lm-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2b2b2b" />
-          <stop offset="1" stopColor="#050505" />
-        </linearGradient>
-      </defs>
-      <path
-        fill="url(#lm-g)"
-        fillRule="evenodd"
-        d="M32 4c3.2 0 5.6 1.7 7.3 4.6l20 34.8c3.6 6.3-.4 12.6-7.3 12.6H12c-6.9 0-10.9-6.3-7.3-12.6l20-34.8C26.4 5.7 28.8 4 32 4Zm0 28.5c-5.3 0-9.5 3.6-9.5 8s4.2 8 9.5 8 9.5-3.6 9.5-8-4.2-8-9.5-8Z"
-      />
-    </svg>
+    <>
+      <img src={light} className={`${className} theme-light-only`} alt="" aria-hidden="true" draggable="false" {...rest} />
+      <img src={dark} className={`${className} theme-dark-only`} alt="" aria-hidden="true" draggable="false" {...rest} />
+    </>
+  );
+}
+
+export function LogoMark({ size = 64 }) {
+  return <Themed light="/brand/mark-light.png" dark="/brand/mark-dark.png" className="brand-mark" width={size} height={size} />;
+}
+
+/** The AURLYNN wordmark; `height` in px (the artwork is ~11:1). */
+export function Wordmark({ height = 13 }) {
+  return (
+    <span className="brand-word brand-wordmark" role="img" aria-label="Aurlynn">
+      <Themed light="/brand/wordmark-light.png" dark="/brand/wordmark-dark.png" className="brand-wordmark-img" style={{ height }} />
+    </span>
   );
 }
 
@@ -20,7 +27,7 @@ export function Brand({ sub }) {
   return (
     <div className="brand">
       <LogoMark />
-      <span className="brand-word">AURLYNN</span>
+      <Wordmark />
       {sub && <span className="brand-sub">{sub}</span>}
     </div>
   );

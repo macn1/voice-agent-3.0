@@ -69,9 +69,9 @@ export function NotificationsBell() {
           ) : (
             items.map((n) => (
               <button key={n.id} className={`notif-item ${n.read_at ? '' : 'unread'}`} onClick={() => openItem(n)}>
-                <div style={{ fontWeight: n.read_at ? 400 : 600, fontSize: 14 }}>{n.title}</div>
+                <div className={`text-body-sm ${n.read_at ? 'fw-regular' : 'fw-semibold'}`}>{n.title}</div>
                 {n.body && <div className="muted small">{n.body}</div>}
-                <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+                <div className="muted text-overline" style={{ marginTop: 4 }}>
                   {dateTime(n.created_at)}
                 </div>
               </button>

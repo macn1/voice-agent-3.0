@@ -45,7 +45,6 @@
   --gutter-left: 76px;
   --gutter-right: 40px;
 
-  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 }
 
@@ -107,9 +106,6 @@ html::-webkit-scrollbar {
 
 body {
   margin: 0;
-  font-family: var(--font);
-  font-size: 14.5px;
-  line-height: 1.5;
   color: var(--text);
   background: radial-gradient(1200px 700px at 78% -10%, #ffffff 0%, rgba(255, 255, 255, 0) 60%), var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -182,23 +178,36 @@ p {
   padding: 0 0 28px;
 }
 
+/* Size comes from <LogoMark size>; 64px in the sidebar. */
 .brand-mark {
-  width: 64px;
-  height: 64px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+/* Wordmark image: undo the text tracking used by the old text wordmark. */
+.brand-wordmark {
+  display: inline-flex;
+  margin-right: 0;
+  letter-spacing: normal;
+  line-height: 0;
+}
+
+.brand-wordmark-img {
+  width: auto;
 }
 
 .brand-word {
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.42em;
-  margin-right: -0.42em;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-brand);
+  margin-right: calc(-1 * var(--letter-spacing-brand));
   color: var(--ink);
 }
 
 .brand-sub {
   margin-top: -6px;
-  font-size: 10.5px;
-  letter-spacing: 0.18em;
+  font-size: var(--font-size-micro);
+  letter-spacing: var(--letter-spacing-eyebrow);
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -211,9 +220,9 @@ p {
 
 .nav-label {
   margin: 22px 0 8px 18px;
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -225,10 +234,12 @@ p {
   height: 42px;
   padding: 0 14px 0 19px;
   border-radius: var(--radius-sm);
-  font-size: 14.5px;
+  font-size: var(--font-size-nav);
   color: #222;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   position: relative;
 }
 
@@ -246,7 +257,7 @@ p {
 .nav-item.active {
   background: var(--ink);
   color: var(--on-ink);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   box-shadow: var(--shadow-ink);
 }
 
@@ -293,7 +304,10 @@ p {
   .sidebar .nav-item {
     overflow: hidden;
     padding-left: 22px;
-    transition: background 0.15s ease, color 0.15s ease, padding var(--sidebar-ease);
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      padding var(--sidebar-ease);
   }
 
   .sidebar:hover .nav-item,
@@ -371,8 +385,8 @@ p {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid var(--divider);
   box-shadow: var(--shadow-xs);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -431,8 +445,8 @@ p {
   border: 1px solid var(--divider);
   background: rgba(255, 255, 255, 0.85);
   box-shadow: var(--shadow-xs);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .avatar {
@@ -443,15 +457,15 @@ p {
   border-radius: 50%;
   background: var(--ink);
   color: var(--on-ink);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-medium);
   flex-shrink: 0;
 }
 
 .avatar.sm {
   width: 32px;
   height: 32px;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
 }
 
 .avatar.soft {
@@ -487,7 +501,7 @@ p {
   border: 0;
   border-radius: 8px;
   background: none;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   text-align: left;
 }
 
@@ -509,19 +523,10 @@ p {
 
 /* ------------------------------------------------------------------ */
 /* Home hero                                                           */
-/* ------------------------------------------------------------------ */
-
-.eyebrow {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 
 .eyebrow b {
   color: var(--text);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .hero {
@@ -556,10 +561,10 @@ p {
 
 .hero h1 {
   margin-top: 14px;
-  font-size: clamp(36px, 4.2vw, 54px);
-  line-height: 1.04;
-  font-weight: 500;
-  letter-spacing: -0.035em;
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-display);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-display);
 }
 
 .hero h1 .soft {
@@ -569,8 +574,8 @@ p {
 .hero p.lead {
   margin-top: 18px;
   max-width: 440px;
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: var(--font-size-lead);
+  line-height: var(--line-height-relaxed);
   color: var(--text-2);
 }
 
@@ -585,7 +590,9 @@ p {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--border);
   box-shadow: 0 14px 34px -22px rgba(17, 17, 17, 0.35);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .prompt-box:focus-within {
@@ -607,7 +614,7 @@ p {
   border: 0;
   background: none;
   outline: none;
-  font-size: 15px;
+  font-size: var(--font-size-body-lg);
 }
 
 .prompt-box input::placeholder {
@@ -652,9 +659,11 @@ p {
   border-radius: 999px;
   border: 1px solid var(--divider);
   background: rgba(255, 255, 255, 0.72);
-  font-size: 14.5px;
+  font-size: var(--font-size-body);
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .chip:hover {
@@ -670,7 +679,7 @@ p {
 }
 
 .chip .count {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--muted);
 }
 
@@ -696,7 +705,11 @@ p {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.82);
   text-align: left;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .usecase:hover,
@@ -709,16 +722,16 @@ p {
 
 .usecase h3 {
   margin-top: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.38;
-  letter-spacing: -0.005em;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .usecase p {
   margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-loose);
   color: #6a6966;
 }
 
@@ -731,7 +744,9 @@ p {
   border: 1px solid var(--border);
   background: #fff;
   color: var(--ink);
-  transition: color 0.2s, border-color 0.2s;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
 }
 
 .arrow-btn svg {
@@ -791,7 +806,7 @@ p {
   padding: 6px 4px;
   border: 0;
   background: none;
-  font-size: 14.5px;
+  font-size: var(--font-size-body);
 }
 
 .view-more svg {
@@ -802,6 +817,194 @@ p {
 
 .view-more.open svg {
   transform: rotate(180deg);
+}
+
+/* Agents / Phone numbers: centred hero on top, then a management section. */
+.agent-start {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 720px;
+  margin: 28px auto 0;
+  text-align: center;
+}
+
+.agent-start-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 26px;
+}
+
+.agent-start-icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.agent-start h1,
+.page-hero h1 {
+  margin-top: 28px;
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-heading);
+  letter-spacing: var(--letter-spacing-heading);
+}
+
+.agent-start .prompt-box {
+  align-self: stretch;
+  margin-top: 32px;
+  text-align: left;
+}
+
+.chips.centered {
+  justify-content: center;
+}
+
+.page-section {
+  position: relative;
+  z-index: 1;
+  margin-top: 56px;
+  scroll-margin-top: 24px;
+}
+
+.page-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.page-section-head p {
+  margin-top: 4px;
+}
+
+.page-hero {
+  position: relative;
+  z-index: 1;
+  padding-top: 8px; /* same as the Home hero */
+  text-align: center;
+}
+
+/* Phone numbers: "take your agent live" option cards */
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px; /* same as the Home use-case grid */
+  margin-top: 36px;
+}
+
+.option-card {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.option-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.option-card .clay {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+}
+
+.option-card .clay svg {
+  width: 28px;
+  height: 28px;
+}
+
+.option-card h2 {
+  margin-top: 22px;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.option-card h2 + p {
+  margin-top: 6px;
+  color: var(--text-2);
+}
+
+.check-list {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--font-size-body-sm);
+}
+
+.check-list svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.provider-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-2);
+}
+
+.provider-chip img,
+.provider-chip svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.provider-chip svg {
+  color: var(--muted);
+}
+
+.option-meta {
+  margin-top: 20px;
+}
+
+.option-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 26px;
 }
 
 .fab {
@@ -818,9 +1021,11 @@ p {
   border-radius: 999px;
   background: var(--ink);
   color: var(--on-ink);
-  font-size: 15px;
-  font-weight: 500;
-  box-shadow: 0 16px 32px -10px rgba(242, 106, 33, 0.6), 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-medium);
+  box-shadow:
+    0 16px 32px -10px rgba(242, 106, 33, 0.6),
+    0 4px 12px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s;
 }
 
@@ -863,10 +1068,10 @@ p {
   width: 290px;
   height: 330px;
   border-radius: 150px 150px 0 0;
-  background:
-    radial-gradient(120px 60px at 30% 20%, rgba(255, 255, 255, 0.9), transparent 70%),
-    linear-gradient(160deg, #fdfdfc 0%, #ebe9e5 55%, #d7d4cf 100%);
-  box-shadow: inset -18px 0 30px rgba(0, 0, 0, 0.06), -30px 30px 60px -30px rgba(0, 0, 0, 0.25);
+  background: radial-gradient(120px 60px at 30% 20%, rgba(255, 255, 255, 0.9), transparent 70%), linear-gradient(160deg, #fdfdfc 0%, #ebe9e5 55%, #d7d4cf 100%);
+  box-shadow:
+    inset -18px 0 30px rgba(0, 0, 0, 0.06),
+    -30px 30px 60px -30px rgba(0, 0, 0, 0.25);
 }
 
 .hero-art .arch::before {
@@ -924,17 +1129,17 @@ p {
 
 .page-head h1 {
   margin-top: 10px;
-  font-size: 34px;
-  line-height: 1.1;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-size: var(--font-size-page-title);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
 }
 
 .page-head p {
   margin-top: 10px;
   max-width: 620px;
   color: var(--text-2);
-  font-size: 15px;
+  font-size: var(--font-size-body-lg);
 }
 
 .page-head .actions {
@@ -949,7 +1154,7 @@ p {
   gap: 6px;
   margin-bottom: 14px;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: var(--font-size-control-sm);
 }
 
 .back-link:hover {
@@ -996,14 +1201,14 @@ p {
 
 .card-head h2,
 .card-title {
-  font-size: 15.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-size: var(--font-size-card-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .card-sub {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: var(--font-size-small);
   color: var(--muted);
 }
 
@@ -1039,25 +1244,12 @@ p {
   flex-wrap: wrap;
 }
 
-.muted {
-  color: var(--muted);
-}
-
-.small {
-  font-size: 13px;
-}
-
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-}
-
 .kv {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
   row-gap: 14px;
   column-gap: 16px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
 }
 
 .kv dt {
@@ -1075,20 +1267,20 @@ p {
 }
 
 .stat .label {
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--muted);
 }
 
 .stat .value {
   margin-top: 8px;
-  font-size: 26px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-size: var(--font-size-metric);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
 }
 
 .stat .hint {
   margin-top: 4px;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--muted);
 }
 
@@ -1130,10 +1322,14 @@ p {
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--surface);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-button);
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.15s,
+    box-shadow 0.15s;
 }
 
 .btn svg {
@@ -1196,7 +1392,7 @@ p {
 .btn.sm {
   height: 32px;
   padding: 0 13px;
-  font-size: 13px;
+  font-size: var(--font-size-button-sm);
 }
 
 .btn.block {
@@ -1205,7 +1401,7 @@ p {
 
 .btn.lg {
   height: 48px;
-  font-size: 15px;
+  font-size: var(--font-size-button-lg);
 }
 
 .spinner {
@@ -1235,18 +1431,18 @@ p {
 
 .field > label,
 .field-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
   color: var(--text-2);
 }
 
 .field .hint {
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--muted);
 }
 
 .field .error-text {
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--red);
 }
 
@@ -1259,9 +1455,11 @@ p {
   border-radius: 12px;
   border: 1px solid var(--border-strong);
   background: var(--surface);
-  font-size: 14.5px;
+  font-size: var(--font-size-input);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .textarea {
@@ -1280,6 +1478,11 @@ p {
 
 .input.invalid {
   border-color: var(--red);
+}
+
+/* Monospace inputs (phone numbers, keys) keep the input size; .mono only swaps the family. */
+.input.mono {
+  font-size: var(--font-size-input);
 }
 
 .input-wrap {
@@ -1394,7 +1597,7 @@ p {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   cursor: pointer;
 }
 
@@ -1425,8 +1628,8 @@ p {
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
   background: var(--gray-bg);
   color: var(--text-2);
@@ -1486,14 +1689,14 @@ p {
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
 }
 
 .table th {
   padding: 12px 20px;
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: var(--font-size-overline);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--muted);
   text-align: left;
@@ -1535,12 +1738,12 @@ p {
 }
 
 .cell-main {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .cell-sub {
   margin-top: 2px;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--muted);
 }
 
@@ -1551,7 +1754,7 @@ p {
   gap: 12px;
   padding: 14px 20px;
   border-top: 1px solid var(--divider);
-  font-size: 13px;
+  font-size: var(--font-size-small);
   color: var(--muted);
 }
 
@@ -1591,14 +1794,14 @@ p {
 }
 
 .state h3 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-heading-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .state p {
   max-width: 420px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
 }
 
 .skeleton {
@@ -1621,7 +1824,7 @@ p {
   padding: 12px 16px;
   margin-bottom: 20px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   border: 1px solid;
 }
 
@@ -1664,7 +1867,7 @@ p {
   border-radius: 10px;
   background: var(--red-bg);
   color: #8f2219;
-  font-size: 13.5px;
+  font-size: var(--font-size-control-sm);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1707,14 +1910,14 @@ p {
 }
 
 .modal-head h2 {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: var(--font-size-subheading);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .modal-head p {
   margin-top: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   color: var(--muted);
 }
 
@@ -1763,7 +1966,7 @@ p {
   border-radius: 999px;
   background: var(--ink);
   color: var(--on-ink);
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   box-shadow: var(--shadow-md);
   animation: pop 0.2s ease;
 }
@@ -1803,16 +2006,16 @@ p {
 
 .auth-form h1 {
   margin-top: 14px;
-  font-size: 38px;
-  line-height: 1.08;
-  font-weight: 500;
-  letter-spacing: -0.035em;
+  font-size: var(--font-size-title-xl);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-display);
 }
 
 .auth-form .lead {
   margin-top: 12px;
   color: var(--text-2);
-  font-size: 15.5px;
+  font-size: var(--font-size-body-lg);
 }
 
 .auth-art {
@@ -1842,6 +2045,14 @@ p {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow-sm);
+}
+
+.auth-art .quote-title {
+  margin-top: 10px;
+  font-size: var(--font-size-heading-lg);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-title);
+  letter-spacing: var(--letter-spacing-title);
 }
 
 /* Login — one sign-in page for every account (customer and console). */
@@ -1886,7 +2097,7 @@ p {
 }
 
 .login-brand .brand-word {
-  font-size: 13px;
+  font-size: var(--font-size-small);
 }
 
 .login-copy {
@@ -1895,10 +2106,10 @@ p {
 }
 
 .login-copy h1 {
-  font-size: clamp(44px, 5vw, 68px);
-  line-height: 1.02;
-  font-weight: 500;
-  letter-spacing: -0.04em;
+  font-size: var(--font-size-display-lg);
+  line-height: var(--line-height-display);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-display);
 }
 
 .login-copy h1 .soft {
@@ -1908,8 +2119,8 @@ p {
 .login-copy .lead {
   margin-top: 20px;
   max-width: 400px;
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: var(--font-size-lead);
+  line-height: var(--line-height-relaxed);
   color: var(--text-2);
 }
 
@@ -1942,19 +2153,19 @@ p {
 }
 
 .login-card h2 {
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-size: var(--font-size-section-title);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
 }
 
 .login-card h2 + p {
   margin-top: 8px;
-  font-size: 14.5px;
+  font-size: var(--font-size-body);
 }
 
 .login-link {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--text);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
@@ -1971,10 +2182,10 @@ p {
   align-items: center;
   gap: 14px;
   margin: 24px 0 18px;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--faint);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--letter-spacing-eyebrow);
 }
 
 .login-divider::before,
@@ -1998,12 +2209,8 @@ p {
   .login-copy {
     margin: 40px 0 0;
   }
-  .login-copy h1 {
-    font-size: 40px;
-  }
   .login-copy .lead {
     margin-top: 12px;
-    font-size: 16px;
   }
   .login-foot {
     display: none;
@@ -2035,7 +2242,9 @@ p {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--surface);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .plan-card:hover {
@@ -2049,16 +2258,16 @@ p {
 }
 
 .plan-card .price {
-  font-size: 32px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-size: var(--font-size-metric-lg);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-heading);
 }
 
 .plan-card .price small {
-  font-size: 14px;
-  font-weight: 400;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-regular);
   color: var(--muted);
-  letter-spacing: 0;
+  letter-spacing: var(--letter-spacing-normal);
 }
 
 .plan-card ul {
@@ -2068,7 +2277,7 @@ p {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
 }
 
 .plan-card li {
@@ -2137,9 +2346,9 @@ p {
 
 .perm-group h4 {
   margin-bottom: 10px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -2163,8 +2372,8 @@ p {
   padding: 0 9px;
   border-radius: 7px;
   background: var(--gray-bg);
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-mono);
   color: var(--text-2);
 }
 
@@ -2183,9 +2392,9 @@ p {
   border-radius: 8px;
   background: linear-gradient(135deg, #1b1b1b, #3a3936);
   color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: var(--font-size-eyebrow);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
 }
 
 .coming {
@@ -2212,7 +2421,7 @@ p {
 .coming li {
   display: flex;
   gap: 10px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   color: var(--text-2);
 }
 
@@ -2257,6 +2466,9 @@ p {
 }
 
 @media (max-width: 960px) {
+  .option-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   :root {
     --gutter-left: 16px;
     --gutter-right: 16px;
@@ -2277,7 +2489,9 @@ p {
     bottom: 0;
     width: 272px;
     transform: translateX(-100%);
-    transition: transform 0.22s ease, box-shadow 0.22s ease;
+    transition:
+      transform 0.22s ease,
+      box-shadow 0.22s ease;
   }
   .app.nav-open .sidebar {
     transform: none;
@@ -2346,10 +2560,7 @@ p {
   .meter-pill {
     min-width: 0;
     padding: 0 14px;
-    font-size: 13px;
-  }
-  .page-head h1 {
-    font-size: 28px;
+    font-size: var(--font-size-small);
   }
   .kv {
     grid-template-columns: minmax(0, 1fr);
@@ -2364,7 +2575,9 @@ p {
   .fab span {
     display: none;
   }
-  .chips {
+  .chips,
+  .chips.centered {
+    justify-content: flex-start;
     flex-wrap: nowrap;
     overflow-x: auto;
     margin-right: -16px;
@@ -2387,8 +2600,17 @@ p {
   background: radial-gradient(1200px 700px at 78% -10%, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 60%), var(--bg);
 }
 
-[data-theme='dark'] .brand-mark {
-  filter: invert(1);
+/* Logo artwork: each slot holds a light and a dark version (see Logo.jsx). */
+.theme-dark-only {
+  display: none;
+}
+
+[data-theme='dark'] .theme-light-only {
+  display: none;
+}
+
+[data-theme='dark'] .theme-dark-only {
+  display: inline-block;
 }
 
 [data-theme='dark'] .nav-item {
@@ -2571,6 +2793,72 @@ p {
   background: var(--accent-soft);
 }
 
+/* Provider logos are drawn for light backgrounds (Exotel is black on transparent). */
+[data-theme='dark'] .provider-chip img {
+  padding: 1px;
+  background: #fff;
+}
+
 [data-theme='dark'] .code {
   border: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar fly-out submenu (Settings)                                  */
+/* Reuses .nav-label / .nav-item, so it matches the Deploy section.    */
+/* ------------------------------------------------------------------ */
+
+.nav-flyout {
+  display: none;
+}
+
+@media (min-width: 961px) {
+  /* A second sidebar column: same background, divider and padding as .sidebar. */
+  .nav-flyout.open {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: var(--sidebar-w);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    width: var(--sidebar-w);
+    padding: 0 20px 20px 24px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--divider);
+    box-shadow: var(--shadow-md);
+    animation: flyout-in 0.16s ease-out;
+  }
+
+  .nav-flyout::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Drawer (small screens): list the sections inline under Settings while in it. */
+@media (max-width: 960px) {
+  .nav-flyout.in-section {
+    display: flex;
+    flex-direction: column;
+    padding-left: 14px;
+  }
+
+  .nav-flyout .nav-label {
+    margin-top: 14px;
+  }
+}
+
+@keyframes flyout-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-flyout.open {
+    animation: none;
+  }
 }

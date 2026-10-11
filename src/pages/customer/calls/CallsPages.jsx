@@ -39,6 +39,7 @@ import { useGetAgentSectionQuery } from '../../../store/api/flowApi';
 import { useCreateExportMutation } from '../../../store/api/analyticsApi';
 import { dateTime, money, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, Pager, Skeleton, StatusBadge, useToast } from '../../../components/ui';
+import { PixelHero } from '../../../components/PixelHero';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
 import { CallNumberDialog, duration, OUTCOME_TONE, useAgentOptions } from '../shared';
@@ -369,15 +370,7 @@ export function CallDetailPage() {
             <header className="agent-head">
               <div>
                 <div className="row" style={{ gap: 10 }}>
-                  <h1
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 500,
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}
-                  </h1>
+                  <h1 className="text-detail-title">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</h1>
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
                   {c.outcome && <Badge tone={OUTCOME_TONE(c.is_success)}>{titleCase(c.outcome)}</Badge>}
                   {c.flagged && <Badge tone="orange">Flagged</Badge>}
@@ -522,7 +515,7 @@ export function CallDetailPage() {
                       Re-run
                     </Button>
                   </div>
-                  <p style={{ fontSize: 14.5 }}>{c.summary ?? <span className="muted">No summary.</span>}</p>
+                  <p className="text-body">{c.summary ?? <span className="muted">No summary.</span>}</p>
                   {c.sentiment && (
                     <div className="row small">
                       Sentiment{' '}
@@ -546,7 +539,6 @@ export function CallDetailPage() {
                     style={{
                       gridTemplateColumns: '120px 1fr',
                       rowGap: 8,
-                      fontSize: 13.5,
                     }}
                   >
                     <dt>From</dt>
@@ -665,7 +657,6 @@ function KvCard({ title, data }) {
           style={{
             gridTemplateColumns: '140px 1fr',
             rowGap: 8,
-            fontSize: 13.5,
           }}
         >
           {entries.map(([k, v]) => (
@@ -796,7 +787,7 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
         {card?.criteria.map((c) => (
           <div key={c.name} className="row between wrap">
             <div>
-              <div style={{ fontWeight: 500 }}>
+              <div className="fw-medium">
                 {c.name} <span className="muted small">· {c.weight}%</span>
               </div>
               <div className="muted small">{c.description}</div>
@@ -1023,6 +1014,11 @@ export function ReviewPage() {
 export function InboundPage() {
   const navigate = useNavigate();
   const inbound = useListCallsQuery({ direction: 'inbound', range: '7d', limit: 15 });
+
+  if (inbound.data?.items.length === 0) {
+    return <PixelHero icon={PhoneIncoming} motion="ring" title="Answer inbound calls automatically" description="Create an agent to handle incoming calls." />;
+  }
+
   return (
     <>
       <PageHeader

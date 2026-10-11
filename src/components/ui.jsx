@@ -236,7 +236,7 @@ export function Toggle({ checked, onChange, label, description, disabled }) {
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="track" aria-hidden />
       <span>
-        <span style={{ fontWeight: 500, fontSize: 14 }}>{label}</span>
+        <span className="fw-medium text-body-sm">{label}</span>
         {description && (
           <span className="muted small" style={{ display: 'block', marginTop: 2 }}>
             {description}

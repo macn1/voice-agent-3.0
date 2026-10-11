@@ -347,7 +347,7 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
                   />
 
                   <span>
-                    <span style={{ fontWeight: 500 }}>{roleLabel(r)}</span>
+                    <span className="fw-medium">{roleLabel(r)}</span>
                     {r.description && (
                       <span className="muted small" style={{ display: 'block' }}>
                         {r.description}

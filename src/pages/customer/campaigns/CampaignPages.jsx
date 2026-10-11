@@ -14,7 +14,6 @@ import {
   useLazyGetCampaignEstimateQuery,
   useLazyGetCampaignResultsQuery,
   useListCampaignContactsQuery,
-  useListCampaignsQuery,
   useListContactAttemptsQuery,
   useListContactListsQuery,
   usePutCampaignSettingsMutation,
@@ -26,7 +25,7 @@ import {
   useValidateCampaignContactsMutation,
 } from '../../../store/api/callsApi';
 import { useGetAgentSectionQuery } from '../../../store/api/flowApi';
-import { date, dateTime, number, titleCase } from '../../../lib/format';
+import { dateTime, number, titleCase } from '../../../lib/format';
 import {
   Async,
   Badge,
@@ -45,113 +44,14 @@ import {
 } from '../../../components/ui';
 import { downloadText, Drawer, parseCsv, readFileText, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
 import { HBars, Stat, TimeChart } from '../../../components/charts';
+import { PixelHero } from '../../../components/PixelHero';
 import { useAgentOptions, useNumberOptions } from '../shared';
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
-function Progress({ c }) {
-  const t = c.totals;
-  const done = t.completed + t.failed + t.skipped;
-  return (
-    <div style={{ minWidth: 160 }}>
-      <div className="bar">
-        <span style={{ width: `${pct(done, t.contacts)}%` }} />
-      </div>
-      <div className="cell-sub">
-        {number(done)} / {number(t.contacts)} done
-      </div>
-    </div>
-  );
-}
-
 /** P-20 Campaigns list (CALL-03). */
 export function CampaignsPage() {
-  const navigate = useNavigate();
-  const [status, setStatus] = useState('');
-  const [poll, setPoll] = useState(0);
-  const list = useListCampaignsQuery({ status: status || undefined, limit: 100 }, { pollingInterval: poll });
-  useEffect(() => setPoll(list.data?.items.some((c) => c.status === 'running') ? 8000 : 0), [list.data]);
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Deploy"
-        title="Outbound campaigns"
-        description="Call a list of contacts with an agent — on a schedule, with pacing and retries."
-        actions={
-          <>
-            <Link to="/workflows" className="btn">
-              Triggers & callbacks
-            </Link>
-            <Button variant="primary" icon={<Plus />} onClick={() => navigate('/campaigns/new')}>
-              New campaign
-            </Button>
-          </>
-        }
-      />
-
-      <div className="card">
-        <div className="card-head">
-          <div className="filters">
-            <Select
-              value={status}
-              options={['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled']}
-              placeholder="All statuses"
-              onChange={(e) => setStatus(e.target.value)}
-            />
-          </div>
-        </div>
-        <Async state={list}>
-          {(p) =>
-            p.items.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Campaign</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th className="num">Connected</th>
-                    <th className="num">Success</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.items.map((c) => (
-                    <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
-                      <td>
-                        <div className="cell-main">{c.name}</div>
-                        <div className="cell-sub">{c.agent_name}</div>
-                      </td>
-                      <td>
-                        <StatusBadge status={c.status === 'running' ? 'active' : c.status === 'scheduled' ? 'pending' : c.status} label={titleCase(c.status)} />
-                      </td>
-                      <td>
-                        <Progress c={c} />
-                      </td>
-                      <td className="num">{pct(c.totals.connected + c.totals.completed, c.totals.contacts - c.totals.pending - c.totals.skipped)}%</td>
-                      <td className="num">{pct(c.totals.successful, c.totals.completed)}%</td>
-                      <td className="muted">{date(c.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState
-                icon={<Send />}
-                title="No campaigns yet"
-                description="Upload a CSV or pick a contact list to start calling."
-                action={
-                  <Button variant="primary" onClick={() => navigate('/campaigns/new')}>
-                    New campaign
-                  </Button>
-                }
-              />
-            )
-          }
-        </Async>
-      </div>
-    </>
-  );
+  return <PixelHero icon={Send} motion="fly" warm title="Reach thousands of customers by phone" description="Create an agent to launch your first campaign." />;
 }
 
 /* Wizard (P-21) ------------------------------------------------------- */
@@ -395,7 +295,9 @@ export function CampaignWizard() {
                   onClick={() => fileRef.current?.click()}
                 >
                   <Upload size={20} />
-                  <div style={{ marginTop: 6, fontWeight: 500 }}>{csv ? csv.name : 'Choose a CSV file'}</div>
+                  <div className="fw-medium" style={{ marginTop: 6 }}>
+                    {csv ? csv.name : 'Choose a CSV file'}
+                  </div>
                   <div className="muted small">{csv ? `${csv.rows.length} rows · ${csv.headers.length} columns` : 'First row must be the column names'}</div>
                 </button>
                 {csv && (
@@ -705,15 +607,7 @@ export function CampaignDetailPage() {
             <header className="agent-head">
               <div>
                 <div className="row" style={{ gap: 10 }}>
-                  <h1
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 500,
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {c.name}
-                  </h1>
+                  <h1 className="text-detail-title">{c.name}</h1>
                   <StatusBadge status={c.status === 'running' ? 'active' : c.status} label={titleCase(c.status)} />
                 </div>
                 <p className="muted" style={{ marginTop: 6 }}>

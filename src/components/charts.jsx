@@ -146,7 +146,9 @@ export function TimeChart({ data, x, series, kind = 'bar', height = 220, format 
       </svg>
       {hover !== null && (
         <Tip x={tipX} y={tipY}>
-          <div style={{ fontWeight: 600, marginBottom: 2 }}>{shortDay(String(data[hover][x]))}</div>
+          <div className="fw-semibold" style={{ marginBottom: 2 }}>
+            {shortDay(String(data[hover][x]))}
+          </div>
           {series.map((s, k) => (
             <div key={s.key}>
               <span

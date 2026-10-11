@@ -1,6 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, CalendarDays, Clock, Link2, Phone, Plus, Search, ShoppingCart, Trash2, Unlink } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Cable,
+  CalendarDays,
+  Check,
+  Clock,
+  Cloud,
+  Link2,
+  Phone,
+  PhoneCall,
+  Plus,
+  Search,
+  ShoppingCart,
+  Trash2,
+  Unlink,
+} from 'lucide-react';
 import {
   useAddConnectionMutation,
   useAssignNumberAgentMutation,
@@ -34,6 +52,30 @@ import {
 import { SectionCard, Select, Textarea, useSection } from '../../../components/forms';
 import { useAgentOptions } from '../shared';
 
+// Telephony providers shown on "Bring your own telephony". Each logo is read from
+// public/providers/<key>.png; if that file is missing the fallback icon is shown,
+// so adding an official logo later needs no code change.
+const PROVIDERS = [
+  { key: 'exotel', name: 'Exotel' },
+  { key: 'smartflo', name: 'Smartflo', fallback: Cloud },
+  { key: 'pulse', name: 'Pulse', fallback: Activity },
+  { key: 'intalk', name: 'InTalk' },
+  { key: 'vobiz', name: 'Vobiz' },
+  { key: 'twilio', name: 'Twilio' },
+  { key: 'plivo', name: 'Plivo' },
+];
+
+function ProviderChip({ provider }) {
+  const [missing, setMissing] = useState(false);
+  const Fallback = provider.fallback ?? Phone;
+  return (
+    <span className="provider-chip">
+      {missing ? <Fallback aria-hidden /> : <img src={`/providers/${provider.key}.png`} alt="" aria-hidden="true" onError={() => setMissing(true)} />}
+      {provider.name}
+    </span>
+  );
+}
+
 /** P-14 Phone numbers (NUM-01, EXT-01). */
 export function NumbersPage() {
   const toast = useToast();
@@ -47,111 +89,192 @@ export function NumbersPage() {
   const [unassigning, setUnassigning] = useState(null);
   const [buying, setBuying] = useState(false);
   const [tab, setTab] = useState('numbers');
+  const manageRef = useRef(null);
+  // "Connect" opens the carrier tab, then scrolls once it has rendered (scrolling
+  // first gets cancelled when the tab swap changes the page height).
+  const [scrollToManage, setScrollToManage] = useState(false);
+  useEffect(() => {
+    if (!scrollToManage) return;
+    manageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setScrollToManage(false);
+  }, [scrollToManage, tab]);
 
   return (
     <>
-      <PageHeader
-        eyebrow="Deploy"
-        title="Phone numbers"
-        description="Numbers allocated to your company, and the agent that answers each one."
-        actions={
+      <section className="page-hero">
+        <h1>Take your agent live</h1>
+        <div className="option-grid">
+          <article className="option-card">
+            <span className="clay warm" aria-hidden>
+              <PhoneCall />
+            </span>
+            <h2>Rent from Aurlynn</h2>
+            <p>Aurlynn provisions and manages the phone numbers for you, end to end.</p>
+            <ul className="check-list">
+              <li>
+                <Check /> Add or release numbers anytime
+              </li>
+              <li>
+                <Check /> Search and buy numbers right here, in India and abroad
+              </li>
+              <li>
+                <Check /> Fully managed telephony — nothing to set up
+              </li>
+            </ul>
+            <p className="small muted option-meta">
+              Priced per number, per month ·{' '}
+              <Link to="/settings/plan" className="login-link">
+                View plans
+              </Link>
+            </p>
+            <div className="option-foot">
+              <Button variant="primary" onClick={() => setBuying(true)}>
+                Get started <ArrowRight />
+              </Button>
+            </div>
+          </article>
+
+          <article className="option-card">
+            <span className="clay" aria-hidden>
+              <Cable />
+            </span>
+            <h2>Bring your own telephony</h2>
+            <p>Connect a telephony provider you already use and import your phone numbers.</p>
+            <ul className="check-list">
+              <li>
+                <Check /> Works with {PROVIDERS.length} leading providers
+              </li>
+              <li>
+                <Check /> Integrate your existing telephony instantly
+              </li>
+              <li>
+                <Check /> Keep your current numbers and rates
+              </li>
+            </ul>
+            <div className="provider-chips">
+              {PROVIDERS.map((p) => (
+                <ProviderChip key={p.key} provider={p} />
+              ))}
+            </div>
+            <div className="option-foot">
+              <Button
+                onClick={() => {
+                  setTab('carrier');
+                  setScrollToManage(true);
+                }}
+              >
+                Connect <ArrowRight />
+              </Button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      {/* <section className="page-section" ref={manageRef}>
+        <div className="page-section-head">
+          <div>
+            <h2 className="text-subheading">Your numbers</h2>
+            <p className="muted small">Numbers allocated to your company, and the agent that answers each one.</p>
+          </div>
           <Button icon={<ShoppingCart />} onClick={() => setBuying(true)}>
             Get a number
           </Button>
-        }
-      />
-
-      <SegmentTabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { value: 'numbers', label: 'Numbers' },
-          { value: 'holidays', label: 'Holidays' },
-          { value: 'carrier', label: 'Own carrier / SIP' },
-        ]}
-      />
-
-      {tab === 'numbers' && (
-        <div className="card">
-          <Async state={list}>
-            {(nums) =>
-              nums.length ? (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Number</th>
-                      <th>Answered by</th>
-                      <th className="num">Calls (7d)</th>
-                      <th>Since</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nums.map((n) => {
-                      const agent = agents.find((a) => a.id === n.agent_id);
-                      const unpublished = n.agent_id && (n.agent_published === false || (agent && !agent.published_version));
-                      return (
-                        <tr key={n.id}>
-                          <td>
-                            <div className="cell-main mono">{n.e164}</div>
-                            <div className="cell-sub">
-                              {n.country} · {[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}
-                            </div>
-                          </td>
-                          <td>
-                            {n.agent_id ? (
-                              <>
-                                <Link to={`/agents/${n.agent_id}`} className="cell-main">
-                                  {n.agent_name ?? agent?.name ?? n.agent_id}
-                                </Link>
-                                {unpublished && (
-                                  <div className="cell-sub row" style={{ color: 'var(--amber)', gap: 4 }}>
-                                    <AlertTriangle size={13} /> Agent has no published version — calls won't be answered
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <span className="muted">Not assigned</span>
-                            )}
-                          </td>
-                          <td className="num">{n.calls_7d ?? 0}</td>
-                          <td className="muted">{date(n.allocated_at)}</td>
-                          <td className="actions">
-                            <Button size="sm" variant="ghost" icon={<Clock />} onClick={() => navigate(`/numbers/${n.id}`)}>
-                              Routing
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              icon={<Link2 />}
-                              onClick={() => {
-                                setAssigning(n);
-                                setAgentId(n.agent_id ?? '');
-                              }}
-                            >
-                              {n.agent_id ? 'Change' : 'Assign'}
-                            </Button>
-                            {n.agent_id && <Button size="sm" variant="ghost" icon={<Unlink />} title="Remove agent" onClick={() => setUnassigning(n)} />}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <EmptyState
-                  icon={<Phone />}
-                  title="No numbers yet"
-                  description="Ask Aurlynn for a number, buy one, or connect your own carrier."
-                  action={<Button onClick={() => setBuying(true)}>Get a number</Button>}
-                />
-              )
-            }
-          </Async>
         </div>
-      )}
-      {tab === 'holidays' && <HolidaysCard />}
-      {tab === 'carrier' && <CarrierCard />}
+
+        <SegmentTabs
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: 'numbers', label: 'Numbers' },
+            { value: 'holidays', label: 'Holidays' },
+            { value: 'carrier', label: 'Own carrier / SIP' },
+          ]}
+        />
+
+        {tab === 'numbers' && (
+          <div className="card">
+            <Async state={list}>
+              {(nums) =>
+                nums.length ? (
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Number</th>
+                          <th>Answered by</th>
+                          <th className="num">Calls (7d)</th>
+                          <th>Since</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nums.map((n) => {
+                          const agent = agents.find((a) => a.id === n.agent_id);
+                          const unpublished = n.agent_id && (n.agent_published === false || (agent && !agent.published_version));
+                          return (
+                            <tr key={n.id}>
+                              <td>
+                                <div className="cell-main mono">{n.e164}</div>
+                                <div className="cell-sub">
+                                  {n.country} · {[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}
+                                </div>
+                              </td>
+                              <td>
+                                {n.agent_id ? (
+                                  <>
+                                    <Link to={`/agents/${n.agent_id}`} className="cell-main">
+                                      {n.agent_name ?? agent?.name ?? n.agent_id}
+                                    </Link>
+                                    {unpublished && (
+                                      <div className="cell-sub row" style={{ color: 'var(--amber)', gap: 4 }}>
+                                        <AlertTriangle size={13} /> Agent has no published version — calls won't be answered
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="muted">Not assigned</span>
+                                )}
+                              </td>
+                              <td className="num">{n.calls_7d ?? 0}</td>
+                              <td className="muted">{date(n.allocated_at)}</td>
+                              <td className="actions">
+                                <Button size="sm" variant="ghost" icon={<Clock />} onClick={() => navigate(`/numbers/${n.id}`)}>
+                                  Routing
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  icon={<Link2 />}
+                                  onClick={() => {
+                                    setAssigning(n);
+                                    setAgentId(n.agent_id ?? '');
+                                  }}
+                                >
+                                  {n.agent_id ? 'Change' : 'Assign'}
+                                </Button>
+                                {n.agent_id && <Button size="sm" variant="ghost" icon={<Unlink />} title="Remove agent" onClick={() => setUnassigning(n)} />}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={<Phone />}
+                    title="No numbers yet"
+                    description="Ask Aurlynn for a number, buy one, or connect your own carrier."
+                    action={<Button onClick={() => setBuying(true)}>Get a number</Button>}
+                  />
+                )
+              }
+            </Async>
+          </div>
+        )}
+        {tab === 'holidays' && <HolidaysCard />}
+        {tab === 'carrier' && <CarrierCard />}
+      </section> */}
 
       <Modal
         open={!!assigning}
@@ -520,13 +643,7 @@ export function NumberRoutingPage() {
                       });
                     return (
                       <div key={d} className="row wrap" style={{ gap: 10 }}>
-                        <span
-                          style={{
-                            width: 44,
-                            fontWeight: 500,
-                            textTransform: 'capitalize',
-                          }}
-                        >
+                        <span className="fw-medium" style={{ width: 44, textTransform: 'capitalize' }}>
                           {d}
                         </span>
                         <label className="check" style={{ width: 80 }}>

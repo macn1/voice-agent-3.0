@@ -2,11 +2,9 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
   AudioLines,
-  Contact,
   Inbox,
   MessageCircle,
   Plug,
-  ShieldCheck,
   Star,
   BarChart3,
   Blocks,
@@ -30,6 +28,7 @@ import { Badge } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { number, titleCase } from '../../lib/format';
 import { useBilling } from './billingContext';
+import { SETTINGS_GROUPS } from './settings/settingsNav';
 
 const SECTIONS = [
   {
@@ -52,7 +51,6 @@ const SECTIONS = [
       { to: '/numbers', label: 'Phone numbers', icon: Phone },
       { to: '/inbound', label: 'Inbound calls', icon: PhoneIncoming },
       { to: '/campaigns', label: 'Outbound campaigns', icon: Send },
-      { to: '/contacts', label: 'Contacts', icon: Contact },
       { to: '/developers', label: 'Deploy with code', icon: CodeXml },
     ],
   },
@@ -77,45 +75,11 @@ const SECTIONS = [
       { to: '/review', label: 'Quality review', icon: Star },
     ],
   },
-  {
-    label: 'Account',
-    items: [
-      { to: '/settings/team', label: 'Team', icon: Users, end: true },
-      {
-        to: '/settings/roles',
-        label: 'Roles & permissions',
-        icon: ShieldCheck,
-        end: true,
-      },
-      {
-        to: '/settings/plan',
-        label: 'Billing',
-        icon: CreditCard,
-        match: ['/settings/usage', '/settings/invoices', '/settings/payment-methods', '/settings/credits'],
-      },
-    ],
-  },
 ];
 
 const FOOTER = [
-  {
-    to: '/settings',
-    label: 'Settings',
-    icon: Settings,
-    match: [
-      '/settings/profile',
-      '/settings/do-not-call',
-      '/settings/calling-rules',
-      '/settings/privacy',
-      '/settings/activity',
-      '/settings/notifications',
-      '/settings/pronunciations',
-      '/settings/voices',
-      '/settings/exports',
-      '/settings/sub-accounts',
-    ],
-    end: true,
-  },
+  // Hovering Settings opens its grouped sections; it stays active on any /settings page.
+  { to: '/settings', label: 'Settings', icon: Settings, match: ['/settings'], groups: SETTINGS_GROUPS },
   { to: '/docs', label: 'Documentation', icon: FileText },
 ];
 

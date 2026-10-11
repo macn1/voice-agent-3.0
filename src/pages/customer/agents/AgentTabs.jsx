@@ -940,7 +940,7 @@ export function KnowledgeTab({ agent }) {
                         onChange={(e) => set(e.target.checked ? [...ids, kb.id] : ids.filter((x) => x !== kb.id))}
                       />
                       <span>
-                        <span style={{ fontWeight: 500 }}>{kb.name}</span>
+                        <span className="fw-medium">{kb.name}</span>
                         <span className="muted small" style={{ display: 'block' }}>
                           {kb.sources_count} sources · updated {date(kb.updated_at)}
                         </span>
@@ -1046,9 +1046,7 @@ export function ToolsTab({ agent }) {
                       onChange={(e) => set(e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id))}
                     />
                     <span>
-                      <span className="mono" style={{ fontWeight: 600 }}>
-                        {t.name}
-                      </span>
+                      <span className="mono fw-semibold">{t.name}</span>
                       <span className="muted small" style={{ display: 'block' }}>
                         {t.description}
                       </span>
@@ -1790,6 +1788,7 @@ function WidgetCard({ title, description, agentId, section, snippet }) {
                 }}
               >
                 <span
+                  className="text-caption fw-medium"
                   style={{
                     position: 'absolute',
                     bottom: 12,
@@ -1798,8 +1797,6 @@ function WidgetCard({ title, description, agentId, section, snippet }) {
                     borderRadius: 999,
                     background: w.color,
                     color: '#fff',
-                    fontSize: 12.5,
-                    fontWeight: 500,
                   }}
                 >
                   {w.button_text}

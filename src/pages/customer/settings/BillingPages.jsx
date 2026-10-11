@@ -84,14 +84,7 @@ export function PlanPage() {
                 </span>
                 <Badge>{titleCase(subscription.status)}</Badge>
               </div>
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: 32,
-                  fontWeight: 500,
-                  letterSpacing: '-0.03em',
-                }}
-              >
+              <div className="text-metric-lg" style={{ marginTop: 12 }}>
                 {plan?.name ?? 'Your plan'}
               </div>
               {plan && (
@@ -104,27 +97,18 @@ export function PlanPage() {
               {subscription.status === 'trialing' && subscription.trial_ends_at ? (
                 <>
                   <div className="muted small">Trial ends</div>
-                  <div style={{ fontSize: 18, fontWeight: 500 }}>{date(subscription.trial_ends_at)}</div>
+                  <div className="text-title fw-medium">{date(subscription.trial_ends_at)}</div>
                 </>
               ) : periodEnd ? (
                 <>
                   <div className="muted small">{subscription.cancel_at_period_end ? 'Active until' : 'Renews on'}</div>
-                  <div style={{ fontSize: 18, fontWeight: 500 }}>{date(periodEnd)}</div>
+                  <div className="text-title fw-medium">{date(periodEnd)}</div>
                 </>
               ) : null}
             </div>
           </div>
           {plan && (
-            <div
-              className="row wrap"
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                gap: 28,
-                marginTop: 24,
-                fontSize: 14,
-              }}
-            >
+            <div className="row wrap text-body-sm" style={{ position: 'relative', zIndex: 1, gap: 28, marginTop: 24 }}>
               <span>
                 <b>{number(plan.included_call_minutes)}</b> <span className="muted">minutes</span>
               </span>
@@ -163,9 +147,7 @@ export function PlanPage() {
       <div>
         <div className="row between wrap" style={{ marginBottom: 16 }}>
           <div>
-            <div className="card-title" style={{ fontSize: 18 }}>
-              Compare plans
-            </div>
+            <div className="card-title text-title">Compare plans</div>
             <div className="card-sub">Switching takes effect immediately. Demo mode: no payment is taken.</div>
           </div>
         </div>
@@ -176,7 +158,7 @@ export function PlanPage() {
               return (
                 <div key={p.id} className={`plan-card ${current ? 'current' : ''}`}>
                   <div className="row between">
-                    <span style={{ fontWeight: 600, fontSize: 16 }}>{p.name}</span>
+                    <span className="text-heading-sm">{p.name}</span>
                     {current && <Badge tone="ink">Current</Badge>}
                   </div>
                   <div className="price">
@@ -236,16 +218,9 @@ function UsageBar({ label, used, included, unit }) {
         <span className="card-title">{label}</span>
         {included ? <span className="muted small">{Math.round(ratio * 100)}%</span> : null}
       </div>
-      <div
-        style={{
-          marginTop: 12,
-          fontSize: 28,
-          fontWeight: 500,
-          letterSpacing: '-0.02em',
-        }}
-      >
+      <div className="text-metric-md" style={{ marginTop: 12 }}>
         {number(used, 1)}
-        <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>
+        <span className="muted text-body-lg fw-regular">
           {included !== undefined ? ` / ${number(included)}` : ''} {unit}
         </span>
       </div>
@@ -292,14 +267,7 @@ export function UsagePage() {
               <UsageBar label="Active agents" used={u.activeAgents} included={includedAgents} unit="agents" />
               <div className="card card-pad">
                 <span className="card-title">Overage estimate</span>
-                <div
-                  style={{
-                    marginTop: 12,
-                    fontSize: 28,
-                    fontWeight: 500,
-                    letterSpacing: '-0.02em',
-                  }}
-                >
+                <div className="text-metric-md" style={{ marginTop: 12 }}>
                   {overCost !== undefined ? money(overCost, plan?.currency) : '—'}
                 </div>
                 <div className="muted small" style={{ marginTop: 6 }}>
@@ -405,7 +373,7 @@ export function InvoiceDetailPage() {
               <div className="card-head">
                 <div>
                   <div className="row" style={{ gap: 10 }}>
-                    <h2 style={{ fontSize: 20 }}>{inv.invoice_number}</h2>
+                    <h2 className="text-heading-lg">{inv.invoice_number}</h2>
                     <StatusBadge status={inv.status} />
                   </div>
                   <div className="card-sub">
@@ -464,8 +432,10 @@ export function InvoiceDetailPage() {
                   <dd>{money(inv.subtotal_amount, inv.currency)}</dd>
                   <dt>Tax</dt>
                   <dd>{money(inv.tax_amount, inv.currency)}</dd>
-                  <dt style={{ color: 'var(--text)', fontWeight: 600 }}>Total</dt>
-                  <dd style={{ fontWeight: 600 }}>{money(inv.total_amount, inv.currency)}</dd>
+                  <dt className="fw-semibold" style={{ color: 'var(--text)' }}>
+                    Total
+                  </dt>
+                  <dd className="fw-semibold">{money(inv.total_amount, inv.currency)}</dd>
                   <dt>Paid</dt>
                   <dd>{money(inv.amount_paid, inv.currency)}</dd>
                 </dl>

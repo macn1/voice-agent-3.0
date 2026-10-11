@@ -170,15 +170,7 @@ export function AgentEditor() {
           <div className="agent-head">
             <div>
               <div className="row" style={{ gap: 10 }}>
-                <h1
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 500,
-                    letterSpacing: '-0.03em',
-                  }}
-                >
-                  {a.name}
-                </h1>
+                <h1 className="text-detail-title">{a.name}</h1>
                 <StatusBadge status={a.status} />
                 {a.has_unpublished_changes && <Badge tone="orange">Unpublished changes</Badge>}
               </div>
@@ -386,7 +378,7 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
 
       {vars.length > 0 && (
         <details style={{ marginBottom: 16 }}>
-          <summary className="small" style={{ cursor: 'pointer', fontWeight: 500 }}>
+          <summary className="small fw-medium" style={{ cursor: 'pointer' }}>
             Test values for call variables ({vars.length})
           </summary>
           <div className="form-grid" style={{ marginTop: 12 }}>

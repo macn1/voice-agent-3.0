@@ -94,13 +94,7 @@ export function CompanyProfilePage() {
                   const set = (x) => patch({ hours: { ...p.hours, [d]: { ...h, ...x } } });
                   return (
                     <div key={d} className="row wrap" style={{ gap: 12 }}>
-                      <span
-                        style={{
-                          width: 48,
-                          fontWeight: 500,
-                          textTransform: 'capitalize',
-                        }}
-                      >
+                      <span className="fw-medium" style={{ width: 48, textTransform: 'capitalize' }}>
                         {d}
                       </span>
                       <label className="check" style={{ width: 90 }}>

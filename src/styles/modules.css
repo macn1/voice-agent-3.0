@@ -29,7 +29,7 @@
   border: 0;
   outline: none;
   background: none;
-  font-size: 14px;
+  font-size: var(--font-size-input);
 }
 
 .pill {
@@ -40,7 +40,7 @@
   padding: 0 6px 0 11px;
   border-radius: 999px;
   background: var(--gray-bg);
-  font-size: 13px;
+  font-size: var(--font-size-small);
 }
 
 .pill button {
@@ -118,7 +118,7 @@
   border: 0;
   border-radius: 10px;
   background: none;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   color: var(--text-2);
   text-align: left;
   white-space: nowrap;
@@ -141,14 +141,14 @@
 .subnav button.active {
   background: var(--surface);
   color: var(--text);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   box-shadow: var(--shadow-sm);
 }
 
 .subnav .group {
   margin: 14px 12px 4px;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-micro);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -174,7 +174,7 @@
 }
 
 .chart .axis text {
-  font-size: 11px;
+  font-size: var(--font-size-eyebrow);
   fill: var(--muted);
 }
 
@@ -191,8 +191,8 @@
   border-radius: 10px;
   background: var(--ink);
   color: var(--on-ink);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-body);
   box-shadow: var(--shadow-md);
   transform: translate(-50%, calc(-100% - 10px));
   white-space: nowrap;
@@ -206,7 +206,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
   color: var(--text-2);
 }
 
@@ -228,7 +228,7 @@
   align-items: center;
   gap: 12px;
   padding: 3px 0;
-  font-size: 13px;
+  font-size: var(--font-size-small);
 }
 
 .hbar .track {
@@ -248,7 +248,7 @@
   display: grid;
   grid-template-columns: 36px repeat(24, minmax(0, 1fr));
   gap: 2px;
-  font-size: 10.5px;
+  font-size: var(--font-size-micro);
   color: var(--muted);
 }
 
@@ -267,8 +267,8 @@
   max-width: 82%;
   padding: 10px 14px;
   border-radius: 16px;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
 }
 
@@ -290,12 +290,12 @@
   max-width: 100%;
   background: var(--amber-bg);
   color: #7a4a09;
-  font-size: 12.5px;
+  font-size: var(--font-size-caption);
 }
 
 .bubble .meta {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-eyebrow);
   opacity: 0.65;
 }
 
@@ -305,7 +305,7 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: var(--font-size-body-sm);
   cursor: pointer;
 }
 
@@ -318,8 +318,8 @@
 }
 
 .transcript-line .who {
-  font-weight: 600;
-  font-size: 12.5px;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-caption);
   text-transform: capitalize;
 }
 
@@ -334,7 +334,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: var(--font-size-control-sm);
   color: var(--muted);
 }
 
@@ -345,8 +345,8 @@
   height: 26px;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .steps .step.on {
@@ -409,8 +409,8 @@
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
-  font-size: 10.5px;
-  font-weight: 600;
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-semibold);
   line-height: 17px;
   text-align: center;
 }
@@ -428,7 +428,7 @@
   padding: 10px 12px;
   border-radius: 10px 10px 10px 2px;
   background: #fff;
-  font-size: 13px;
+  font-size: var(--font-size-small);
   white-space: pre-wrap;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
@@ -439,7 +439,7 @@
   border-radius: 8px;
   background: #fff;
   color: #1a73e8;
-  font-size: 13px;
+  font-size: var(--font-size-small);
   text-align: center;
 }
 
@@ -475,9 +475,9 @@
   border-radius: 12px;
   background: #151515;
   color: #e9e7e3;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-loose);
   overflow-x: auto;
   white-space: pre;
 }
@@ -500,7 +500,7 @@
   height: 40px;
   border-radius: 999px;
   padding: 0 16px;
-  font-size: 13.5px;
+  font-size: var(--font-size-control-sm);
 }
 
 .agent-head {
@@ -544,4 +544,381 @@
   .mapping-row {
     grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 36px;
   }
+}
+
+/* Icon hero (inbound / outbound pages) -------------------------------- */
+
+.pixel-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: min(62vh, 560px);
+  padding: 48px 16px;
+  text-align: center;
+  animation: hero-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.pixel-hero h2 {
+  font-size: var(--font-size-heading-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.pixel-hero p {
+  max-width: 420px;
+  color: var(--text-2);
+  font-size: var(--font-size-body-sm);
+}
+
+.pixel-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.hero-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 32px;
+}
+
+.hero-icon .clay {
+  width: 96px;
+  height: 96px;
+  border-radius: 26px;
+  animation: clay-float 4s ease-in-out infinite;
+}
+
+.hero-icon .clay svg {
+  width: 42px;
+  height: 42px;
+}
+
+.hero-ripple {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 30px;
+  border: 1.5px solid var(--accent-border);
+  animation: hero-ripple 3s ease-out infinite;
+}
+
+.hero-ripple.late {
+  animation-delay: 1.5s;
+}
+
+/* Icon motions inside a clay tile. */
+.clay-glyph {
+  display: grid;
+  place-items: center;
+}
+
+.motion-ring {
+  transform-origin: 50% 60%;
+  animation: icon-ring 2.4s ease-in-out infinite;
+}
+
+.motion-fly {
+  animation: icon-fly 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+}
+
+.motion-pulse {
+  animation: icon-pulse 2.4s ease-in-out infinite;
+}
+
+.motion-nudge {
+  animation: icon-nudge 2.4s ease-in-out infinite;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes clay-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes hero-ripple {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes icon-ring {
+  0%,
+  40%,
+  100% {
+    transform: rotate(0);
+  }
+  5%,
+  15%,
+  25% {
+    transform: rotate(-12deg);
+  }
+  10%,
+  20%,
+  30% {
+    transform: rotate(12deg);
+  }
+}
+
+@keyframes icon-fly {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  40% {
+    opacity: 0;
+    transform: translate(16px, -16px);
+  }
+  41% {
+    opacity: 0;
+    transform: translate(-16px, 16px);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes icon-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.86);
+  }
+}
+
+@keyframes icon-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+/* Deploy with code ---------------------------------------------------- */
+
+.code-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 40px 0 8px;
+  text-align: center;
+}
+
+.code-hero h1 {
+  font-size: var(--font-size-heading-lg);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.code-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.code-hero-actions .dropdown {
+  left: 0;
+  right: auto;
+  text-align: left;
+}
+
+.code-section {
+  margin-top: 44px;
+}
+
+.code-section > h2 {
+  margin-bottom: 14px;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.code-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.code-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 96px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.code-card.row-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+}
+
+.code-card:hover,
+.code-card:focus-visible {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+}
+
+.code-card > .clay {
+  margin-bottom: 12px;
+}
+
+.code-card.row-card > .clay {
+  margin-bottom: 0;
+}
+
+.code-card h3 {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+}
+
+.code-card p {
+  font-size: var(--font-size-xs);
+  color: var(--text-2);
+}
+
+.code-card .chev {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+
+.code-card:hover .chev,
+.code-card:focus-visible .chev {
+  opacity: 1;
+  transform: none;
+}
+
+/* Small clay tile; the icon animates while the card is hovered. */
+.clay.sm {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: #3b3a38;
+  transition: transform 0.2s ease;
+}
+
+.clay.sm svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.7;
+}
+
+.clay.sm::after {
+  right: 6px;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+}
+
+.clay.sm .clay-glyph {
+  animation-play-state: paused;
+}
+
+.code-card:hover .clay.sm,
+.code-card:focus-visible .clay.sm {
+  transform: translateY(-2px);
+}
+
+.code-card:hover .clay-glyph,
+.code-card:focus-visible .clay-glyph {
+  animation-play-state: running;
+}
+
+.clay-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.clay-text.italic {
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 800;
+}
+
+[data-theme='dark'] .clay.sm {
+  color: var(--text-2);
+}
+
+@media (max-width: 1100px) {
+  .code-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .code-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-hero,
+  .hero-icon *,
+  .clay-glyph {
+    animation: none !important;
+  }
+  .hero-ripple {
+    display: none;
+  }
+}
+
+/* Shorter hero that sits above page content (e.g. the integrations catalog). */
+.pixel-hero.compact {
+  min-height: 0;
+  padding: 24px 16px 44px;
 }

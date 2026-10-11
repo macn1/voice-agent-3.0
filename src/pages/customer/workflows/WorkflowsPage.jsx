@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarClock, History, Pencil, Plus, Send, Trash2, Users, X, Zap } from 'lucide-react';
+import { ArrowRight, CalendarClock, History, Home, Pencil, Plus, Send, Trash2, Users, Workflow, X, Zap } from 'lucide-react';
 import {
   useCreateScheduledCallMutation,
   useCreateTriggerMutation,
@@ -30,12 +30,39 @@ import {
   useToast,
 } from '../../../components/ui';
 import { CopyField, Drawer, MappingEditor, Select, Textarea } from '../../../components/forms';
+import { PixelHero } from '../../../components/PixelHero';
+import { useBilling } from '../billingContext';
 import { E164, useAgentOptions, useNumberOptions } from '../shared';
 
 /** Workflows: call triggers (CALL-10, INT-F7), callbacks (CON-03), follow-up log (ACT-03.4), agent teams (AGT-16). */
 export function WorkflowsPage() {
   const [params, setParams] = useSearchParams();
+  const { loaded, plan } = useBilling();
   const tab = params.get('tab') || 'triggers';
+
+  if (!loaded) return null;
+  if (!/enterprise/i.test(plan?.name ?? '')) {
+    return (
+      <PixelHero
+        icon={Workflow}
+        motion="pulse"
+        warm
+        title="Workflows are only available for enterprise plans."
+        description="Upgrade to an enterprise plan to design multi-step journeys that orchestrate complex agent tasks."
+        actions={
+          <>
+            <Link to="/" className="btn">
+              <Home /> Go to home
+            </Link>
+            <Link to="/settings/plan" className="btn primary">
+              Explore Plans <ArrowRight />
+            </Link>
+          </>
+        }
+      />
+    );
+  }
+
   return (
     <>
       <PageHeader

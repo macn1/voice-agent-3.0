@@ -74,7 +74,7 @@ export function AdminLayout() {
       sidebar={<Sidebar sections={SECTIONS} footer={FOOTER} brandSub="Console" />}
       topbarRight={
         <>
-          <span className="meter-pill" style={{ fontSize: 13, color: 'var(--muted)' }}>
+          <span className="meter-pill text-small" style={{ color: 'var(--muted)' }}>
             Platform console
           </span>
           <UserMenu subtitle={<RoleBadges />} links={[{ label: 'My profile', icon: UserRound, to: '/admin/profile' }]} />

@@ -630,15 +630,7 @@ export function ContactDetailPage() {
           <>
             <header className="agent-head">
               <div>
-                <h1
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 500,
-                    letterSpacing: '-0.03em',
-                  }}
-                >
-                  {c.name ?? c.phone}
-                </h1>
+                <h1 className="text-detail-title">{c.name ?? c.phone}</h1>
                 <p className="muted mono" style={{ marginTop: 6 }}>
                   {c.phone}
                   {c.email ? ` · ${c.email}` : ''}
@@ -683,7 +675,6 @@ export function ContactDetailPage() {
                     style={{
                       gridTemplateColumns: '120px 1fr',
                       rowGap: 8,
-                      fontSize: 13.5,
                     }}
                   >
                     <dt>Source</dt>

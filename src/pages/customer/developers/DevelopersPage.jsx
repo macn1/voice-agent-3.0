@@ -1,6 +1,33 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Ban, Eye, KeyRound, Pause, Play, Plus, RefreshCw, Send, Trash2, Webhook } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  AppWindow,
+  ArrowLeft,
+  Ban,
+  BarChart3,
+  Braces,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Gauge,
+  KeyRound,
+  Layers,
+  Pause,
+  PhoneForwarded,
+  PhoneIncoming,
+  PhoneOff,
+  PhoneOutgoing,
+  Play,
+  Plus,
+  RefreshCw,
+  Send,
+  Share2,
+  Terminal,
+  Trash2,
+  Webhook,
+  Workflow,
+  Zap,
+} from 'lucide-react';
 import { useCreateApiKeyMutation, useListApiKeysQuery, useRevokeApiKeyMutation } from '../../../store/api/authApi';
 import {
   useCreateWebhookMutation,
@@ -27,14 +54,41 @@ import {
   useToast,
 } from '../../../components/ui';
 import { CopyField, Drawer } from '../../../components/forms';
+import { ClayIcon } from '../../../components/PixelHero';
 import { PREFIX } from '../../../store/api/services';
 
-/** P-32 Webhooks + P-33 Developers (INT-F1, DEV-01, DEV-02). */
+const DEPLOY_CARDS = [
+  { icon: PhoneOutgoing, motion: 'fly', title: 'Instant outbound', description: 'Place a single outbound call with one API request', to: '?tab=quickstart' },
+  { icon: Layers, motion: 'pulse', title: 'Batch outbound calling', description: 'Run outbound calling campaigns at scale', to: '/campaigns/new' },
+  { icon: PhoneIncoming, motion: 'ring', title: 'Inbound deployments', description: 'Deploy an agent on a number to answer inbound calls', to: '/numbers' },
+  { icon: BarChart3, motion: 'pulse', title: 'Data fetch', description: 'Fetch call outcomes, recordings, and transcripts', to: '?tab=webhooks' },
+  { icon: Braces, motion: 'nudge', title: 'Agents SDK', description: 'Build and deploy an agent on your own stack', to: '/docs' },
+  { icon: PhoneOff, motion: 'ring', title: 'DND lists', description: 'Manage do not disturb lists', to: '/settings/do-not-call' },
+];
+
+const RECIPES = [
+  { text: 'Mo', title: 'MoEngage', description: 'Trigger voice calls straight from your MoEngage campaigns or Flows', to: '/integrations/moengage' },
+  { icon: PhoneForwarded, motion: 'nudge', title: 'Outbound with inbound callback', description: 'Campaign with callback fallback', to: '/workflows' },
+  { icon: AppWindow, motion: 'pulse', title: 'Embed an agent on your website', description: 'Drop an agent on any page', to: '/docs' },
+  { icon: Zap, motion: 'pulse', title: 'Zapier', description: 'Call from any Zap', to: '/integrations/zapier' },
+  { text: 'M', italic: true, title: 'Make', description: 'Call from a scenario', to: '/integrations/make' },
+  { icon: Share2, motion: 'pulse', title: 'HubSpot', description: 'Call from workflows', to: '/integrations/hubspot' },
+  { icon: Workflow, motion: 'nudge', title: 'n8n', description: 'Call from a workflow', to: '/integrations/n8n' },
+  { icon: Gauge, motion: 'pulse', title: 'Balancing rate limits', description: 'Pace calls under provider limits', to: '/settings/calling-rules' },
+];
+
+const CODING_TOOLS = ['Claude Code', 'Cursor', 'Windsurf', 'GitHub Copilot'];
+
+/** P-32 Webhooks + P-33 Developers (INT-F1, DEV-01, DEV-02). Landing by default; ?tab= opens keys / webhooks / quickstart. */
 export function DevelopersPage() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') || 'keys';
+  const tab = params.get('tab');
+  if (!tab) return <DeployLanding />;
   return (
     <>
+      <Link to="/developers" className="back-link">
+        <ArrowLeft /> Deploy with code
+      </Link>
       <PageHeader
         eyebrow="Deploy"
         title="Deploy with code"
@@ -57,6 +111,101 @@ export function DevelopersPage() {
   );
 }
 
+function DeployLanding() {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false);
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const copySetup = async (tool) => {
+    setOpen(false);
+    const base = `${window.location.origin}${PREFIX.outbound}/api/v1`;
+    const prompt = [
+      'Set up Aurlynn voice agents in this project.',
+      `- API base URL: ${base}`,
+      '- Auth: "Authorization: Bearer $AURLYNN_API_KEY" (read the key from the AURLYNN_API_KEY env var)',
+      `- Start a call: POST ${base}/calls with { "agent_id", "to", "variables" }`,
+      '- Receive results with a webhook for call.completed and verify the X-Aurlynn-Signature header (HMAC-SHA256 of the raw body).',
+      `- Docs: ${window.location.origin}/docs`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast(`Setup prompt copied — paste it into ${tool}`);
+    } catch {
+      toast('Could not copy to the clipboard', 'error');
+    }
+  };
+
+  const go = (to) => navigate(to.startsWith('?') ? `/developers${to}` : to);
+
+  return (
+    <>
+      <section className="code-hero">
+        <h1>Build voice agents with code</h1>
+        <div className="code-hero-actions">
+          <div ref={ref} style={{ position: 'relative' }}>
+            <Button size="sm" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
+              Set up for AI coding tool <ChevronDown />
+            </Button>
+            {open && (
+              <div className="dropdown" role="menu">
+                {CODING_TOOLS.map((t) => (
+                  <button key={t} className="dropdown-item" role="menuitem" onClick={() => copySetup(t)}>
+                    <Terminal />
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button size="sm" variant="primary" icon={<KeyRound />} onClick={() => navigate('/developers?tab=keys&create=1')}>
+            Generate API key
+          </Button>
+        </div>
+      </section>
+
+      <section className="code-section">
+        <h2>Deploy with APIs</h2>
+        <div className="code-grid">
+          {DEPLOY_CARDS.map((c) => (
+            <button key={c.title} className="code-card" onClick={() => go(c.to)}>
+              <ClayIcon icon={c.icon} motion={c.motion} size="sm" />
+              <h3>{c.title}</h3>
+              <p>{c.description}</p>
+              <ChevronRight className="chev" aria-hidden />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="code-section">
+        <h2>Recipes & Guides</h2>
+        <div className="code-grid">
+          {RECIPES.map((r) => (
+            <button key={r.title} className="code-card row-card" onClick={() => go(r.to)}>
+              <ClayIcon icon={r.icon} motion={r.motion} size="sm">
+                {r.text && <span className={`clay-text ${r.italic ? 'italic' : ''}`}>{r.text}</span>}
+              </ClayIcon>
+              <span>
+                <h3>{r.title}</h3>
+                <p>{r.description}</p>
+              </span>
+              <ChevronRight className="chev" aria-hidden />
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
 const SCOPES = ['calls:write', 'calls:read', 'contacts:write', 'contacts:read', 'campaigns:write', 'analytics:read'];
 
 function KeysTab() {
@@ -70,6 +219,15 @@ function KeysTab() {
   const [created, setCreated] = useState(null);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  // "Generate API key" on the landing links here with ?create=1.
+  useEffect(() => {
+    if (params.get('create') !== '1') return;
+    setName('');
+    setCreating(true);
+    setParams({ tab: 'keys' }, { replace: true });
+  }, [params, setParams]);
 
   return (
     <div className="card">
@@ -173,7 +331,7 @@ function KeysTab() {
             <span className="field-label">Scopes</span>
             <div className="perm-grid">
               {SCOPES.map((s) => (
-                <label key={s} className="check mono" style={{ fontSize: 13 }}>
+                <label key={s} className="check mono text-small">
                   <input
                     type="checkbox"
                     checked={scopes.includes(s)}
@@ -392,7 +550,7 @@ function WebhookEditor({ value, onClose, onSaved }) {
           <span className="field-label">Events</span>
           <div className="perm-grid">
             {EVENTS.map((e) => (
-              <label key={e} className="check mono" style={{ fontSize: 13 }}>
+              <label key={e} className="check mono text-small">
                 <input
                   type="checkbox"
                   checked={(w.events ?? []).includes(e)}

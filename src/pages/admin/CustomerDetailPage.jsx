@@ -77,7 +77,7 @@ export function CustomerDetailPage() {
                 <h1 style={{ margin: 0 }}>{t.name}</h1>
                 <StatusBadge status={t.status} />
               </div>
-              <p className="mono" style={{ fontSize: 13 }}>
+              <p className="mono text-small">
                 {t.slug} · {t.id}
               </p>
             </div>
@@ -298,9 +298,7 @@ function DomainsTab({ tenantId }) {
                     <tr key={d.id}>
                       <td>
                         <div className="row" style={{ gap: 8 }}>
-                          <span className="cell-main mono" style={{ fontSize: 13.5 }}>
-                            {d.domain}
-                          </span>
+                          <span className="cell-main mono text-control-sm">{d.domain}</span>
                           {d.is_primary && <Badge tone="ink">Primary</Badge>}
                         </div>
                       </td>
@@ -597,7 +595,7 @@ function PlanTab({ tenantId }) {
               {list.map((p) => (
                 <div key={p.id} className={`plan-card ${assigned?.package_id === p.id ? 'current' : ''}`}>
                   <div className="row between">
-                    <span style={{ fontWeight: 600, fontSize: 16 }}>{p.name}</span>
+                    <span className="text-heading-sm">{p.name}</span>
                     {!p.is_public && <Badge plain>Admin only</Badge>}
                   </div>
                   <div className="price">
@@ -826,12 +824,7 @@ function UsageTab({ tenantId }) {
                 <div className="label">Call minutes</div>
                 <div className="value">
                   {number(u.callMinutes, 1)}
-                  {u.includedMinutes !== undefined && (
-                    <span className="muted" style={{ fontSize: 15 }}>
-                      {' '}
-                      / {number(u.includedMinutes)}
-                    </span>
-                  )}
+                  {u.includedMinutes !== undefined && <span className="muted text-body-lg"> / {number(u.includedMinutes)}</span>}
                 </div>
                 {ratio !== undefined && (
                   <div className={`bar ${ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warn' : ''}`} style={{ marginTop: 12 }}>

@@ -262,8 +262,8 @@ function PermissionMatrix({ role, groups, initial, onClose, onSave }) {
               <label key={d.code} className="check">
                 <input type="checkbox" disabled={readOnly} checked={selected.has(d.code)} onChange={(e) => toggle(d.code, e.target.checked)} />
                 <span>
-                  <span style={{ fontWeight: 500 }}>{d.label}</span>
-                  <span className="mono muted" style={{ display: 'block', fontSize: 11.5 }}>
+                  <span className="fw-medium">{d.label}</span>
+                  <span className="mono muted text-overline" style={{ display: 'block' }}>
                     {d.code}
                   </span>
                 </span>

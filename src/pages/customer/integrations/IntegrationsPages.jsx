@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Plug, RefreshCw, Search, Unplug } from 'lucide-react';
+import { ArrowLeft, BookOpen, CheckCircle2, LayoutGrid, Plug, RefreshCw, Search, Unplug } from 'lucide-react';
 import {
   useConnectCalendarMutation,
   useConnectIntegrationMutation,
@@ -22,6 +22,7 @@ import {
   useRunIntegrationSyncMutation,
 } from '../../../store/api/integrationApi';
 import { dateTime, titleCase } from '../../../lib/format';
+import { PixelHero } from '../../../components/PixelHero';
 import {
   Async,
   Badge,
@@ -31,7 +32,6 @@ import {
   errMsg,
   Field,
   Input,
-  PageHeader,
   SegmentTabs,
   Skeleton,
   StatusBadge,
@@ -64,12 +64,28 @@ export function IntegrationsPage() {
   const [q, setQ] = useState('');
   return (
     <>
-      <PageHeader
-        eyebrow="Connect"
-        title="Integrations"
-        description="Connect your CRM, calendar, helpdesk and automation tools so agents can look things up, book, and log every call."
+      <PixelHero
+        compact
+        icon={Plug}
+        motion="nudge"
+        title="Connect the tools your team already uses"
+        description="Link your CRM, calendar, helpdesk and automation tools so agents can look things up, book meetings and log every call."
+        actions={
+          <>
+            <Link to="/docs" className="btn">
+              <BookOpen /> Read docs
+            </Link>
+            <Button
+              variant="primary"
+              icon={<LayoutGrid />}
+              onClick={() => document.getElementById('integration-catalog')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              Browse integrations
+            </Button>
+          </>
+        }
       />
-      <div className="row between wrap" style={{ marginBottom: 18 }}>
+      <div id="integration-catalog" className="row between wrap" style={{ marginBottom: 18, scrollMarginTop: 16 }}>
         <div className="tabs" style={{ margin: 0 }}>
           {CATEGORIES.map((c) => (
             <button key={c} className={`chip ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>
@@ -97,16 +113,7 @@ export function IntegrationsPage() {
                   }}
                   onClick={() => navigate(`/integrations/${i.provider}`)}
                 >
-                  <span
-                    className="clay"
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 14,
-                      fontWeight: 700,
-                      fontSize: 18,
-                    }}
-                  >
+                  <span className="clay fw-bold text-title" style={{ width: 48, height: 48, borderRadius: 14 }}>
                     {i.name[0]}
                   </span>
                   <span>
@@ -174,29 +181,12 @@ export function IntegrationDetailPage() {
           <>
             <header className="agent-head">
               <div className="row" style={{ gap: 16, alignItems: 'flex-start' }}>
-                <span
-                  className="clay"
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 16,
-                    fontWeight: 700,
-                    fontSize: 22,
-                  }}
-                >
+                <span className="clay fw-bold text-heading-lg" style={{ width: 56, height: 56, borderRadius: 16 }}>
                   {i.name[0]}
                 </span>
                 <div>
                   <div className="row" style={{ gap: 10 }}>
-                    <h1
-                      style={{
-                        fontSize: 28,
-                        fontWeight: 500,
-                        letterSpacing: '-0.03em',
-                      }}
-                    >
-                      {i.name}
-                    </h1>
+                    <h1 className="text-detail-title">{i.name}</h1>
                     <StatusBadge
                       status={i.connected ? (i.status === 'error' ? 'failed' : 'active') : 'cancelled'}
                       label={i.connected ? (i.status === 'error' ? 'Error' : 'Connected') : 'Not connected'}
@@ -741,7 +731,7 @@ function AutomationTab({ name }) {
   return (
     <div className="card card-pad stack">
       <div className="card-title">Set up {name}</div>
-      <ol className="small" style={{ lineHeight: 1.9 }}>
+      <ol className="small lh-spacious">
         <li>
           Create an API key on <Link to="/developers?tab=keys">Deploy with code → API keys</Link> with <span className="mono">calls:write</span>.
         </li>

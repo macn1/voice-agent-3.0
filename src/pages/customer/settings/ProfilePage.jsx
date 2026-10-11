@@ -14,11 +14,11 @@ export function ProfilePage() {
     <div className="grid-2" style={{ alignItems: 'start' }}>
       <div className="card card-pad">
         <div className="row" style={{ gap: 16, marginBottom: 24 }}>
-          <span className="avatar" style={{ width: 56, height: 56, fontSize: 20 }}>
+          <span className="avatar text-heading-lg" style={{ width: 56, height: 56 }}>
             {initials(profile.name)}
           </span>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{profile.name}</div>
+            <div className="text-title fw-semibold">{profile.name}</div>
             <div className="muted">{profile.email}</div>
           </div>
         </div>
@@ -68,7 +68,7 @@ export function ProfilePage() {
             <div className="tag-list">
               {/* Codes may arrive as strings or as { code } objects. */}
               {profile.permissions
-                .map((p) => (typeof p === "string" ? p : p?.code))
+                .map((p) => (typeof p === 'string' ? p : p?.code))
                 .filter(Boolean)
                 .map((code) => (
                   <span key={code} className="tag">

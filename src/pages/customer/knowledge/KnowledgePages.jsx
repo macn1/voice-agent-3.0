@@ -1,6 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Globe, HelpCircle, LibraryBig, MessageCircleQuestion, Plus, RefreshCw, Search, Trash2, Type, Upload } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  FileText,
+  Globe,
+  HelpCircle,
+  LibraryBig,
+  MessageCircleQuestion,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Type,
+  Upload,
+} from 'lucide-react';
 import {
   useAddSourceMutation,
   useCreateKnowledgeBaseMutation,
@@ -10,8 +24,10 @@ import {
   useRemoveSourceMutation,
   useResyncSourceMutation,
 } from '../../../store/api/flowApi';
+import { PixelHero } from '../../../components/PixelHero';
 import { useListUnansweredQuestionsQuery } from '../../../store/api/analyticsApi';
 import { date, dateTime, titleCase } from '../../../lib/format';
+import { asList } from '../../../lib/normalize';
 import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, StatusBadge, useToast } from '../../../components/ui';
 import { Select, Textarea } from '../../../components/forms';
 
@@ -25,54 +41,77 @@ export function KnowledgeListPage() {
   const [desc, setDesc] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // No knowledge bases yet (or the list couldn't load): show the getting-started hero.
+  const empty = list.isError || (list.isSuccess && asList(list.data).length === 0);
 
   return (
     <>
-      <PageHeader
-        eyebrow="Build"
-        title="Knowledge base"
-        description="Documents, websites, FAQs and notes your agents answer from. Attach a knowledge base to an agent on its Knowledge tab."
-        actions={
-          <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-            New knowledge base
-          </Button>
-        }
-      />
-
-      <div className="card">
-        <Async state={list}>
-          {(kbs) =>
-            kbs.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th className="num">Sources</th>
-                    <th className="num">Agents using it</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kbs.map((kb) => (
-                    <tr key={kb.id} className="clickable" onClick={() => navigate(`/knowledge/${kb.id}`)}>
-                      <td>
-                        <div className="cell-main">{kb.name}</div>
-                        {kb.description && <div className="cell-sub">{kb.description}</div>}
-                      </td>
-                      <td className="num">{kb.sources_count}</td>
-                      <td className="num">{kb.agents_count}</td>
-                      <td className="muted">{date(kb.updated_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState icon={<LibraryBig />} title="No knowledge yet" description="Create a knowledge base, then add files, a website or FAQs." />
-            )
+      {empty ? (
+        <PixelHero
+          icon={LibraryBig}
+          motion="pulse"
+          title="Create your first knowledge base"
+          description="Upload files, so your agents have information to answer callers."
+          actions={
+            <>
+              <Link to="/docs" className="btn">
+                <BookOpen /> Read docs
+              </Link>
+              <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+                Create knowledge base
+              </Button>
+            </>
           }
-        </Async>
-      </div>
-      <UnansweredCard />
+        />
+      ) : (
+        <>
+          <PageHeader
+            eyebrow="Build"
+            title="Knowledge base"
+            description="Documents, websites, FAQs and notes your agents answer from. Attach a knowledge base to an agent on its Knowledge tab."
+            actions={
+              <Button variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+                New knowledge base
+              </Button>
+            }
+          />
+
+          <div className="card">
+            <Async state={list}>
+              {(kbs) =>
+                kbs.length ? (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th className="num">Sources</th>
+                        <th className="num">Agents using it</th>
+                        <th>Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kbs.map((kb) => (
+                        <tr key={kb.id} className="clickable" onClick={() => navigate(`/knowledge/${kb.id}`)}>
+                          <td>
+                            <div className="cell-main">{kb.name}</div>
+                            {kb.description && <div className="cell-sub">{kb.description}</div>}
+                          </td>
+                          <td className="num">{kb.sources_count}</td>
+                          <td className="num">{kb.agents_count}</td>
+                          <td className="muted">{date(kb.updated_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <EmptyState icon={<LibraryBig />} title="No knowledge yet" description="Create a knowledge base, then add files, a website or FAQs." />
+                )
+              }
+            </Async>
+          </div>
+          <UnansweredCard />
+        </>
+      )}
       <Modal
         open={creating}
         onClose={() => setCreating(false)}
@@ -542,7 +581,9 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               onClick={() => fileRef.current?.click()}
             >
               <Upload size={22} />
-              <div style={{ marginTop: 8, fontWeight: 500 }}>Choose files</div>
+              <div className="fw-medium" style={{ marginTop: 8 }}>
+                Choose files
+              </div>
               <div className="muted small">PDF, Word, text, Markdown, CSV</div>
             </button>
             {files.map((f) => (

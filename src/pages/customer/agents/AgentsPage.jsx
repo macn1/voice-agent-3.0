@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Copy, Download, Plus, Search, Trash2, Upload, UserRound } from 'lucide-react';
+import { Bot, Copy, Download, Plus, Search, Trash2, Upload, UserRound } from 'lucide-react';
 import { date } from '../../../lib/format';
 import {
   useDeleteAgentMutation,
@@ -9,9 +9,10 @@ import {
   useLazyExportAgentQuery,
   useListAgentsQuery,
 } from '../../../store/api/flowApi';
-import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Input, PageHeader, StatusBadge, useToast } from '../../../components/ui';
+import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Input, StatusBadge, useToast } from '../../../components/ui';
 import { downloadText, readFileText, Select } from '../../../components/forms';
 import { useBilling } from '../billingContext';
+import { AgentPromptBox, UseCaseGallery } from '../AgentStarter';
 
 export function AgentsPage() {
   const navigate = useNavigate();
@@ -39,12 +40,23 @@ export function AgentsPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Build"
-        title="Agents"
-        description="Every voice agent in your company. Edits go to a draft; calls keep using the published version until you publish."
-        actions={
-          <>
+      <section className="agent-start">
+        <span className="clay agent-start-icon" aria-hidden>
+          <Bot />
+        </span>
+        <h1>What should your voice agent do?</h1>
+        <AgentPromptBox placeholder="Create a voice agent to call leads and qualify them for sales" />
+      </section>
+
+      <UseCaseGallery centered />
+
+      {/* <section className="page-section">
+        <div className="page-section-head">
+          <div>
+            <h2 className="text-subheading">Your agents</h2>
+            <p className="muted small">Edits go to a draft; calls keep using the published version until you publish.</p>
+          </div>
+          <div className="row" style={{ gap: 10 }}>
             <input
               ref={fileRef}
               type="file"
@@ -77,126 +89,126 @@ export function AgentsPage() {
             >
               New agent
             </Button>
-          </>
-        }
-      />
-
-      {atLimit && (
-        <div className="banner warn">
-          <span className="grow">You've reached your plan's limit of {limit} agents.</span>
-          <Link to="/settings/plan" className="btn sm">
-            Upgrade plan
-          </Link>
-        </div>
-      )}
-      <div className="card">
-        <div className="card-head">
-          <div className="filters">
-            <div className="search">
-              <Search />
-              <Input placeholder="Search agents" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <Select value={status} options={['draft', 'live', 'paused']} placeholder="All statuses" onChange={(e) => setStatus(e.target.value)} />
-            {tags.length > 0 && <Select value={tag} options={tags} placeholder="All tags" onChange={(e) => setTag(e.target.value)} />}
           </div>
         </div>
-        <Async state={list}>
-          {() =>
-            rows.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Agent</th>
-                      <th>Language</th>
-                      <th>Status</th>
-                      <th>Numbers</th>
-                      <th className="num">Calls (7d)</th>
-                      <th>Last published</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((a) => (
-                      <tr key={a.id} className="clickable" onClick={() => navigate(`/agents/${a.id}`)}>
-                        <td>
-                          <div className="cell-main">{a.name}</div>
-                          <div className="tag-list" style={{ marginTop: 4 }}>
-                            {a.tags?.map((t) => (
-                              <span key={t} className="tag">
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="muted">{a.language ?? '—'}</td>
-                        <td>
-                          <div className="row" style={{ gap: 6 }}>
-                            <StatusBadge status={a.status} />
-                            {a.has_unpublished_changes && <Badge tone="orange">Unpublished changes</Badge>}
-                          </div>
-                        </td>
-                        <td className="mono small">{a.numbers?.length ? a.numbers.join(', ') : <span className="muted">—</span>}</td>
-                        <td className="num">{a.calls_7d ?? 0}</td>
-                        <td className="muted">{a.last_published_at ? date(a.last_published_at) : 'Never'}</td>
-                        <td className="actions" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Copy />}
-                            title="Duplicate"
-                            onClick={async () => {
-                              try {
-                                const d = await duplicateAgent(a.id).unwrap();
-                                toast(`Duplicated as ${d.name}`);
-                              } catch (e) {
-                                toast(errMsg(e), 'error');
-                              }
-                            }}
-                          />
 
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Download />}
-                            title="Export"
-                            onClick={async () => {
-                              try {
-                                downloadText(
-                                  `${a.name.replace(/\W+/g, '-')}.json`,
-                                  JSON.stringify(await exportAgent(a.id).unwrap(), null, 2),
-                                  'application/json',
-                                );
-                              } catch (e) {
-                                toast(errMsg(e), 'error');
-                              }
-                            }}
-                          />
-
-                          <Button size="sm" variant="ghost" icon={<Trash2 />} title="Delete" onClick={() => setRemoving(a)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {atLimit && (
+          <div className="banner warn">
+            <span className="grow">You've reached your plan's limit of {limit} agents.</span>
+            <Link to="/settings/plan" className="btn sm">
+              Upgrade plan
+            </Link>
+          </div>
+        )}
+        <div className="card">
+          <div className="card-head">
+            <div className="filters">
+              <div className="search">
+                <Search />
+                <Input placeholder="Search agents" value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
-            ) : (
-              <EmptyState
-                icon={<UserRound />}
-                title={items.length ? 'No agents match' : 'No agents yet'}
-                description={items.length ? 'Try another search or filter.' : 'Start from a template, describe what you need, or begin blank.'}
-                action={
-                  !items.length && (
-                    <Button variant="primary" icon={<Plus />} onClick={() => navigate('/agents/new')}>
-                      New agent
-                    </Button>
-                  )
-                }
-              />
-            )
-          }
-        </Async>
-      </div>
+              <Select value={status} options={['draft', 'live', 'paused']} placeholder="All statuses" onChange={(e) => setStatus(e.target.value)} />
+              {tags.length > 0 && <Select value={tag} options={tags} placeholder="All tags" onChange={(e) => setTag(e.target.value)} />}
+            </div>
+          </div>
+          <Async state={list}>
+            {() =>
+              rows.length ? (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Agent</th>
+                        <th>Language</th>
+                        <th>Status</th>
+                        <th>Numbers</th>
+                        <th className="num">Calls (7d)</th>
+                        <th>Last published</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((a) => (
+                        <tr key={a.id} className="clickable" onClick={() => navigate(`/agents/${a.id}`)}>
+                          <td>
+                            <div className="cell-main">{a.name}</div>
+                            <div className="tag-list" style={{ marginTop: 4 }}>
+                              {a.tags?.map((t) => (
+                                <span key={t} className="tag">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="muted">{a.language ?? '—'}</td>
+                          <td>
+                            <div className="row" style={{ gap: 6 }}>
+                              <StatusBadge status={a.status} />
+                              {a.has_unpublished_changes && <Badge tone="orange">Unpublished changes</Badge>}
+                            </div>
+                          </td>
+                          <td className="mono small">{a.numbers?.length ? a.numbers.join(', ') : <span className="muted">—</span>}</td>
+                          <td className="num">{a.calls_7d ?? 0}</td>
+                          <td className="muted">{a.last_published_at ? date(a.last_published_at) : 'Never'}</td>
+                          <td className="actions" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Copy />}
+                              title="Duplicate"
+                              onClick={async () => {
+                                try {
+                                  const d = await duplicateAgent(a.id).unwrap();
+                                  toast(`Duplicated as ${d.name}`);
+                                } catch (e) {
+                                  toast(errMsg(e), 'error');
+                                }
+                              }}
+                            />
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Download />}
+                              title="Export"
+                              onClick={async () => {
+                                try {
+                                  downloadText(
+                                    `${a.name.replace(/\W+/g, '-')}.json`,
+                                    JSON.stringify(await exportAgent(a.id).unwrap(), null, 2),
+                                    'application/json',
+                                  );
+                                } catch (e) {
+                                  toast(errMsg(e), 'error');
+                                }
+                              }}
+                            />
+
+                            <Button size="sm" variant="ghost" icon={<Trash2 />} title="Delete" onClick={() => setRemoving(a)} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<UserRound />}
+                  title={items.length ? 'No agents match' : 'No agents yet'}
+                  description={items.length ? 'Try another search or filter.' : 'Pick a template above, describe what you need, or begin blank.'}
+                  action={
+                    !items.length && (
+                      <Button variant="primary" icon={<Plus />} onClick={() => navigate('/agents/new')}>
+                        New agent
+                      </Button>
+                    )
+                  }
+                />
+              )
+            }
+          </Async>
+        </div>
+      </section> */}
       <ConfirmDialog
         open={!!removing}
         onClose={() => setRemoving(null)}

@@ -782,14 +782,7 @@ export function CreditsPage() {
                 <div className="eyebrow" style={{ color: '#a9a8a5' }}>
                   Credit balance
                 </div>
-                <div
-                  style={{
-                    fontSize: 36,
-                    fontWeight: 500,
-                    letterSpacing: '-0.03em',
-                    marginTop: 10,
-                  }}
-                >
+                <div className="text-metric-lg" style={{ marginTop: 10 }}>
                   {money(w.balance, w.currency)}
                 </div>
                 <div className="row" style={{ marginTop: 18 }}>
