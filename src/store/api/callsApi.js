@@ -11,7 +11,8 @@ const CAMP = (_r, _e, arg) => [{ type: 'Campaign', id: typeof arg === 'string' ?
 export const callsApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
     // Phone numbers & routing ------------------------------------------------
-    listNumbers: b.query({ query: () => C.telephony('/customer/phone-numbers'), providesTags: ['Number'] }),
+    listNumbers: b.query({ query: () => C.inbound('/customer/phone-numbers'), providesTags: ['Number'] }),
+    getNumber: b.query({ query: (id) => C.telephony(`/customer/phone-numbers/${id}`), providesTags: (_r, _e, id) => [{ type: 'Number', id }] }),
     assignNumberAgent: b.mutation({
       query: ({ id, agent_id }) => C.inbound(`/customer/phone-numbers/${id}/agent`, { method: 'PUT', body: { agent_id } }),
       invalidatesTags: ['Number', 'Agent'],
@@ -37,14 +38,33 @@ export const callsApi = baseApi.injectEndpoints({
     addConnection: b.mutation({ query: (body) => C.telephony('/customer/telephony/connections', { method: 'POST', body }), invalidatesTags: ['Connection'] }),
 
     // Single calls (CALL-02) -------------------------------------------------
-    startCall: b.mutation({ query: (body) => C.outbound('/calls', { method: 'POST', body }), invalidatesTags: ['Call'] }),
+    startCall: b.mutation({
+      query: (body) => C.outbound('/calls', { method: 'POST', body: { ...body, to_number: body.to_number || body.to } }),
+      invalidatesTags: ['Call'],
+    }),
     getCallStatus: b.query({ query: (id) => C.outbound(`/calls/${id}`), providesTags: (_r, _e, id) => [{ type: 'Call', id }] }),
     hangupCall: b.mutation({ query: (id) => C.outbound(`/calls/${id}/hangup`, { method: 'POST', body: {} }), invalidatesTags: ['Call'] }),
 
     // Call records (CALL-05, CALL-06, PCA, QTY-03) ---------------------------
-    listCalls: b.query({ query: (params = {}) => C.analytics('/customer/calls', { params }), providesTags: ['Call'] }),
+    listCalls: b.query({
+      query: ({ range, phone, ...params } = {}) => {
+        const p = { ...params };
+        if (phone && !p.q) p.q = phone;
+        if (range && !p.from) {
+          const m = String(range).match(/^(\d+)d$/);
+          const days = m ? Number(m[1]) : 7;
+          p.from = new Date(Date.now() - days * 86400000).toISOString();
+        }
+        return C.analytics('/customer/calls', { params: p });
+      },
+      providesTags: ['Call'],
+    }),
     getCall: b.query({ query: (id) => C.analytics(`/customer/calls/${id}`), providesTags: (_r, _e, id) => [{ type: 'Call', id }] }),
-    getTranscript: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/transcript`) }),
+    getTranscript: b.query({
+      query: (id) => C.analytics(`/customer/calls/${id}/transcript`),
+      transformResponse: (res) => res?.turns ?? res ?? [],
+    }),
+    getCallAnalysis: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/analysis`) }),
     getRecording: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/recording`) }),
     listLiveCalls: b.query({ query: () => C.analytics('/customer/calls/live'), providesTags: ['Call'] }),
     updateCall: b.mutation({ query: ({ id, ...body }) => C.analytics(`/customer/calls/${id}`, { method: 'PATCH', body }), invalidatesTags: ['Call'] }),
@@ -141,6 +161,7 @@ export const callsApi = baseApi.injectEndpoints({
 
 export const {
   useListNumbersQuery,
+  useGetNumberQuery,
   useAssignNumberAgentMutation,
   useUnassignNumberAgentMutation,
   useGetRoutingQuery,
@@ -158,6 +179,7 @@ export const {
   useListCallsQuery,
   useGetCallQuery,
   useGetTranscriptQuery,
+  useGetCallAnalysisQuery,
   useGetRecordingQuery,
   useListLiveCallsQuery,
   useUpdateCallMutation,

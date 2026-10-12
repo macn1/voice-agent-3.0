@@ -50,7 +50,7 @@ export function AgentsPage() {
 
       <UseCaseGallery centered />
 
-      {/* <section className="page-section">
+      <section className="page-section">
         <div className="page-section-head">
           <div>
             <h2 className="text-subheading">Your agents</h2>
@@ -208,7 +208,7 @@ export function AgentsPage() {
             }
           </Async>
         </div>
-      </section> */}
+      </section>
       <ConfirmDialog
         open={!!removing}
         onClose={() => setRemoving(null)}

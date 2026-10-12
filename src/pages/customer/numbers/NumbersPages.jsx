@@ -22,6 +22,7 @@ import {
 import {
   useAddConnectionMutation,
   useAssignNumberAgentMutation,
+  useGetNumberQuery,
   useGetRoutingQuery,
   useListConnectionsQuery,
   useListHolidaysQuery,
@@ -170,7 +171,7 @@ export function NumbersPage() {
         </div>
       </section>
 
-      {/* <section className="page-section" ref={manageRef}>
+      <section className="page-section" ref={manageRef}>
         <div className="page-section-head">
           <div>
             <h2 className="text-subheading">Your numbers</h2>
@@ -216,7 +217,7 @@ export function NumbersPage() {
                               <td>
                                 <div className="cell-main mono">{n.e164}</div>
                                 <div className="cell-sub">
-                                  {n.country} · {[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}
+                                  {n.country} · {[n.capabilities?.voice && 'Voice', n.capabilities?.sms && 'SMS'].filter(Boolean).join(' + ') || 'Voice'}
                                 </div>
                               </td>
                               <td>
@@ -236,7 +237,7 @@ export function NumbersPage() {
                                 )}
                               </td>
                               <td className="num">{n.calls_7d ?? 0}</td>
-                              <td className="muted">{date(n.allocated_at)}</td>
+                              <td className="muted">{date(n.allocated_at || n.created_at)}</td>
                               <td className="actions">
                                 <Button size="sm" variant="ghost" icon={<Clock />} onClick={() => navigate(`/numbers/${n.id}`)}>
                                   Routing
@@ -274,7 +275,7 @@ export function NumbersPage() {
         )}
         {tab === 'holidays' && <HolidaysCard />}
         {tab === 'carrier' && <CarrierCard />}
-      </section> */}
+      </section>
 
       <Modal
         open={!!assigning}
@@ -574,6 +575,8 @@ export function NumberRoutingPage() {
   const { id = '' } = useParams();
   const nums = useListNumbersQuery();
   const num = nums.data?.find((n) => n.id === id);
+  const single = useGetNumberQuery(id, { skip: !id || !!num });
+  const current = num ?? single.data;
   const routing = useSection(useGetRoutingQuery(id), usePutRoutingMutation(), (body) => ({ id, body }));
   const [simulate, { isLoading: simBusy }] = useSimulateRoutingMutation();
   const { options } = useAgentOptions();
@@ -589,7 +592,7 @@ export function NumberRoutingPage() {
       </Link>
       <PageHeader
         eyebrow="Routing"
-        title={num?.e164 ?? 'Number routing'}
+        title={current?.e164 ?? 'Number routing'}
         description="Business hours, what happens after hours, and the fallback if the agent can't take the call."
       />
       <div className="stack">

@@ -63,6 +63,12 @@ export const customerApi = baseApi.injectEndpoints({
     }),
     listWalletTransactions: b.query({ query: () => C.billing('/customer/billing/wallet/transactions'), providesTags: ['Wallet'] }),
     setAutoRecharge: b.mutation({ query: (body) => C.billing('/customer/billing/wallet/auto-recharge', { method: 'PUT', body }), invalidatesTags: ['Wallet'] }),
+
+    // Demo usage (DEMO_MODE only) ----------------------------------------
+    clearDemoUsage: b.mutation({
+      query: () => C.billing('/customer/demo/usage', { method: 'DELETE' }),
+      invalidatesTags: ['Usage'],
+    }),
   }),
 });
 
@@ -91,4 +97,5 @@ export const {
   useTopUpWalletMutation,
   useListWalletTransactionsQuery,
   useSetAutoRechargeMutation,
+  useClearDemoUsageMutation,
 } = customerApi;

@@ -44,6 +44,17 @@ export const adminApi = baseApi.injectEndpoints({
     }),
     listLlmProviders: b.query({ query: () => A.auth('/admin/catalog/llm-providers') }),
 
+    // Tenant staff & credentials (admin) --------------------------------
+    listTenantStaff: b.query({
+      query: (tenantId) => A.auth(`/admin/customers/${tenantId}/staff`),
+      providesTags: ['Staff'],
+    }),
+    resetTenantStaffCredentials: b.mutation({
+      query: ({ tenantId, staffId, ...body }) =>
+        A.auth(`/admin/customers/${tenantId}/staff/${staffId}/credentials`, { method: 'PATCH', body }),
+      invalidatesTags: ['Staff'],
+    }),
+
     // Platform roles & staff --------------------------------------------
     listAdminRoles: b.query({ query: () => A.auth('/admin/roles'), providesTags: ['AdminRole'] }),
     createAdminRole: b.mutation({ query: (body) => A.auth('/admin/roles', { method: 'POST', body }), invalidatesTags: ['AdminRole'] }),
@@ -109,6 +120,8 @@ export const {
   useGetTenantSettingsQuery,
   usePutTenantSettingsMutation,
   useListLlmProvidersQuery,
+  useListTenantStaffQuery,
+  useResetTenantStaffCredentialsMutation,
   useListAdminRolesQuery,
   useCreateAdminRoleMutation,
   useSetAdminRolePermissionsMutation,
