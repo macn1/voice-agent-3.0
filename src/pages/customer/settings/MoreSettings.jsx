@@ -50,42 +50,44 @@ export function NotificationSettingsPage() {
       {(v, _p, set) => {
         const events = [...new Set([...Object.keys(EVENT_LABEL), ...Object.keys(v.preferences)])];
         return (
-          <table className="table" style={{ margin: '-8px -24px' }}>
-            <thead>
-              <tr>
-                <th>Alert</th>
-                <th style={{ textAlign: 'center' }}>In-app</th>
-                <th style={{ textAlign: 'center' }}>Email</th>
-                <th style={{ textAlign: 'center' }}>WhatsApp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => {
-                const p = v.preferences[e] ?? {
-                  email: false,
-                  whatsapp: false,
-                  in_app: true,
-                };
-                const toggle = (k) =>
-                  set({
-                    preferences: {
-                      ...v.preferences,
-                      [e]: { ...p, [k]: !p[k] },
-                    },
-                  });
-                return (
-                  <tr key={e}>
-                    <td>{EVENT_LABEL[e] ?? e}</td>
-                    {['in_app', 'email', 'whatsapp'].map((k) => (
-                      <td key={k} style={{ textAlign: 'center' }}>
-                        <input type="checkbox" checked={p[k]} onChange={() => toggle(k)} />
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="table" style={{ margin: '-8px -24px' }}>
+              <thead>
+                <tr>
+                  <th>Alert</th>
+                  <th style={{ textAlign: 'center' }}>In-app</th>
+                  <th style={{ textAlign: 'center' }}>Email</th>
+                  <th style={{ textAlign: 'center' }}>WhatsApp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e) => {
+                  const p = v.preferences[e] ?? {
+                    email: false,
+                    whatsapp: false,
+                    in_app: true,
+                  };
+                  const toggle = (k) =>
+                    set({
+                      preferences: {
+                        ...v.preferences,
+                        [e]: { ...p, [k]: !p[k] },
+                      },
+                    });
+                  return (
+                    <tr key={e}>
+                      <td>{EVENT_LABEL[e] ?? e}</td>
+                      {['in_app', 'email', 'whatsapp'].map((k) => (
+                        <td key={k} style={{ textAlign: 'center' }}>
+                          <input type="checkbox" checked={p[k]} onChange={() => toggle(k)} />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         );
       }}
     </SectionCard>
@@ -165,39 +167,41 @@ export function DoNotCallPage() {
         {(p) => (
           <>
             {p.items.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Number</th>
-                    <th>Reason</th>
-                    <th>Source</th>
-                    <th>Added</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.items.map((d) => (
-                    <tr key={d.id}>
-                      <td className="mono cell-main">{d.phone}</td>
-                      <td>{d.reason ?? '—'}</td>
-                      <td>{titleCase(d.source)}</td>
-                      <td className="muted">{dateTime(d.created_at)}</td>
-                      <td className="actions">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Trash2 />}
-                          onClick={() =>
-                            removeDnd(d.id)
-                              .unwrap()
-                              .catch((e) => toast(errMsg(e), 'error'))
-                          }
-                        />
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Number</th>
+                      <th>Reason</th>
+                      <th>Source</th>
+                      <th>Added</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {p.items.map((d) => (
+                      <tr key={d.id}>
+                        <td className="mono cell-main">{d.phone}</td>
+                        <td>{d.reason ?? '—'}</td>
+                        <td>{titleCase(d.source)}</td>
+                        <td className="muted">{dateTime(d.created_at)}</td>
+                        <td className="actions">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trash2 />}
+                            onClick={() =>
+                              removeDnd(d.id)
+                                .unwrap()
+                                .catch((e) => toast(errMsg(e), 'error'))
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No blocked numbers" />
             )}
@@ -458,33 +462,35 @@ export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = fa
         {(p) => (
           <>
             {p.items.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Who</th>
-                    <th>What</th>
-                    {showTenant && <th>Customer</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.items.map((a) => (
-                    <tr key={a.id}>
-                      <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                        {dateTime(a.created_at)}
-                      </td>
-                      <td>
-                        <div className="cell-main">{a.actor_name}</div>
-                        <div className="cell-sub">{titleCase(a.actor_type)}</div>
-                      </td>
-                      <td>
-                        <span className="tag">{a.action}</span> {a.entity_name}
-                      </td>
-                      {showTenant && <td>{a.tenant_name ?? '—'}</td>}
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Who</th>
+                      <th>What</th>
+                      {showTenant && <th>Customer</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {p.items.map((a) => (
+                      <tr key={a.id}>
+                        <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                          {dateTime(a.created_at)}
+                        </td>
+                        <td>
+                          <div className="cell-main">{a.actor_name}</div>
+                          <div className="cell-sub">{titleCase(a.actor_type)}</div>
+                        </td>
+                        <td>
+                          <span className="tag">{a.action}</span> {a.entity_name}
+                        </td>
+                        {showTenant && <td>{a.tenant_name ?? '—'}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No activity" />
             )}
@@ -500,7 +506,7 @@ export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = fa
 
 export function PronunciationsPage() {
   const s = useSection(useListPronunciationsQuery(), usePutPronunciationsMutation(), (v) =>
-    v.map(({ language, word, say_as }) => ({ language, word, say_as })),
+    v.map(({ word, say_as }) => ({ word, say_as })),
   );
   const say = (text) => {
     if (!('speechSynthesis' in window)) return;
@@ -508,16 +514,13 @@ export function PronunciationsPage() {
     speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   };
   return (
-    <SectionCard title="Pronunciations" description="Tell agents how to say brand names, people and terms." section={s}>
+    <SectionCard title="Pronunciations" description="Tell every agent in your company how to say brand names, people and terms." section={s}>
       {(list, _p, set) => (
         <>
           {list.map((x, i) => {
             const upd = (p) => set(list.map((y, j) => (j === i ? { ...y, ...p } : y)));
             return (
               <div key={i} className="row wrap" style={{ gap: 8 }}>
-                <div style={{ width: 200 }}>
-                  <LanguageSelect value={x.language} onChange={(v) => upd({ language: v })} />
-                </div>
                 <input className="input" style={{ flex: 1, minWidth: 140 }} placeholder="Word" value={x.word} onChange={(e) => upd({ word: e.target.value })} />
                 <span className="muted">say as</span>
                 <input
@@ -533,7 +536,7 @@ export function PronunciationsPage() {
             );
           })}
           <div>
-            <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => set([...list, { id: '', language: 'en-IN', word: '', say_as: '' }])}>
+            <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => set([...list, { word: '', say_as: '' }])}>
               Add word
             </Button>
           </div>
@@ -571,23 +574,25 @@ export function VoicesPage() {
       <Async state={list}>
         {(vs) =>
           vs.length ? (
-            <table className="table">
-              <tbody>
-                {vs.map((v) => (
-                  <tr key={v.id}>
-                    <td className="cell-main">{v.name}</td>
-                    <td>{v.language}</td>
-                    <td>
-                      <StatusBadge status={v.status === 'ready' ? 'active' : v.status === 'failed' ? 'failed' : 'pending'} label={titleCase(v.status)} />
-                    </td>
-                    <td className="muted">{dateTime(v.created_at)}</td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(v.id)} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {vs.map((v) => (
+                    <tr key={v.id}>
+                      <td className="cell-main">{v.name}</td>
+                      <td>{v.language}</td>
+                      <td>
+                        <StatusBadge status={v.status === 'ready' ? 'active' : v.status === 'failed' ? 'failed' : 'pending'} label={titleCase(v.status)} />
+                      </td>
+                      <td className="muted">{dateTime(v.created_at)}</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(v.id)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Mic2 />} title="No custom voices" />
           )
@@ -692,30 +697,32 @@ export function ExportsPage() {
         <Async state={jobs}>
           {(js) =>
             js.length ? (
-              <table className="table">
-                <tbody>
-                  {js.map((j) => (
-                    <tr key={j.id}>
-                      <td className="cell-main">{titleCase(j.kind)}</td>
-                      <td className="muted">{dateTime(j.created_at)}</td>
-                      <td>
-                        <StatusBadge
-                          status={j.status === 'ready' ? 'active' : j.status === 'failed' ? 'failed' : 'pending'}
-                          label={j.status === 'queued' ? 'Preparing…' : titleCase(j.status)}
-                        />
-                      </td>
-                      <td className="muted">{j.expires_at ? `expires ${dateTime(j.expires_at)}` : ''}</td>
-                      <td className="actions">
-                        {j.status === 'ready' && j.download_url && (
-                          <a className="btn sm" href={j.download_url}>
-                            <Download size={15} /> Download
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {js.map((j) => (
+                      <tr key={j.id}>
+                        <td className="cell-main">{titleCase(j.kind)}</td>
+                        <td className="muted">{dateTime(j.created_at)}</td>
+                        <td>
+                          <StatusBadge
+                            status={j.status === 'ready' ? 'active' : j.status === 'failed' ? 'failed' : 'pending'}
+                            label={j.status === 'queued' ? 'Preparing…' : titleCase(j.status)}
+                          />
+                        </td>
+                        <td className="muted">{j.expires_at ? `expires ${dateTime(j.expires_at)}` : ''}</td>
+                        <td className="actions">
+                          {j.status === 'ready' && j.download_url && (
+                            <a className="btn sm" href={j.download_url}>
+                              <Download size={15} /> Download
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No exports yet" />
             )
@@ -843,34 +850,36 @@ export function CreditsPage() {
         <Async state={tx}>
           {(rows) =>
             rows.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>What</th>
-                    <th className="num">Amount</th>
-                    <th className="num">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((t) => (
-                    <tr key={t.id}>
-                      <td className="muted">{dateTime(t.created_at)}</td>
-                      <td>{titleCase(t.reason)}</td>
-                      <td
-                        className="num"
-                        style={{
-                          color: t.type === 'credit' ? 'var(--green)' : undefined,
-                        }}
-                      >
-                        {t.type === 'credit' ? '+' : '−'}
-                        {money(t.amount, wallet.data?.currency)}
-                      </td>
-                      <td className="num">{money(t.balance_after, wallet.data?.currency)}</td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>What</th>
+                      <th className="num">Amount</th>
+                      <th className="num">Balance</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((t) => (
+                      <tr key={t.id}>
+                        <td className="muted">{dateTime(t.created_at)}</td>
+                        <td>{titleCase(t.reason)}</td>
+                        <td
+                          className="num"
+                          style={{
+                            color: t.type === 'credit' ? 'var(--green)' : undefined,
+                          }}
+                        >
+                          {t.type === 'credit' ? '+' : '−'}
+                          {money(t.amount, wallet.data?.currency)}
+                        </td>
+                        <td className="num">{money(t.balance_after, wallet.data?.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No transactions" />
             )
@@ -918,36 +927,38 @@ export function SubAccountsPage() {
       <Async state={list}>
         {(xs) =>
           xs.length ? (
-            <table className="table">
-              <tbody>
-                {xs.map((s) => (
-                  <tr key={s.id}>
-                    <td className="cell-main">{s.name}</td>
-                    <td className="mono muted">{s.slug}</td>
-                    <td>
-                      <StatusBadge status={s.status} />
-                    </td>
-                    <td className="actions">
-                      <Button
-                        size="sm"
-                        icon={<ArrowRightLeft />}
-                        onClick={async () => {
-                          try {
-                            // Stores the sub-account's tokens and clears the cache.
-                            await switchSubAccount(s.id).unwrap();
-                            navigate('/');
-                          } catch (e) {
-                            toast(errMsg(e), 'error');
-                          }
-                        }}
-                      >
-                        Switch to
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {xs.map((s) => (
+                    <tr key={s.id}>
+                      <td className="cell-main">{s.name}</td>
+                      <td className="mono muted">{s.slug}</td>
+                      <td>
+                        <StatusBadge status={s.status} />
+                      </td>
+                      <td className="actions">
+                        <Button
+                          size="sm"
+                          icon={<ArrowRightLeft />}
+                          onClick={async () => {
+                            try {
+                              // Stores the sub-account's tokens and clears the cache.
+                              await switchSubAccount(s.id).unwrap();
+                              navigate('/');
+                            } catch (e) {
+                              toast(errMsg(e), 'error');
+                            }
+                          }}
+                        >
+                          Switch to
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No sub-accounts" />
           )

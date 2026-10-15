@@ -18,9 +18,11 @@ import {
   Star,
   UserRound,
   Wrench,
+  Zap,
 } from 'lucide-react';
 import {
   useAddReviewMutation,
+  useGetCallAnalysisQuery,
   useGetCallQuery,
   useGetRecordingQuery,
   useGetTranscriptQuery,
@@ -43,6 +45,7 @@ import { PixelHero } from '../../../components/PixelHero';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
 import { CallNumberDialog, duration, OUTCOME_TONE, useAgentOptions } from '../shared';
+import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
 
 const PAGE = 25;
 
@@ -150,6 +153,7 @@ export function CallsPage() {
   const [params, setParams] = useSearchParams();
   const { options } = useAgentOptions();
   const [calling, setCalling] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const offset = Number(params.get('offset') ?? 0);
   const filters = Object.fromEntries([...params.entries()].filter(([k]) => k !== 'offset'));
   const list = useListCallsQuery({ range: '7d', ...filters, limit: PAGE, offset });
@@ -170,6 +174,9 @@ export function CallsPage() {
         description="Every call with its recording, transcript, summary, extracted data and outcome."
         actions={
           <>
+            <Button icon={<Zap />} onClick={() => setSimulating(true)}>
+              Simulate call
+            </Button>
             <Button
               icon={<Download />}
               onClick={async () => {
@@ -203,7 +210,16 @@ export function CallsPage() {
               {page.items.length ? (
                 <CallsTable calls={page.items} onOpen={(c) => navigate(`/calls/${c.id}`)} />
               ) : (
-                <EmptyState icon={<AudioLines />} title="No calls match" description="Try a wider date range or clear filters." />
+                <EmptyState
+                  icon={<AudioLines />}
+                  title="No calls match"
+                  description="Try a wider date range or clear filters, or generate demo calls."
+                  action={
+                    <Button icon={<Zap />} onClick={() => setSimulating(true)}>
+                      Simulate a demo call
+                    </Button>
+                  }
+                />
               )}
               <Pager
                 offset={offset}
@@ -221,6 +237,7 @@ export function CallsPage() {
         </Async>
       </div>
       <CallNumberDialog open={calling} onClose={() => setCalling(false)} />
+      <DemoSimulatorModal open={simulating} onClose={() => setSimulating(false)} />
     </>
   );
 }
@@ -231,6 +248,7 @@ export function LiveCallsPage({ embedded = false }) {
   const live = useListLiveCallsQuery(undefined, { pollingInterval: 5000 });
   const [listenToCall] = useListenToCallMutation();
   const [takeOverCall] = useTakeOverCallMutation();
+  const [simulating, setSimulating] = useState(false);
   const [, force] = useState(0);
   useEffect(() => {
     const tick = setInterval(() => force((x) => x + 1), 1000);
@@ -244,72 +262,89 @@ export function LiveCallsPage({ embedded = false }) {
           <h2>Calls in progress</h2>
           <div className="card-sub">Refreshes every 5 seconds.</div>
         </div>
+        {!embedded && (
+          <Button size="sm" icon={<Zap />} onClick={() => setSimulating(true)}>
+            Simulate a call
+          </Button>
+        )}
       </div>
       <Async state={live}>
         {(calls) =>
           calls.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Caller</th>
-                  <th>Agent</th>
-                  <th className="num">Elapsed</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {calls.map((c) => (
-                  <tr key={c.id}>
-                    <td>
-                      <div className="cell-main">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</div>
-                      <div className="cell-sub">{titleCase(c.direction)}</div>
-                    </td>
-                    <td>{c.agent_name}</td>
-                    <td className="num mono">{duration(Math.round((Date.now() - Date.parse(c.started_at)) / 1000))}</td>
-                    <td>
-                      <StatusBadge status="active" label={titleCase(c.status)} />
-                    </td>
-                    <td className="actions">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<Headphones />}
-                        onClick={() =>
-                          listenToCall(c.id)
-                            .unwrap()
-                            .then((r) => window.open(r.media_url, '_blank'))
-                            .catch((e) => toast(errMsg(e), 'error'))
-                        }
-                      >
-                        Listen
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<UserRound />}
-                        onClick={() =>
-                          takeOverCall(c.id)
-                            .unwrap()
-                            .then(() => toast('You are now on the call'))
-                            .catch((e) => toast(errMsg(e), 'error'))
-                        }
-                      >
-                        Take over
-                      </Button>
-                      <Link to={`/calls/${c.id}`} className="btn sm ghost">
-                        Open
-                      </Link>
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Caller</th>
+                    <th>Agent</th>
+                    <th className="num">Elapsed</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {calls.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <div className="cell-main">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</div>
+                        <div className="cell-sub">{titleCase(c.direction)}</div>
+                      </td>
+                      <td>{c.agent_name}</td>
+                      <td className="num mono">{duration(Math.round((Date.now() - Date.parse(c.started_at)) / 1000))}</td>
+                      <td>
+                        <StatusBadge status="active" label={titleCase(c.status)} />
+                      </td>
+                      <td className="actions">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Headphones />}
+                          onClick={() =>
+                            listenToCall(c.id)
+                              .unwrap()
+                              .then((r) => window.open(r.media_url, '_blank'))
+                              .catch((e) => toast(errMsg(e), 'error'))
+                          }
+                        >
+                          Listen
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<UserRound />}
+                          onClick={() =>
+                            takeOverCall(c.id)
+                              .unwrap()
+                              .then(() => toast('You are now on the call'))
+                              .catch((e) => toast(errMsg(e), 'error'))
+                          }
+                        >
+                          Take over
+                        </Button>
+                        <Link to={`/calls/${c.id}`} className="btn sm ghost">
+                          Open
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <EmptyState icon={<AudioLines />} title="No calls right now" description="Calls in progress appear here as they happen." />
+            <EmptyState
+              icon={<AudioLines />}
+              title="No calls right now"
+              description="Calls in progress appear here as they happen. You can simulate calls to preview live behavior."
+              action={
+                <Button icon={<Zap />} onClick={() => setSimulating(true)}>
+                  Simulate a call
+                </Button>
+              }
+            />
           )
         }
       </Async>
+      <DemoSimulatorModal open={simulating} onClose={() => setSimulating(false)} />
     </div>
   );
   if (embedded) return body;
@@ -318,7 +353,15 @@ export function LiveCallsPage({ embedded = false }) {
       <Link to="/calls" className="back-link">
         <ArrowLeft /> Call logs
       </Link>
-      <PageHeader eyebrow="Monitor" title="Live calls" />
+      <PageHeader
+        eyebrow="Monitor"
+        title="Live calls"
+        actions={
+          <Button icon={<Zap />} onClick={() => setSimulating(true)}>
+            Simulate call
+          </Button>
+        }
+      />
       {body}
     </>
   );
@@ -331,6 +374,7 @@ export function CallDetailPage() {
   const { can } = useAuth();
   const call = useGetCallQuery(id);
   const transcript = useGetTranscriptQuery(id);
+  const analysis = useGetCallAnalysisQuery(id);
   const recording = useGetRecordingQuery(id);
   const reviews = useListReviewsQuery(id);
   const outcomes = useGetAgentSectionQuery({ id: call.data?.agent_id, section: 'outcomes' }, { skip: !call.data?.agent_id });
@@ -345,7 +389,8 @@ export function CallDetailPage() {
   const [rerunning, setRerunning] = useState(false);
 
   const activeSeq = useMemo(() => {
-    const t = transcript.data ?? [];
+    const raw = transcript.data;
+    const t = Array.isArray(raw) ? raw : raw?.turns ?? [];
     let a = -1;
     t.forEach((x) => x.offset_ms <= pos && (a = x.seq));
     return a;
@@ -416,7 +461,7 @@ export function CallDetailPage() {
             <div
               className="grid-2"
               style={{
-                gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
+                '--grid-cols': 'minmax(0, 1.4fr) minmax(0, 1fr)',
                 alignItems: 'start',
               }}
             >
@@ -475,8 +520,9 @@ export function CallDetailPage() {
                       <EmptyState title="Transcript hidden" description="Transcripts aren't visible for your company or your role." />
                     ) : (
                       <Async state={transcript}>
-                        {(turns) =>
-                          turns.length ? (
+                        {(data) => {
+                          const turns = Array.isArray(data) ? data : data?.turns ?? [];
+                          return turns.length ? (
                             <>
                               {turns.map((t) => (
                                 <TranscriptLine key={t.seq} t={t} active={t.seq === activeSeq} onClick={() => seek(t.offset_ms)} />
@@ -484,8 +530,8 @@ export function CallDetailPage() {
                             </>
                           ) : (
                             <EmptyState title="No transcript" />
-                          )
-                        }
+                          );
+                        }}
                       </Async>
                     )}
                   </div>
@@ -515,12 +561,21 @@ export function CallDetailPage() {
                       Re-run
                     </Button>
                   </div>
-                  <p className="text-body">{c.summary ?? <span className="muted">No summary.</span>}</p>
-                  {c.sentiment && (
+                  <p className="text-body">{analysis.data?.summary ?? c.summary ?? <span className="muted">No summary.</span>}</p>
+                  {(analysis.data?.sentiment ?? c.sentiment) && (
                     <div className="row small">
                       Sentiment{' '}
-                      <Badge plain tone={c.sentiment === 'positive' ? 'green' : c.sentiment === 'negative' ? 'red' : ''}>
-                        {titleCase(c.sentiment)}
+                      <Badge
+                        plain
+                        tone={
+                          (analysis.data?.sentiment ?? c.sentiment) === 'positive'
+                            ? 'green'
+                            : (analysis.data?.sentiment ?? c.sentiment) === 'negative'
+                              ? 'red'
+                              : ''
+                        }
+                      >
+                        {titleCase(analysis.data?.sentiment ?? c.sentiment)}
                       </Badge>
                     </div>
                   )}
@@ -530,7 +585,7 @@ export function CallDetailPage() {
                     </div>
                   )}
                 </div>
-                <KvCard title="Extracted fields" data={c.extracted} />
+                <KvCard title="Extracted fields" data={analysis.data?.extracted ?? c.extracted} />
                 <KvCard title="Call variables" data={c.variables} />
                 <div className="card card-pad stack" style={{ gap: 10 }}>
                   <span className="card-title">Details</span>
@@ -816,7 +871,7 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
         <div className="field">
           <span className="field-label">Comments on lines</span>
           {comments.map((cm, i) => (
-            <div key={i} className="row" style={{ gap: 8 }}>
+            <div key={i} className="row wrap" style={{ gap: 8 }}>
               <Select
                 style={{ width: 220 }}
                 value={String(cm.seq)}
@@ -893,18 +948,20 @@ export function ReviewPage() {
         <Async state={cards}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <tbody>
-                  {list.map((c) => (
-                    <tr key={c.id} className="clickable" onClick={() => setEditing(structuredClone(c))}>
-                      <td className="cell-main">
-                        {c.name} {c.is_default && <Badge tone="ink">Default</Badge>}
-                      </td>
-                      <td className="muted">{c.criteria.map((x) => `${x.name} ${x.weight}%`).join(' · ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {list.map((c) => (
+                      <tr key={c.id} className="clickable" onClick={() => setEditing(structuredClone(c))}>
+                        <td className="cell-main">
+                          {c.name} {c.is_default && <Badge tone="ink">Default</Badge>}
+                        </td>
+                        <td className="muted">{c.criteria.map((x) => `${x.name} ${x.weight}%`).join(' · ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No scorecards" />
             )

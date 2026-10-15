@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Ban, Check, FileText, Globe, Pencil, Phone, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, Check, FileText, Globe, Key, Pencil, Phone, Play, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { date, dateTime, money, number, titleCase } from '../../lib/format';
 import { asList, normalizeUsage } from '../../lib/normalize';
@@ -22,8 +22,10 @@ import {
   useListNumberPoolQuery,
   useListTenantInvoicesQuery,
   useListTenantNumbersQuery,
+  useListTenantStaffQuery,
   usePutTenantSettingsMutation,
   useReleaseNumberMutation,
+  useResetTenantStaffCredentialsMutation,
   useSuspendCustomerMutation,
   useUpdateCustomerMutation,
   useVerifyDomainMutation,
@@ -61,6 +63,7 @@ export function CustomerDetailPage() {
     { value: 'invoices', label: 'Invoices' },
     { value: 'usage', label: 'Usage' },
     { value: 'numbers', label: 'Numbers' },
+    { value: 'staff', label: 'Staff' },
   ];
 
   return (
@@ -94,6 +97,7 @@ export function CustomerDetailPage() {
           {tab === 'invoices' && <InvoicesTab tenantId={id} />}
           {tab === 'usage' && <UsageTab tenantId={id} />}
           {tab === 'numbers' && <NumbersTab tenantId={id} />}
+          {tab === 'staff' && <StaffTab tenantId={id} />}
         </>
       )}
     </>
@@ -564,7 +568,9 @@ function PlanTab({ tenantId }) {
   const [assignPackage] = useAssignPackageMutation();
   const [assignedLocal, setAssignedLocal] = useState(null);
   const assigned = sub.data ?? assignedLocal;
-  const readable = !sub.error;
+  // 404 no_subscription just means no plan has been assigned yet.
+  const noPlan = sub.error?.code === 'no_subscription';
+  const readable = !sub.error || noPlan;
   const pkgName = (id) => (id ? (asList(packages.data).find((p) => p.id === id)?.name ?? id.slice(0, 8)) : '—');
 
   return (
@@ -638,20 +644,22 @@ function PlanTab({ tenantId }) {
             <h2>Plan history</h2>
           </div>
           {history.data.length ? (
-            <table className="table">
-              <tbody>
-                {history.data.map((h) => (
-                  <tr key={h.id}>
-                    <td className="muted">{date(h.created_at)}</td>
-                    <td>
-                      {pkgName(h.old_package_id)} → <b>{pkgName(h.new_package_id)}</b>
-                    </td>
-                    <td>{titleCase(h.changed_by)}</td>
-                    <td className="muted">{h.reason ?? ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {history.data.map((h) => (
+                    <tr key={h.id}>
+                      <td className="muted">{date(h.created_at)}</td>
+                      <td>
+                        {pkgName(h.old_package_id)} → <b>{pkgName(h.new_package_id)}</b>
+                      </td>
+                      <td>{titleCase(h.changed_by)}</td>
+                      <td className="muted">{h.reason ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No changes yet" />
           )}
@@ -701,17 +709,19 @@ function InvoicesTab({ tenantId }) {
         {open && (
           <div className="stack">
             {(open.line_items ?? open.items ?? []).length ? (
-              <table className="table">
-                <tbody>
-                  {(open.line_items ?? open.items ?? []).map((l) => (
-                    <tr key={l.id}>
-                      <td>{l.description || titleCase(l.item_type)}</td>
-                      <td className="num">{number(l.quantity, 2)}</td>
-                      <td className="num">{money(l.amount, open.currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {(open.line_items ?? open.items ?? []).map((l) => (
+                      <tr key={l.id}>
+                        <td>{l.description || titleCase(l.item_type)}</td>
+                        <td className="num">{number(l.quantity, 2)}</td>
+                        <td className="num">{money(l.amount, open.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="muted small">Line items are not included in this view.</p>
             )}
@@ -736,7 +746,7 @@ function NumbersTab({ tenantId }) {
   const [releaseNumber] = useReleaseNumberMutation();
   const [pick, setPick] = useState('');
   const [releasing, setReleasing] = useState(null);
-  const available = (pool.data ?? []).filter((n) => n.status === 'available');
+  const available = asList(pool.data).filter((n) => n.status === 'available');
   return (
     <div className="card">
       <div className="card-head">
@@ -769,22 +779,24 @@ function NumbersTab({ tenantId }) {
       <Async state={nums}>
         {(list) =>
           list.length ? (
-            <table className="table">
-              <tbody>
-                {list.map((n) => (
-                  <tr key={n.id}>
-                    <td className="mono cell-main">{n.e164}</td>
-                    <td>{n.agent_name ?? <span className="muted">No agent</span>}</td>
-                    <td className="muted">{date(n.allocated_at)}</td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" onClick={() => setReleasing(n)}>
-                        Release
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {list.map((n) => (
+                    <tr key={n.id}>
+                      <td className="mono cell-main">{n.e164}</td>
+                      <td>{n.agent_name ?? <span className="muted">No agent</span>}</td>
+                      <td className="muted">{date(n.allocated_at)}</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" onClick={() => setReleasing(n)}>
+                          Release
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Phone />} title="No numbers allocated" />
           )
@@ -811,6 +823,7 @@ function UsageTab({ tenantId }) {
     <Async state={usage} skeleton={<Skeleton h={140} />}>
       {(data) => {
         const u = normalizeUsage(data);
+        if (!u.hasSubscription) return <EmptyState title="No plan assigned" description="Usage appears here once a plan is assigned on the Plan tab." />;
         const ratio = u.includedMinutes ? u.callMinutes / u.includedMinutes : undefined;
         return (
           <div className="stack">
@@ -845,5 +858,117 @@ function UsageTab({ tenantId }) {
         );
       }}
     </Async>
+  );
+}
+
+function StaffTab({ tenantId }) {
+  const staff = useListTenantStaffQuery(tenantId);
+  const [resetting, setResetting] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [resetCredentials, { isLoading: isResetting }] = useResetTenantStaffCredentialsMutation();
+  const toast = useToast();
+
+  const handleOpenReset = (member) => {
+    setResetting(member);
+    setNewEmail(member.email || '');
+    setNewPassword('');
+  };
+
+  const handleReset = async (e) => {
+    e?.preventDefault();
+    if (!resetting) return;
+    if (!newPassword && !newEmail) {
+      toast('Enter a new password or email', 'error');
+      return;
+    }
+    try {
+      const payload = { tenantId, staffId: resetting.id };
+      if (newPassword) payload.password = newPassword;
+      if (newEmail && newEmail !== resetting.email) payload.email = newEmail;
+      await resetCredentials(payload).unwrap();
+      toast('Credentials updated successfully', 'success');
+      setResetting(null);
+    } catch (err) {
+      toast(errMsg(err), 'error');
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Customer staff</h2>
+      </div>
+      <Async state={staff}>
+        {(list) => {
+          const members = asList(list);
+          return members.length ? (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((m) => (
+                    <tr key={m.id}>
+                      <td className="cell-main">{m.name || 'Unnamed'}</td>
+                      <td>{m.email}</td>
+                      <td>
+                        <Badge variant="muted">{m.role || m.role_name || (m.is_owner ? 'Owner' : 'Staff')}</Badge>
+                      </td>
+                      <td>
+                        <StatusBadge status={m.status || 'active'} />
+                      </td>
+                      <td className="muted">{date(m.created_at || m.createdAt)}</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" icon={<Key />} onClick={() => handleOpenReset(m)}>
+                          Reset credentials
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState icon={<Users />} title="No staff members registered for this customer" />
+          );
+        }}
+      </Async>
+
+      <Modal open={!!resetting} onClose={() => setResetting(null)} title={`Reset credentials for ${resetting?.name || resetting?.email}`}>
+        <form onSubmit={handleReset} className="stack">
+          <p className="muted text-small">
+            Update authentication credentials for this customer account. Changing password will take effect immediately.
+          </p>
+          <Field label="Email">
+            <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="user@company.com" />
+          </Field>
+          <Field label="New password" hint="Leave blank to keep existing password">
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Minimum 8 characters"
+            />
+          </Field>
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+            <Button variant="ghost" onClick={() => setResetting(null)} type="button">
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" loading={isResetting}>
+              Save credentials
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   );
 }

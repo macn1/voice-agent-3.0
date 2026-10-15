@@ -366,16 +366,18 @@ export function CampaignWizard() {
                 <summary className="small" style={{ cursor: 'pointer' }}>
                   See what was removed
                 </summary>
-                <table className="table" style={{ marginTop: 8 }}>
-                  <tbody>
-                    {report.samples.map((s, i) => (
-                      <tr key={i}>
-                        <td className="mono">{s.phone}</td>
-                        <td className="muted">{titleCase(s.reason)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="table-wrap">
+                  <table className="table" style={{ marginTop: 8 }}>
+                    <tbody>
+                      {report.samples.map((s, i) => (
+                        <tr key={i}>
+                          <td className="mono">{s.phone}</td>
+                          <td className="muted">{titleCase(s.reason)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </details>
             ) : null}
             <ScheduleForm value={settings} onChange={setSettings} />
@@ -749,69 +751,71 @@ function ContactsTab({ id }) {
         {(p) => (
           <>
             {p.items.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Contact</th>
-                    <th>Status</th>
-                    <th className="num">Attempts</th>
-                    <th>Outcome</th>
-                    <th>Next attempt</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.items.map((ct) => (
-                    <tr key={ct.id}>
-                      <td>
-                        <div className="cell-main">{ct.name ?? ct.phone}</div>
-                        <div className="cell-sub mono">{ct.phone}</div>
-                      </td>
-                      <td>
-                        <StatusBadge
-                          status={ct.status === 'completed' ? 'active' : ct.status === 'skipped' ? 'cancelled' : ct.status}
-                          label={titleCase(ct.status)}
-                        />
-                        {ct.skip_reason && <div className="cell-sub">{titleCase(ct.skip_reason)}</div>}
-                      </td>
-                      <td className="num">{ct.attempts}</td>
-                      <td>{ct.outcome ? titleCase(ct.outcome) : '—'}</td>
-                      <td className="muted">{dateTime(ct.next_attempt_at)}</td>
-                      <td className="actions">
-                        <Button size="sm" variant="ghost" icon={<History />} onClick={() => setViewing(ct)}>
-                          Attempts
-                        </Button>
-                        {['no_answer', 'busy', 'failed'].includes(ct.status) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<RotateCw />}
-                            onClick={() =>
-                              retryContact({ id, contactId: ct.id })
-                                .unwrap()
-                                .catch((e) => toast(errMsg(e), 'error'))
-                            }
-                          >
-                            Retry
-                          </Button>
-                        )}
-                        {ct.status === 'pending' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Trash2 />}
-                            onClick={() =>
-                              removeContact({ id, contactId: ct.id })
-                                .unwrap()
-                                .catch((e) => toast(errMsg(e), 'error'))
-                            }
-                          />
-                        )}
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Contact</th>
+                      <th>Status</th>
+                      <th className="num">Attempts</th>
+                      <th>Outcome</th>
+                      <th>Next attempt</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {p.items.map((ct) => (
+                      <tr key={ct.id}>
+                        <td>
+                          <div className="cell-main">{ct.name ?? ct.phone}</div>
+                          <div className="cell-sub mono">{ct.phone}</div>
+                        </td>
+                        <td>
+                          <StatusBadge
+                            status={ct.status === 'completed' ? 'active' : ct.status === 'skipped' ? 'cancelled' : ct.status}
+                            label={titleCase(ct.status)}
+                          />
+                          {ct.skip_reason && <div className="cell-sub">{titleCase(ct.skip_reason)}</div>}
+                        </td>
+                        <td className="num">{ct.attempts}</td>
+                        <td>{ct.outcome ? titleCase(ct.outcome) : '—'}</td>
+                        <td className="muted">{dateTime(ct.next_attempt_at)}</td>
+                        <td className="actions">
+                          <Button size="sm" variant="ghost" icon={<History />} onClick={() => setViewing(ct)}>
+                            Attempts
+                          </Button>
+                          {['no_answer', 'busy', 'failed'].includes(ct.status) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<RotateCw />}
+                              onClick={() =>
+                                retryContact({ id, contactId: ct.id })
+                                  .unwrap()
+                                  .catch((e) => toast(errMsg(e), 'error'))
+                              }
+                            >
+                              Retry
+                            </Button>
+                          )}
+                          {ct.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Trash2 />}
+                              onClick={() =>
+                                removeContact({ id, contactId: ct.id })
+                                  .unwrap()
+                                  .catch((e) => toast(errMsg(e), 'error'))
+                              }
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No contacts" />
             )}
@@ -934,26 +938,28 @@ function AnalyticsTab({ id }) {
           <div className="card-head">
             <h2>Agent comparison</h2>
           </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th className="num">Calls</th>
-                <th className="num">Success</th>
-                <th className="num">Avg duration</th>
-              </tr>
-            </thead>
-            <tbody>
-              {variants.data.map((v) => (
-                <tr key={v.agent_name}>
-                  <td className="cell-main">{v.agent_name}</td>
-                  <td className="num">{v.calls}</td>
-                  <td className="num">{Math.round(v.success_rate * 100)}%</td>
-                  <td className="num">{Math.round(v.avg_duration)}s</td>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th className="num">Calls</th>
+                  <th className="num">Success</th>
+                  <th className="num">Avg duration</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {variants.data.map((v) => (
+                  <tr key={v.agent_name}>
+                    <td className="cell-main">{v.agent_name}</td>
+                    <td className="num">{v.calls}</td>
+                    <td className="num">{Math.round(v.success_rate * 100)}%</td>
+                    <td className="num">{Math.round(v.avg_duration)}s</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

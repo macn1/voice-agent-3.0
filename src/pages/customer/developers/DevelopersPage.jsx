@@ -250,46 +250,48 @@ function KeysTab() {
       <Async state={list}>
         {(keys) =>
           keys.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Key</th>
-                  <th>Scopes</th>
-                  <th>Last used</th>
-                  <th>Created</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {keys.map((k) => (
-                  <tr key={k.id} style={k.revoked_at ? { opacity: 0.55 } : undefined}>
-                    <td className="cell-main">
-                      {k.name} {k.revoked_at && <Badge tone="red">Revoked</Badge>}
-                    </td>
-                    <td className="mono">{k.key_prefix}…</td>
-                    <td>
-                      <div className="tag-list">
-                        {k.scopes.map((s) => (
-                          <span key={s} className="tag">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="muted">{k.last_used_at ? dateTime(k.last_used_at) : 'Never'}</td>
-                    <td className="muted">{dateTime(k.created_at)}</td>
-                    <td className="actions">
-                      {!k.revoked_at && (
-                        <Button size="sm" variant="ghost" icon={<Ban />} onClick={() => setRevoking(k)}>
-                          Revoke
-                        </Button>
-                      )}
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Scopes</th>
+                    <th>Last used</th>
+                    <th>Created</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {keys.map((k) => (
+                    <tr key={k.id} style={k.revoked_at ? { opacity: 0.55 } : undefined}>
+                      <td className="cell-main">
+                        {k.name} {k.revoked_at && <Badge tone="red">Revoked</Badge>}
+                      </td>
+                      <td className="mono">{k.key_prefix}…</td>
+                      <td>
+                        <div className="tag-list">
+                          {k.scopes.map((s) => (
+                            <span key={s} className="tag">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="muted">{k.last_used_at ? dateTime(k.last_used_at) : 'Never'}</td>
+                      <td className="muted">{dateTime(k.created_at)}</td>
+                      <td className="actions">
+                        {!k.revoked_at && (
+                          <Button size="sm" variant="ghost" icon={<Ban />} onClick={() => setRevoking(k)}>
+                            Revoke
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<KeyRound />} title="No API keys" description="Create a key to start calls from your CRM or backend." />
           )
@@ -398,58 +400,60 @@ function WebhooksTab() {
       <Async state={list}>
         {(eps) =>
           eps.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>URL</th>
-                  <th>Events</th>
-                  <th>Status</th>
-                  <th>Last delivery</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {eps.map((w) => (
-                  <tr key={w.id}>
-                    <td className="mono small">{w.url}</td>
-                    <td>
-                      <div className="tag-list">
-                        {w.events.map((e) => (
-                          <span key={e} className="tag">
-                            {e}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      <StatusBadge status={w.status === 'failing' ? 'failed' : w.status === 'paused' ? 'pending' : 'active'} label={titleCase(w.status)} />
-                    </td>
-                    <td className="muted">{dateTime(w.last_delivery_at)}</td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" icon={<Eye />} onClick={() => setLogFor(w)}>
-                        Deliveries
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={w.status === 'paused' ? <Play /> : <Pause />}
-                        title={w.status === 'paused' ? 'Resume' : 'Pause'}
-                        onClick={() =>
-                          updateWebhook({ id: w.id, status: w.status === 'paused' ? 'active' : 'paused' })
-                            .unwrap()
-                            .catch((e) => toast(errMsg(e), 'error'))
-                        }
-                      />
-
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(w)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(w)} />
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>URL</th>
+                    <th>Events</th>
+                    <th>Status</th>
+                    <th>Last delivery</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {eps.map((w) => (
+                    <tr key={w.id}>
+                      <td className="mono small">{w.url}</td>
+                      <td>
+                        <div className="tag-list">
+                          {w.events.map((e) => (
+                            <span key={e} className="tag">
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <StatusBadge status={w.status === 'failing' ? 'failed' : w.status === 'paused' ? 'pending' : 'active'} label={titleCase(w.status)} />
+                      </td>
+                      <td className="muted">{dateTime(w.last_delivery_at)}</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" icon={<Eye />} onClick={() => setLogFor(w)}>
+                          Deliveries
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={w.status === 'paused' ? <Play /> : <Pause />}
+                          title={w.status === 'paused' ? 'Resume' : 'Pause'}
+                          onClick={() =>
+                            updateWebhook({ id: w.id, status: w.status === 'paused' ? 'active' : 'paused' })
+                              .unwrap()
+                              .catch((e) => toast(errMsg(e), 'error'))
+                          }
+                        />
+
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(w)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(w)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Webhook />} title="No webhooks" description="Send call results to your CRM, data warehouse or automation tool." />
           )
@@ -625,24 +629,26 @@ function DeliveriesDrawer({ endpoint, onClose }) {
       <Async state={list}>
         {(ds) =>
           ds.length ? (
-            <table className="table">
-              <tbody>
-                {ds.map((d) => (
-                  <tr key={d.id} className="clickable" onClick={() => setOpen(open?.id === d.id ? null : d)}>
-                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                      {dateTime(d.created_at)}
-                    </td>
-                    <td className="mono small">{d.event_type}</td>
-                    <td>
-                      <Badge tone={d.status === 'delivered' ? 'green' : d.status === 'pending' ? 'amber' : 'red'}>
-                        {d.response_code ?? titleCase(d.status)}
-                      </Badge>
-                    </td>
-                    <td className="muted small">attempt {d.attempt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {ds.map((d) => (
+                    <tr key={d.id} className="clickable" onClick={() => setOpen(open?.id === d.id ? null : d)}>
+                      <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                        {dateTime(d.created_at)}
+                      </td>
+                      <td className="mono small">{d.event_type}</td>
+                      <td>
+                        <Badge tone={d.status === 'delivered' ? 'green' : d.status === 'pending' ? 'amber' : 'red'}>
+                          {d.response_code ?? titleCase(d.status)}
+                        </Badge>
+                      </td>
+                      <td className="muted small">attempt {d.attempt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No deliveries yet" />
           )

@@ -158,7 +158,7 @@ export function AgentsPage() {
                               title="Duplicate"
                               onClick={async () => {
                                 try {
-                                  const d = await duplicateAgent(a.id).unwrap();
+                                  const d = await duplicateAgent({ id: a.id }).unwrap();
                                   toast(`Duplicated as ${d.name}`);
                                 } catch (e) {
                                   toast(errMsg(e), 'error');

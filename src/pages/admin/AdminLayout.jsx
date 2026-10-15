@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { Activity, Building2, LayoutDashboard, LayoutTemplate, Package as PackageIcon, Phone, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { Activity, Bot, Building2, LayoutDashboard, LayoutTemplate, Package as PackageIcon, Phone, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { AppShell, Sidebar, UserMenu } from '../../components/Shell';
 import { Badge } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
@@ -23,10 +23,11 @@ const SECTIONS = [
     items: [
       { to: '/admin/numbers', label: 'Number pool', icon: Phone },
       {
-        to: '/admin/templates',
-        label: 'Agent templates',
-        icon: LayoutTemplate,
+        to: '/admin/agents',
+        label: 'Agents',
+        icon: Bot,
       },
+      { to: '/admin/templates', label: 'Agent templates', icon: LayoutTemplate },
     ],
   },
   {

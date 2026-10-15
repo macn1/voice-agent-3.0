@@ -4,9 +4,14 @@ import { A } from './services';
 // Platform admin console: Postman "Platform - Customers", "Platform - Staff &
 // Roles", "Packages (Admin)", admin subscription/invoice/usage routes, plus
 // the gap routes (ADM-04.4, 05.2, 05.3, 07.4, 09.2, 09.3, 10.3) and proposed
-// ADM-11 numbers, ADM-12 overview, AGT-11.7 templates, CMP-04.2 audit.
+// ADM-11 numbers, ADM-12 overview, CMP-04.2 audit.
+//
+// Agents: voice-flow-be has no /admin route for agents, so the console calls
+// the existing /customer/agents routes (Postman "Flow Service (Agents)") with
+// the admin session's token. Shapes: list -> { items, total }; record -> agent.
 
 const C_ID = (_r, _e, arg) => [{ type: 'Customer', id: typeof arg === 'string' ? arg : arg.id }];
+const agent = (id) => `/customer/agents/${id}`;
 
 export const adminApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
@@ -50,8 +55,7 @@ export const adminApi = baseApi.injectEndpoints({
       providesTags: ['Staff'],
     }),
     resetTenantStaffCredentials: b.mutation({
-      query: ({ tenantId, staffId, ...body }) =>
-        A.auth(`/admin/customers/${tenantId}/staff/${staffId}/credentials`, { method: 'PATCH', body }),
+      query: ({ tenantId, staffId, ...body }) => A.auth(`/admin/customers/${tenantId}/staff/${staffId}/credentials`, { method: 'PATCH', body }),
       invalidatesTags: ['Staff'],
     }),
 
@@ -95,13 +99,35 @@ export const adminApi = baseApi.injectEndpoints({
       query: ({ tenantId, numberId }) => A.telephony(`/admin/customers/${tenantId}/phone-numbers/${numberId}`, { method: 'DELETE' }),
       invalidatesTags: ['NumberPool'],
     }),
-    listTenantNumbers: b.query({ query: (tenantId) => A.telephony(`/admin/customers/${tenantId}/phone-numbers`), providesTags: ['NumberPool'] }),
+    listTenantNumbers: b.query({
+      query: (tenantId) => A.telephony('/admin/phone-numbers', { params: { tenant_id: tenantId } }),
+      transformResponse: (d) => d?.items ?? d ?? [],
+      providesTags: ['NumberPool'],
+    }),
 
-    // Overview, templates, audit ----------------------------------------
-    getPlatformSummary: b.query({ query: () => A.analytics('/admin/analytics/summary'), providesTags: ['Platform'] }),
-    getCustomerRanking: b.query({ query: () => A.analytics('/admin/analytics/customers'), providesTags: ['Platform'] }),
+    // Agents (AGT-01) ----------------------------------------------------
+    // ?status=draft|live|paused, limit, offset. No server-side search or sort.
+    listAdminAgents: b.query({ query: (params = {}) => A.flow('/customer/agents', { params }), providesTags: ['Agent'] }),
+    getAdminAgent: b.query({ query: (id) => A.flow(agent(id)), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
+    createAdminAgent: b.mutation({ query: (body) => A.flow('/customer/agents', { method: 'POST', body }), invalidatesTags: ['Agent'] }),
+    updateAdminAgent: b.mutation({ query: ({ id, ...body }) => A.flow(agent(id), { method: 'PATCH', body }), invalidatesTags: ['Agent'] }),
+    deleteAdminAgent: b.mutation({ query: (id) => A.flow(agent(id), { method: 'DELETE' }), invalidatesTags: ['Agent', 'Number'] }),
+    // Only a published agent can be paused (409 agent_not_published).
+    pauseAdminAgent: b.mutation({ query: (id) => A.flow(`${agent(id)}/pause`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
+    resumeAdminAgent: b.mutation({ query: (id) => A.flow(`${agent(id)}/resume`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
+    // Draft greeting / system prompt (AGT-03.2).
+    putAdminAgentFlowDraft: b.mutation({
+      query: ({ id, ...body }) => A.flow(`${agent(id)}/flow/draft`, { method: 'PUT', body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Agent', id }],
+    }),
+
+    // Agent templates (needs template.manage to create) --------------------
     listAdminTemplates: b.query({ query: () => A.flow('/admin/agent-templates'), providesTags: ['Template'] }),
     createAdminTemplate: b.mutation({ query: (body) => A.flow('/admin/agent-templates', { method: 'POST', body }), invalidatesTags: ['Template'] }),
+
+    // Overview, audit ----------------------------------------------------
+    getPlatformSummary: b.query({ query: () => A.analytics('/admin/analytics/summary'), providesTags: ['Platform'] }),
+    getCustomerRanking: b.query({ query: () => A.analytics('/admin/analytics/customers'), providesTags: ['Platform'] }),
     listAdminAudit: b.query({ query: (params) => A.analytics('/admin/audit-log', { params }), providesTags: ['Audit'] }),
   }),
 });
@@ -145,7 +171,15 @@ export const {
   useListTenantNumbersQuery,
   useGetPlatformSummaryQuery,
   useGetCustomerRankingQuery,
+  useListAdminAgentsQuery,
+  useGetAdminAgentQuery,
+  useCreateAdminAgentMutation,
+  useUpdateAdminAgentMutation,
+  useDeleteAdminAgentMutation,
+  usePauseAdminAgentMutation,
+  useResumeAdminAgentMutation,
+  usePutAdminAgentFlowDraftMutation,
+  useListAdminAuditQuery,
   useListAdminTemplatesQuery,
   useCreateAdminTemplateMutation,
-  useListAdminAuditQuery,
 } = adminApi;

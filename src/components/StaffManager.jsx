@@ -36,6 +36,8 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
   const [removing, setRemoving] = useState(null);
   const [created, setCreated] = useState(null);
   const [inviteLink, setInviteLink] = useState(null);
+  // Customer teams are invited by link (no password); platform staff still get a temporary password.
+  const canInvite = !!hooks.useResendInvite;
 
   const roleName = (r) => {
     if (typeof r !== 'string') return r.name;
@@ -127,7 +129,7 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
                               onClick={async () => {
                                 try {
                                   const r = await resendInvite(s.id).unwrap();
-                                  setInviteLink(r.invite_link);
+                                  setInviteLink(inviteHref(r));
                                 } catch (e) {
                                   toast(errMsg(e), 'error');
                                 }
@@ -167,10 +169,12 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
         onClose={() => setCreating(false)}
         roles={roleList}
         noun={noun}
+        invite={canInvite}
         onCreate={async (body) => {
-          await createStaff(body).unwrap();
-          setCreated({ email: body.email, password: body.password });
-          toast(`${body.name} added`);
+          const r = await createStaff(body).unwrap();
+          if (!body.password) setInviteLink(inviteHref(r));
+          else setCreated({ email: body.email, password: body.password });
+          toast(body.password ? `${body.name} added` : `${body.name} invited`);
         }}
       />
 
@@ -201,7 +205,7 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
         open={!!inviteLink}
         onClose={() => setInviteLink(null)}
         title="Invite link"
-        description="Email isn't connected yet — copy this link and send it to them."
+        description="Email isn't connected yet — copy this link and send it to them. It works once and expires in 7 days."
         footer={
           <Button
             variant="primary"
@@ -256,10 +260,19 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
   );
 }
 
-function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
+/** The API builds invite links on its own base URL (localhost in dev); point them at this dashboard. */
+export function inviteHref(r) {
+  const url = r?.invite_url ?? r?.invite_link;
+  if (!url) return '';
+  const m = url.match(/\/invite\/[^/?#]+/);
+  return m ? `${window.location.origin}${m[0]}` : url;
+}
+
+function CreateStaffModal({ open, onClose, roles, noun, onCreate, invite = false }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [byInvite, setByInvite] = useState(invite);
   const [roleIds, setRoleIds] = useState([]);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -270,6 +283,7 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
       setName('');
       setEmail('');
       setPassword(generatePassword());
+      setByInvite(invite);
       setRoleIds([]);
       setTouched(false);
       setError(null);
@@ -279,7 +293,7 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
   const errs = {
     name: !name.trim() ? 'Enter a name' : null,
     email: !EMAIL_RE.test(email) ? 'Enter a valid email' : null,
-    password: password.length < 8 ? 'At least 8 characters' : null,
+    password: !byInvite && password.length < 8 ? 'At least 8 characters' : null,
   };
   const invalid = Object.values(errs).some(Boolean);
 
@@ -292,7 +306,7 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
       await onCreate({
         name: name.trim(),
         email: email.trim(),
-        password,
+        ...(byInvite ? {} : { password }),
         role_ids: roleIds,
       });
       onClose();
@@ -308,7 +322,9 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
       open={open}
       onClose={onClose}
       title={`Add ${noun}`}
-      description="They can sign in right away with the temporary password."
+      description={
+        byInvite ? "You'll get a one-time link to send them. They choose their own password." : 'They can sign in right away with the temporary password.'
+      }
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -326,14 +342,27 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate }) {
         <Field label="Email" error={touched ? errs.email : null}>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} invalid={touched && !!errs.email} />
         </Field>
-        <Field label="Temporary password" error={touched ? errs.password : null} hint="Share it securely; they should change it after signing in.">
-          <div className="input-wrap">
-            <Input className="mono" value={password} onChange={(e) => setPassword(e.target.value)} invalid={touched && !!errs.password} />
-            <button type="button" className="input-icon" title="Generate" onClick={() => setPassword(generatePassword())}>
-              <Wand2 />
-            </button>
-          </div>
-        </Field>
+        {invite && (
+          <label className="check">
+            <input type="checkbox" checked={byInvite} onChange={(e) => setByInvite(e.target.checked)} />
+            <span>
+              <span className="fw-medium">Send an invite link</span>
+              <span className="muted small" style={{ display: 'block' }}>
+                They set their own password. Untick to create the account with a temporary password instead.
+              </span>
+            </span>
+          </label>
+        )}
+        {!byInvite && (
+          <Field label="Temporary password" error={touched ? errs.password : null} hint="Share it securely; they should change it after signing in.">
+            <div className="input-wrap">
+              <Input className="mono" value={password} onChange={(e) => setPassword(e.target.value)} invalid={touched && !!errs.password} />
+              <button type="button" className="input-icon" title="Generate" onClick={() => setPassword(generatePassword())}>
+                <Wand2 />
+              </button>
+            </div>
+          </Field>
+        )}
         <div className="field">
           <span className="field-label">Roles</span>
           {roles.length ? (

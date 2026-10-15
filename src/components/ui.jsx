@@ -126,7 +126,7 @@ export function ErrorState({ error, onRetry }) {
           This screen is ready, but <b>{SERVICE_LABEL[error.service]}</b> isn't deployed or doesn't serve this route yet. It will start working as soon as the
           backend ships it.
         </p>
-        <code className="tag" style={{ marginTop: 4 }}>
+        <code className="tag" style={{ marginTop: 4, height: 'auto', minHeight: 24, maxWidth: '100%', overflowWrap: 'anywhere' }}>
           {error.path}
         </code>
         {onRetry && (

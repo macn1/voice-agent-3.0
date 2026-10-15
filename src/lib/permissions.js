@@ -45,11 +45,28 @@ export const PLATFORM_PERMISSIONS = [
 ];
 
 export const TENANT_PERMISSIONS = [
-  { code: 'agent.create', label: 'Create and edit agents', category: 'Agents' },
+  { code: 'agent.create', label: 'Create agents', category: 'Agents' },
+  { code: 'agent.manage', label: 'Edit, pause and delete agents', category: 'Agents' },
   { code: 'flow.publish', label: 'Publish agents', category: 'Agents' },
+  {
+    code: 'company_profile.manage',
+    label: 'Edit the company profile',
+    category: 'Agents',
+  },
+  {
+    code: 'phone_number.manage',
+    label: 'Assign agents to phone numbers',
+    category: 'Phone numbers',
+  },
   {
     code: 'transcripts.view',
     label: 'View call transcripts',
+    category: 'Calls',
+  },
+  { code: 'calls.place', label: 'Place and simulate calls', category: 'Calls' },
+  {
+    code: 'calls.manage',
+    label: 'Correct calls and reset demo data',
     category: 'Calls',
   },
   {

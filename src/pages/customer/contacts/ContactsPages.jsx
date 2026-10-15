@@ -511,21 +511,23 @@ function ListsTab() {
       <Async state={lists}>
         {(ls) =>
           ls.length ? (
-            <table className="table">
-              <tbody>
-                {ls.map((l) => (
-                  <tr key={l.id}>
-                    <td className="cell-main">{l.name}</td>
-                    <td className="num">{l.count} contacts</td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" onClick={() => navigate(`/campaigns/new?list=${l.id}`)}>
-                        Use in campaign
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {ls.map((l) => (
+                    <tr key={l.id}>
+                      <td className="cell-main">{l.name}</td>
+                      <td className="num">{l.count} contacts</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" onClick={() => navigate(`/campaigns/new?list=${l.id}`)}>
+                          Use in campaign
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No lists" />
           )
@@ -653,7 +655,7 @@ export function ContactDetailPage() {
             <div
               className="grid-2"
               style={{
-                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)',
+                '--grid-cols': 'minmax(0, 1fr) minmax(0, 1.4fr)',
                 alignItems: 'start',
               }}
             >

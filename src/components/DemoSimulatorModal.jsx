@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Calendar, Play, RefreshCw, Trash2, Zap } from 'lucide-react';
+import { Play, Trash2, Zap } from 'lucide-react';
 import {
   useGenerateDemoHistoryMutation,
   useListDemoScenariosQuery,
@@ -17,7 +17,7 @@ export function DemoSimulatorModal({ open, onClose, defaultAgentId }) {
   const scenariosQ = useListDemoScenariosQuery(undefined, { skip: !open });
   const [simulateCall, { isLoading: simBusy }] = useSimulateDemoCallMutation();
   const [generateHistory, { isLoading: genBusy }] = useGenerateDemoHistoryMutation();
-  const [resetDemoCalls, { isLoading: resetBusy }] = useResetDemoCallsMutation();
+  const [resetDemoCalls] = useResetDemoCallsMutation();
   const [clearDemoUsage] = useClearDemoUsageMutation();
 
   const [tab, setTab] = useState('simulate'); // 'simulate' | 'history' | 'reset'

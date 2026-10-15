@@ -250,6 +250,18 @@ export function UsagePage() {
     >
       {(data) => {
         const u = normalizeUsage(data);
+        if (!u.hasSubscription)
+          return (
+            <EmptyState
+              title="No plan assigned"
+              description="Usage is tracked once a plan is active on your account."
+              action={
+                <Link to="/settings/plan" className="btn sm primary">
+                  Choose a plan
+                </Link>
+              }
+            />
+          );
         const includedMin = u.includedMinutes ?? (plan ? Number(plan.included_call_minutes) : undefined);
         const includedAgents = u.includedAgents ?? (plan ? Number(plan.included_agents) : undefined);
         const overMin = u.overageMinutes ?? (includedMin !== undefined ? Math.max(0, u.callMinutes - includedMin) : 0);

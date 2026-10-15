@@ -176,7 +176,7 @@ function Overview({ filters }) {
     <div className="stack">
       <Async state={summary} skeleton={<Skeleton h={110} />}>
         {(s) => (
-          <div className="grid-3" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+          <div className="grid-3" style={{ '--grid-cols': 'repeat(4, minmax(0, 1fr))' }}>
             <Stat label="Calls" value={number(s.calls)} hint={delta(s.calls, s.prev?.calls)} onClick={() => navigate('/calls')} />
             <Stat label="Minutes" value={number(s.minutes)} hint={delta(s.minutes, s.prev?.minutes)} />
             <Stat label="Success rate" value={`${Math.round(s.success_rate * 100)}%`} hint={delta(s.success_rate, s.prev?.success_rate)} />
@@ -216,28 +216,30 @@ function Overview({ filters }) {
         <Async state={agents}>
           {(rows) =>
             rows.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th className="num">Calls</th>
-                    <th className="num">Minutes</th>
-                    <th className="num">Success</th>
-                    <th className="num">Avg duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.agent_id} className="clickable" onClick={() => navigate(`/calls?agent_id=${r.agent_id}`)}>
-                      <td className="cell-main">{r.agent_name}</td>
-                      <td className="num">{number(r.calls)}</td>
-                      <td className="num">{number(r.minutes)}</td>
-                      <td className="num">{Math.round(r.success_rate * 100)}%</td>
-                      <td className="num">{Math.round(r.avg_duration)}s</td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th className="num">Calls</th>
+                      <th className="num">Minutes</th>
+                      <th className="num">Success</th>
+                      <th className="num">Avg duration</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.agent_id} className="clickable" onClick={() => navigate(`/calls?agent_id=${r.agent_id}`)}>
+                        <td className="cell-main">{r.agent_name}</td>
+                        <td className="num">{number(r.calls)}</td>
+                        <td className="num">{number(r.minutes)}</td>
+                        <td className="num">{Math.round(r.success_rate * 100)}%</td>
+                        <td className="num">{Math.round(r.avg_duration)}s</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No data" />
             )
@@ -290,17 +292,19 @@ function Outcomes({ filters }) {
         <Async state={fields}>
           {(rows) =>
             rows.length ? (
-              <table className="table">
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i}>
-                      <td className="mono">{r.field}</td>
-                      <td>{r.value}</td>
-                      <td className="num">{number(r.count)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i}>
+                        <td className="mono">{r.field}</td>
+                        <td>{r.value}</td>
+                        <td className="num">{number(r.count)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No extracted fields" description="Define fields on an agent's Analysis tab." />
             )
@@ -318,7 +322,7 @@ function Usage({ filters }) {
     <div className="stack">
       <Async state={cost} skeleton={<Skeleton h={110} />}>
         {(c) => (
-          <div className="grid-3" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+          <div className="grid-3" style={{ '--grid-cols': 'repeat(4, minmax(0, 1fr))' }}>
             <Stat label="Total cost" value={money(c.total, c.currency)} />
             <Stat label="Cost per call" value={money(c.per_call, c.currency)} />
             <Stat label="Cost per success" value={money(c.per_success, c.currency)} />
@@ -504,26 +508,28 @@ function Patterns({ filters }) {
             <Async state={s}>
               {(rows) =>
                 rows.length ? (
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th className="num">Calls</th>
-                        <th className="num">Connect</th>
-                        <th className="num">Success</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <tr key={r.name}>
-                          <td className="cell-main">{r.name}</td>
-                          <td className="num">{number(r.calls)}</td>
-                          <td className="num">{Math.round(r.connect_rate * 100)}%</td>
-                          <td className="num">{Math.round(r.success_rate * 100)}%</td>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th className="num">Calls</th>
+                          <th className="num">Connect</th>
+                          <th className="num">Success</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.name}>
+                            <td className="cell-main">{r.name}</td>
+                            <td className="num">{number(r.calls)}</td>
+                            <td className="num">{Math.round(r.connect_rate * 100)}%</td>
+                            <td className="num">{Math.round(r.success_rate * 100)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <EmptyState title="No data" />
                 )

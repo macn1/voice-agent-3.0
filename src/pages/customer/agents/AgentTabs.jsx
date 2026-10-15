@@ -133,7 +133,7 @@ export function IdentityTab({ agent }) {
       /* fall back to a generic introduction */
     }
     const u = new SpeechSynthesisUtterance(greeting || `Hi, I'm ${p.name}, ${p.role}. How can I help you today?`);
-    u.rate = 0.8 + (p.personality.energy / 100) * 0.5;
+    u.rate = 0.8 + ((p.personality?.energy ?? 50) / 100) * 0.5;
     u.onend = () => setSpeaking(false);
     setSpeaking(true);
     speechSynthesis.cancel();
@@ -158,13 +158,13 @@ export function IdentityTab({ agent }) {
           <>
             <div className="form-grid">
               <Field label="Agent's name">
-                <Input value={p.name} onChange={(e) => patch({ name: e.target.value })} />
+                <Input value={p.name ?? ''} onChange={(e) => patch({ name: e.target.value })} />
               </Field>
               <Field label="Gender">
                 <Select value={p.gender} options={['female', 'male', 'neutral']} onChange={(e) => patch({ gender: e.target.value })} />
               </Field>
               <Field label="Role" className="full" hint="e.g. “Front-desk assistant for CareFirst Clinics”">
-                <Input value={p.role} onChange={(e) => patch({ role: e.target.value })} />
+                <Input value={p.role ?? ''} onChange={(e) => patch({ role: e.target.value })} />
               </Field>
             </div>
             <div className="field">
@@ -185,12 +185,12 @@ export function IdentityTab({ agent }) {
                 ['humour', 'Serious', 'Playful'],
               ].map(([k, l, r]) => (
                 <Field key={k} label={titleCase(k)}>
-                  <Slider value={p.personality[k]} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
+                  <Slider value={p.personality?.[k] ?? 50} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
                 </Field>
               ))}
             </div>
             <Field label="Speaking style" hint="Anything about how it talks — sentence length, words to use or avoid.">
-              <Textarea rows={3} value={p.style} onChange={(e) => patch({ style: e.target.value })} />
+              <Textarea rows={3} value={p.style ?? ''} onChange={(e) => patch({ style: e.target.value })} />
             </Field>
           </>
         )}
@@ -817,10 +817,7 @@ export function LanguagesTab({ agent }) {
       {(l, patch) => (
         <>
           <div className="form-grid">
-            <Field label="Primary language">
-              <LanguageSelect value={l.primary} onChange={(v) => patch({ primary: v })} />
-            </Field>
-            <Field label="Language switching">
+            <Field label="Language switching" hint="The first language below is the primary one.">
               <Select
                 value={l.detection}
                 options={[
@@ -843,14 +840,15 @@ export function LanguagesTab({ agent }) {
             return (
               <div key={i} className="card" style={{ padding: 16 }}>
                 <div className="row between" style={{ marginBottom: 12 }}>
-                  <div style={{ width: 280 }}>
+                  <div className="row" style={{ flex: '0 1 340px', minWidth: 0 }}>
                     <LanguageSelect value={lang.language} onChange={(v) => upd({ language: v })} />
+                    {i === 0 && <Badge plain>Primary</Badge>}
                   </div>
                   <Button
                     size="sm"
                     variant="ghost"
                     icon={<Trash2 />}
-                    disabled={l.languages.length === 1}
+                    disabled={l.languages.length === 1 && i === 0}
                     onClick={() =>
                       patch({
                         languages: l.languages.filter((_, j) => j !== i),
@@ -977,36 +975,38 @@ export function KnowledgeTab({ agent }) {
         <Async state={docs}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <tbody>
-                  {list.map((d) => (
-                    <tr key={d.id}>
-                      <td className="cell-main">{d.title}</td>
-                      <td>
-                        <StatusBadge status={d.status === 'ready' ? 'active' : d.status} label={titleCase(d.status)} />
-                        {d.error && (
-                          <div className="cell-sub" style={{ color: 'var(--red)' }}>
-                            {d.error}
-                          </div>
-                        )}
-                      </td>
-                      <td className="muted">{date(d.created_at)}</td>
-                      <td className="actions">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Trash2 />}
-                          onClick={() =>
-                            removeDocument({ id: agent.id, docId: d.id })
-                              .unwrap()
-                              .catch((e) => toast(errMsg(e), 'error'))
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {list.map((d) => (
+                      <tr key={d.id}>
+                        <td className="cell-main">{d.title}</td>
+                        <td>
+                          <StatusBadge status={d.status === 'ready' ? 'active' : d.status} label={titleCase(d.status)} />
+                          {d.error && (
+                            <div className="cell-sub" style={{ color: 'var(--red)' }}>
+                              {d.error}
+                            </div>
+                          )}
+                        </td>
+                        <td className="muted">{date(d.created_at)}</td>
+                        <td className="actions">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trash2 />}
+                            onClick={() =>
+                              removeDocument({ id: agent.id, docId: d.id })
+                                .unwrap()
+                                .catch((e) => toast(errMsg(e), 'error'))
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No documents" description="Upload PDFs, Word files or text." />
             )
@@ -1406,25 +1406,27 @@ export function TestsTab({ agent }) {
         <Async state={scenarios}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <tbody>
-                  {list.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <div className="cell-main">{s.name}</div>
-                        <div className="cell-sub">{s.caller_script}</div>
-                      </td>
-                      <td>
-                        <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
-                          {s.expectations.map((x) => (
-                            <li key={x}>{x}</li>
-                          ))}
-                        </ul>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {list.map((s) => (
+                      <tr key={s.id}>
+                        <td>
+                          <div className="cell-main">{s.name}</div>
+                          <div className="cell-sub">{s.caller_script}</div>
+                        </td>
+                        <td>
+                          <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
+                            {s.expectations.map((x) => (
+                              <li key={x}>{x}</li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No scenarios" description="e.g. “Angry caller asks for a refund” — must apologise and offer a callback." />
             )
@@ -1438,37 +1440,39 @@ export function TestsTab({ agent }) {
         <Async state={runs}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Started</th>
-                    <th>Version</th>
-                    <th>Result</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((r) => (
-                    <tr key={r.id}>
-                      <td>{dateTime(r.started_at)}</td>
-                      <td>{r.agent_version ? `v${r.agent_version}` : 'Draft'}</td>
-                      <td>
-                        <StatusBadge status={r.status === 'passed' ? 'active' : r.status === 'failed' ? 'failed' : 'pending'} label={titleCase(r.status)} />
-                        {r.results.length > 0 && (
-                          <span className="muted small" style={{ marginLeft: 8 }}>
-                            {r.results.filter((x) => x.passed).length}/{r.results.length} passed
-                          </span>
-                        )}
-                      </td>
-                      <td className="actions">
-                        <Button size="sm" variant="ghost" icon={<Eye />} disabled={!r.results.length} onClick={() => setViewing(r)}>
-                          Details
-                        </Button>
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Started</th>
+                      <th>Version</th>
+                      <th>Result</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {list.map((r) => (
+                      <tr key={r.id}>
+                        <td>{dateTime(r.started_at)}</td>
+                        <td>{r.agent_version ? `v${r.agent_version}` : 'Draft'}</td>
+                        <td>
+                          <StatusBadge status={r.status === 'passed' ? 'active' : r.status === 'failed' ? 'failed' : 'pending'} label={titleCase(r.status)} />
+                          {r.results.length > 0 && (
+                            <span className="muted small" style={{ marginLeft: 8 }}>
+                              {r.results.filter((x) => x.passed).length}/{r.results.length} passed
+                            </span>
+                          )}
+                        </td>
+                        <td className="actions">
+                          <Button size="sm" variant="ghost" icon={<Eye />} disabled={!r.results.length} onClick={() => setViewing(r)}>
+                            Details
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No runs yet" />
             )
@@ -1656,53 +1660,55 @@ export function VersionsTab({ agent }) {
       <Async state={versions}>
         {(list) =>
           list.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Version</th>
-                  <th>Note</th>
-                  <th>Published</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((v) => (
-                  <tr key={v.version}>
-                    <td>
-                      <div className="row" style={{ gap: 8 }}>
-                        <b>v{v.version}</b>
-                        {v.is_live && <Badge tone="green">Live</Badge>}
-                      </div>
-                    </td>
-                    <td className="muted">{v.note || '—'}</td>
-                    <td className="muted">
-                      {dateTime(v.published_at)}
-                      {v.published_by ? ` · ${v.published_by}` : ''}
-                    </td>
-                    <td className="actions">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<Eye />}
-                        onClick={() =>
-                          loadVersion({ id: agent.id, version: v.version })
-                            .unwrap()
-                            .then(setView)
-                            .catch((e) => toast(errMsg(e), 'error'))
-                        }
-                      >
-                        View
-                      </Button>
-                      {!v.is_live && (
-                        <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setRolling(v)}>
-                          Roll back
-                        </Button>
-                      )}
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Note</th>
+                    <th>Published</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {list.map((v) => (
+                    <tr key={v.version}>
+                      <td>
+                        <div className="row" style={{ gap: 8 }}>
+                          <b>v{v.version}</b>
+                          {v.is_live && <Badge tone="green">Live</Badge>}
+                        </div>
+                      </td>
+                      <td className="muted">{v.note || '—'}</td>
+                      <td className="muted">
+                        {dateTime(v.published_at)}
+                        {v.published_by ? ` · ${v.published_by}` : ''}
+                      </td>
+                      <td className="actions">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Eye />}
+                          onClick={() =>
+                            loadVersion({ id: agent.id, version: v.version })
+                              .unwrap()
+                              .then(setView)
+                              .catch((e) => toast(errMsg(e), 'error'))
+                          }
+                        >
+                          View
+                        </Button>
+                        {!v.is_live && (
+                          <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setRolling(v)}>
+                            Roll back
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="Not published yet" description="Use Publish at the top to make version 1 live." />
           )
@@ -2041,7 +2047,7 @@ export function SettingsTab({ agent }) {
             icon={<Copy />}
             onClick={async () => {
               try {
-                const d = await duplicateAgent(agent.id).unwrap();
+                const d = await duplicateAgent({ id: agent.id }).unwrap();
                 toast(`Created ${d.name}`);
                 navigate(`/agents/${d.id}`);
               } catch (e) {

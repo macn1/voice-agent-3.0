@@ -58,12 +58,12 @@ export function AcceptInvitePage() {
     <AuthLayout>
       <form className="auth-form" onSubmit={submit} noValidate>
         <div className="eyebrow">You're invited</div>
-        <h1>{info.data ? `Join ${info.data.company}` : 'Set up your account'}</h1>
+        <h1>{info.data ? `Join ${info.data.company_name ?? info.data.company}` : 'Set up your account'}</h1>
         {info.isLoading ? (
           <Skeleton h={18} w={260} style={{ marginTop: 12 }} />
         ) : info.data ? (
           <p className="lead">
-            {info.data.inviter} invited <b>{info.data.email}</b> to Aurlynn.
+            {info.data.invited_by ?? info.data.inviter} invited <b>{info.data.email}</b> to {info.data.company_name ?? 'Aurlynn'}.
           </p>
         ) : expired ? (
           <p className="lead">This link has expired or was already used. Ask your admin to resend the invite.</p>
@@ -106,7 +106,7 @@ export function ForgotPasswordPage() {
           setError(null);
           try {
             const r = await forgotPassword(email.trim()).unwrap();
-            setSent({ link: r?.reset_link });
+            setSent({ link: r?.reset_url ?? r?.reset_link });
           } catch (err) {
             setError(errMsg(err));
           } finally {
@@ -293,12 +293,13 @@ export function SignupPage() {
           setError(null);
           try {
             const r = await signup({
-              ...f,
               name: f.name.trim(),
-              company: f.company.trim(),
+              company_name: f.company.trim(),
               email: f.email.trim(),
+              password: f.password,
             }).unwrap();
-            setDone({ link: r?.verify_link });
+            // verification_url is only returned on dev, where no email is sent.
+            setDone({ link: r?.verification_url ?? r?.verify_link });
           } catch (err) {
             setError(errMsg(err));
           } finally {

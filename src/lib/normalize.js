@@ -69,7 +69,8 @@ const num = (v) => (v == null || v === '' ? undefined : Number(v));
 
 /** Accepts `{metrics: {...}}`, `{call_minutes: n}`, `[{metric_type, quantity}]`, `{records|items: [...]}`. */
 export function normalizeUsage(data) {
-  const out = { callMinutes: 0, activeAgents: 0, apiCalls: 0 };
+  // has_subscription is false when no plan is assigned (period dates are then null).
+  const out = { callMinutes: 0, activeAgents: 0, apiCalls: 0, hasSubscription: !(data && typeof data === 'object' && data.has_subscription === false) };
   if (!data || typeof data !== 'object') return out;
   const o = data;
 

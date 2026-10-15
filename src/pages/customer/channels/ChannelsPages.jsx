@@ -214,52 +214,54 @@ function TemplatesTab() {
       <Async state={list}>
         {(ts) =>
           ts.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Template</th>
-                  <th>Channel</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {ts.map((t) => (
-                  <tr key={t.id}>
-                    <td>
-                      <div className="cell-main mono">{t.name}</div>
-                      <div
-                        className="cell-sub"
-                        style={{
-                          maxWidth: 420,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {t.body}
-                      </div>
-                    </td>
-                    <td>
-                      {titleCase(t.channel)} · {t.language}
-                    </td>
-                    <td>{titleCase(t.category)}</td>
-                    <td>
-                      <StatusBadge status={t.status === 'approved' ? 'active' : t.status === 'rejected' ? 'failed' : 'pending'} label={titleCase(t.status)} />
-                      {t.reject_reason && (
-                        <div className="cell-sub" style={{ color: 'var(--red)' }}>
-                          {t.reject_reason}
-                        </div>
-                      )}
-                    </td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(t)} />
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Template</th>
+                    <th>Channel</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {ts.map((t) => (
+                    <tr key={t.id}>
+                      <td>
+                        <div className="cell-main mono">{t.name}</div>
+                        <div
+                          className="cell-sub"
+                          style={{
+                            maxWidth: 420,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {t.body}
+                        </div>
+                      </td>
+                      <td>
+                        {titleCase(t.channel)} · {t.language}
+                      </td>
+                      <td>{titleCase(t.category)}</td>
+                      <td>
+                        <StatusBadge status={t.status === 'approved' ? 'active' : t.status === 'rejected' ? 'failed' : 'pending'} label={titleCase(t.status)} />
+                        {t.reject_reason && (
+                          <div className="cell-sub" style={{ color: 'var(--red)' }}>
+                            {t.reject_reason}
+                          </div>
+                        )}
+                      </td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(t)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No templates" />
           )
@@ -542,19 +544,21 @@ function SmsTab() {
         <Async state={list}>
           {(xs) =>
             xs.length ? (
-              <table className="table">
-                <tbody>
-                  {xs.map((x) => (
-                    <tr key={x.id}>
-                      <td className="cell-main">{x.display_name ?? x.phone}</td>
-                      <td>{x.provider}</td>
-                      <td>
-                        <StatusBadge status={x.status === 'connected' ? 'active' : x.status} label={titleCase(x.status)} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {xs.map((x) => (
+                      <tr key={x.id}>
+                        <td className="cell-main">{x.display_name ?? x.phone}</td>
+                        <td>{x.provider}</td>
+                        <td>
+                          <StatusBadge status={x.status === 'connected' ? 'active' : x.status} label={titleCase(x.status)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState icon={<Smartphone />} title="No SMS sender" />
             )
@@ -754,7 +758,7 @@ export function InboxPage() {
                 </div>
                 <div style={{ padding: 16, borderTop: '1px solid var(--divider)' }}>
                   {windowClosed ? (
-                    <div className="row" style={{ gap: 8 }}>
+                    <div className="row wrap" style={{ gap: 8 }}>
                       <span className="muted small" style={{ flex: 1 }}>
                         The 24-hour reply window has closed — only approved templates can be sent.
                       </span>
@@ -865,65 +869,67 @@ export function BroadcastsPage() {
         <Async state={list}>
           {(bs) =>
             bs.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Broadcast</th>
-                    <th>Status</th>
-                    <th style={{ width: 280 }}>Delivery</th>
-                    <th className="num">Replied</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bs.map((b) => (
-                    <tr key={b.id}>
-                      <td>
-                        <div className="cell-main">{b.name}</div>
-                        <div className="cell-sub">
-                          {b.template_name ?? b.template_id} → {b.list_name ?? b.contact_list_id} · {dateTime(b.scheduled_at)}
-                        </div>
-                      </td>
-                      <td>
-                        <StatusBadge
-                          status={b.status === 'done' ? 'active' : b.status === 'scheduled' || b.status === 'sending' ? 'pending' : b.status}
-                          label={titleCase(b.status)}
-                        />
-                      </td>
-                      <td>
-                        {b.stats.sent ? (
-                          <ShareBar
-                            parts={[
-                              {
-                                label: 'Read',
-                                value: b.stats.read,
-                                color: SERIES[2],
-                              },
-                              {
-                                label: 'Delivered',
-                                value: b.stats.delivered - b.stats.read,
-                                color: SERIES[0],
-                              },
-                              {
-                                label: 'Sent',
-                                value: b.stats.sent - b.stats.delivered - b.stats.failed,
-                                color: '#b8b6b1',
-                              },
-                              {
-                                label: 'Failed',
-                                value: b.stats.failed,
-                                color: SERIES[1],
-                              },
-                            ]}
-                          />
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td className="num">{number(b.stats.replied)}</td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Broadcast</th>
+                      <th>Status</th>
+                      <th style={{ width: 280 }}>Delivery</th>
+                      <th className="num">Replied</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {bs.map((b) => (
+                      <tr key={b.id}>
+                        <td>
+                          <div className="cell-main">{b.name}</div>
+                          <div className="cell-sub">
+                            {b.template_name ?? b.template_id} → {b.list_name ?? b.contact_list_id} · {dateTime(b.scheduled_at)}
+                          </div>
+                        </td>
+                        <td>
+                          <StatusBadge
+                            status={b.status === 'done' ? 'active' : b.status === 'scheduled' || b.status === 'sending' ? 'pending' : b.status}
+                            label={titleCase(b.status)}
+                          />
+                        </td>
+                        <td>
+                          {b.stats.sent ? (
+                            <ShareBar
+                              parts={[
+                                {
+                                  label: 'Read',
+                                  value: b.stats.read,
+                                  color: SERIES[2],
+                                },
+                                {
+                                  label: 'Delivered',
+                                  value: b.stats.delivered - b.stats.read,
+                                  color: SERIES[0],
+                                },
+                                {
+                                  label: 'Sent',
+                                  value: b.stats.sent - b.stats.delivered - b.stats.failed,
+                                  color: '#b8b6b1',
+                                },
+                                {
+                                  label: 'Failed',
+                                  value: b.stats.failed,
+                                  color: SERIES[1],
+                                },
+                              ]}
+                            />
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                        <td className="num">{number(b.stats.replied)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState icon={<Send />} title="No broadcasts yet" />
             )

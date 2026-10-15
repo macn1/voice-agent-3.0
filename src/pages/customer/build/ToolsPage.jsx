@@ -31,45 +31,47 @@ export function ToolsPage() {
         <Async state={list}>
           {(tools) =>
             tools.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Tool</th>
-                    <th>Endpoint</th>
-                    <th className="num">Agents</th>
-                    <th>Last call</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {tools.map((t) => (
-                    <tr key={t.id}>
-                      <td>
-                        <div className="cell-main mono">{t.name}</div>
-                        <div className="cell-sub">{t.description}</div>
-                      </td>
-                      <td className="mono small">
-                        <Badge plain>{t.method}</Badge> {t.url}
-                      </td>
-                      <td className="num">{t.agents_count ?? 0}</td>
-                      <td>
-                        {t.last_status ? (
-                          <Badge tone={t.last_status.startsWith('2') ? 'green' : 'red'}>{t.last_status}</Badge>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td className="actions">
-                        <Button size="sm" variant="ghost" icon={<FlaskConical />} onClick={() => setTesting(t)}>
-                          Test
-                        </Button>
-                        <Button size="sm" variant="ghost" icon={<Pencil />} onClick={() => setEditing(t)} />
-                        <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(t)} />
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Tool</th>
+                      <th>Endpoint</th>
+                      <th className="num">Agents</th>
+                      <th>Last call</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {tools.map((t) => (
+                      <tr key={t.id}>
+                        <td>
+                          <div className="cell-main mono">{t.name}</div>
+                          <div className="cell-sub">{t.description}</div>
+                        </td>
+                        <td className="mono small">
+                          <Badge plain>{t.method}</Badge> {t.url}
+                        </td>
+                        <td className="num">{t.agents_count ?? 0}</td>
+                        <td>
+                          {t.last_status ? (
+                            <Badge tone={t.last_status.startsWith('2') ? 'green' : 'red'}>{t.last_status}</Badge>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                        <td className="actions">
+                          <Button size="sm" variant="ghost" icon={<FlaskConical />} onClick={() => setTesting(t)}>
+                            Test
+                          </Button>
+                          <Button size="sm" variant="ghost" icon={<Pencil />} onClick={() => setEditing(t)} />
+                          <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(t)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState
                 icon={<Wrench />}

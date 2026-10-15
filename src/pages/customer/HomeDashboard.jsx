@@ -75,7 +75,7 @@ export function HomeDashboard() {
         <div
           className="grid-3"
           style={{
-            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            '--grid-cols': 'repeat(4, minmax(0, 1fr))',
             marginBottom: 14,
           }}
         >
@@ -110,7 +110,7 @@ export function HomeDashboard() {
       <div
         className="grid-2"
         style={{
-          gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)',
+          '--grid-cols': 'minmax(0, 1.5fr) minmax(0, 1fr)',
           alignItems: 'start',
           marginBottom: 14,
         }}
@@ -139,19 +139,21 @@ export function HomeDashboard() {
                 All
               </Link>
             </div>
-            <table className="table">
-              <tbody>
-                {agents.data.items.map((a) => (
-                  <tr key={a.id} className="clickable" onClick={() => navigate(`/agents/${a.id}`)}>
-                    <td className="cell-main">{a.name}</td>
-                    <td>
-                      <StatusBadge status={a.status} />
-                    </td>
-                    <td className="num muted">{a.calls_7d ?? 0} calls</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {agents.data.items.map((a) => (
+                    <tr key={a.id} className="clickable" onClick={() => navigate(`/agents/${a.id}`)}>
+                      <td className="cell-main">{a.name}</td>
+                      <td>
+                        <StatusBadge status={a.status} />
+                      </td>
+                      <td className="num muted">{a.calls_7d ?? 0} calls</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

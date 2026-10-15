@@ -249,6 +249,7 @@ function ImportModal({ open, onClose, onApply }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [found, setFound] = useState(null);
+  const [note, setNote] = useState(null);
 
   return (
     <Modal
@@ -287,7 +288,9 @@ function ImportModal({ open, onClose, onApply }) {
                 setBusy(true);
                 setError(null);
                 try {
-                  setFound(await importFromWebsite(url.trim()).unwrap());
+                  const r = await importFromWebsite(url.trim()).unwrap();
+                  setFound(r.suggested ?? r);
+                  setNote(r.message ?? null);
                 } catch (e) {
                   setError(errMsg(e));
                 } finally {
@@ -302,9 +305,12 @@ function ImportModal({ open, onClose, onApply }) {
       }
     >
       {found ? (
-        <pre className="code" style={{ maxHeight: 420, whiteSpace: 'pre-wrap' }}>
-          {JSON.stringify(found, null, 2)}
-        </pre>
+        <div className="stack">
+          {note && <div className="banner info" style={{ margin: 0 }}><span className="grow">{note}</span></div>}
+          <pre className="code" style={{ maxHeight: 420, whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(found, null, 2)}
+          </pre>
+        </div>
       ) : (
         <div className="stack">
           {error && <div className="alert-inline">{error}</div>}

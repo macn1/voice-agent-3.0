@@ -14,49 +14,176 @@ const ag = (id) => `/customer/agents/${id}`;
  * (DB-DESIGN §6: one jsonb column per section). `wrap` shapes the PUT body
  * where the API expects an object around a list.
  */
+// Sections whose stored shape differs from what the editor tab edits:
+// `from` maps the API value to the tab's value, `wrap` maps it back.
+const langFrom = (list = []) => ({
+  detection: list[0]?.detection ?? 'auto',
+  languages: list.map((x) =>
+    typeof x === 'string' ? { language: x, voice_id: '', greeting: '' } : { language: x.code ?? '', voice_id: x.voice_id ?? '', greeting: x.greeting ?? '' },
+  ),
+});
+const langWrap = (l) =>
+  (l.languages ?? [])
+    .filter((x) => x.language)
+    .map((x, i) => ({
+      code: x.language,
+      ...(x.voice_id ? { voice_id: x.voice_id } : {}),
+      ...(x.greeting ? { greeting: x.greeting } : {}),
+      ...(i === 0 ? { detection: l.detection ?? 'auto' } : {}),
+    }));
+
+// The live API returns only what was saved ({} for a fresh tab), so every
+// object section is merged over the defaults the editor tabs expect.
+const withDefaults = (defaults) => (d) => ({ ...defaults, ...(d && typeof d === 'object' && !Array.isArray(d) ? d : {}) });
+
+const PROFILE_KEYS = ['about', 'offerings', 'hours', 'locations', 'contact', 'policies', 'faqs'];
+
 export const AGENT_SECTIONS = {
-  persona: { path: 'persona' },
-  profileOverrides: { path: 'company-profile-overrides' },
-  flow: { path: 'flow/draft' },
-  guidelines: { path: 'guidelines' },
-  variables: { path: 'variables' },
-  behaviour: { path: 'behaviour' },
-  speech: { path: 'speech-settings' },
-  keywords: { path: 'keywords' },
-  languages: { path: 'languages' },
-  settings: { path: 'settings' },
-  model: { path: 'model-settings' },
+  persona: { path: 'persona', from: withDefaults({ name: '', gender: 'female', role: '', tone: 'friendly', personality: {}, style: '' }) },
+  profileOverrides: { path: 'company-profile-overrides', from: withDefaults({ sections: PROFILE_KEYS }) },
+  flow: { path: 'flow/draft', from: withDefaults({ greeting: '', system_prompt: '', steps: [] }) },
+  guidelines: {
+    path: 'guidelines',
+    from: withDefaults({ preset_ids: [], always: [], never: [], blocked_topics: [], fallback_answer: '', escalation_triggers: [] }),
+  },
+  variables: {
+    path: 'variables',
+    from: (d) => (Array.isArray(d) ? d : []).map((v) => ({ type: 'text', direction: 'input', required: false, description: '', ...v })),
+  },
+  behaviour: {
+    path: 'behaviour',
+    from: withDefaults({
+      first_speaker: 'agent',
+      opening_line: '',
+      silence_timeout_seconds: 8,
+      silence_reprompts: 2,
+      reprompt_message: '',
+      max_duration_minutes: 10,
+      end_call_phrases: [],
+      transfer_number: '',
+      voicemail_action: 'hangup',
+      voicemail_message: '',
+    }),
+  },
+  speech: {
+    path: 'speech-settings',
+    from: withDefaults({ voice_id: '', speed: 1, interruption_sensitivity: 0.5, ambience: 'none', backchannel: true }),
+  },
+  keywords: { path: 'keywords', from: (d) => d?.keywords ?? d?.items ?? [], wrap: (list) => ({ keywords: list }) },
+  languages: { path: 'languages', from: langFrom, wrap: langWrap },
+  settings: {
+    path: 'settings',
+    from: withDefaults({ tags: [], description: '', event_webhook_url: '' }),
+    // GET returns the whole agent record; only these fields are editable.
+    // An empty webhook URL is rejected (422), and null can't clear max_concurrent_calls, so both are left out.
+    wrap: (a) => ({
+      name: a.name,
+      description: a.description,
+      tags: a.tags,
+      timezone: a.timezone,
+      ...(a.max_concurrent_calls ? { max_concurrent_calls: a.max_concurrent_calls } : {}),
+      ...(a.event_webhook_url ? { event_webhook_url: a.event_webhook_url } : {}),
+    }),
+  },
+  model: {
+    path: 'model-settings',
+    from: withDefaults({ llm: '', fallback_llm: '', temperature: 0.4, max_reply_tokens: 200, asr_provider: '', tts_provider: '', fallback_tts: '' }),
+  },
   memory: { path: 'memory-settings' },
   knowledgeBases: { path: 'knowledge-bases', wrap: (ids) => ({ knowledge_base_ids: ids }) },
   tools: { path: 'tools', wrap: (ids) => ({ tool_ids: ids }) },
   followUps: { path: 'follow-ups' },
-  analysis: { path: 'analysis-config' },
-  outcomes: { path: 'outcomes' },
-  compliance: { path: 'compliance' },
+  analysis: { path: 'analysis-config', from: withDefaults({ summary: true, sentiment: true, fields: [] }) },
+  outcomes: { path: 'outcomes', from: withDefaults({ outcomes: [], success_rule: '' }) },
+  // Stored as recording_notice / ai_disclosure text; the tab also keeps an on/off flag per line.
+  compliance: {
+    path: 'compliance',
+    from: (d) => ({
+      recording_enabled: true,
+      ...d,
+      consent_line: d?.consent_line ?? d?.recording_notice ?? '',
+      ai_disclosure_enabled: d?.ai_disclosure_enabled ?? !!d?.ai_disclosure,
+      ai_disclosure_line: d?.ai_disclosure_line ?? d?.ai_disclosure ?? '',
+    }),
+    wrap: ({ consent_line, ai_disclosure_line, ...c }) => ({ ...c, recording_notice: consent_line, ai_disclosure: ai_disclosure_line }),
+  },
   widget: { path: 'widget' },
   webchat: { path: 'webchat' },
   chatSettings: { path: 'chat-settings' },
 };
+
+// Version config key -> draft endpoint, used to compare the draft with the live
+// version on the client (the backend has no diff route).
+const DIFF_SECTIONS = {
+  flow: 'flow/draft',
+  persona: 'persona',
+  behaviour: 'behaviour',
+  variables: 'variables',
+  guidelines: 'guidelines',
+  analysis: 'analysis-config',
+  compliance: 'compliance',
+  profile_overrides: 'company-profile-overrides',
+  speech: 'speech-settings',
+  model: 'model-settings',
+  languages: 'languages',
+};
+const isEmpty = (v) => v == null || (Array.isArray(v) ? !v.length : typeof v === 'object' ? !Object.keys(v).length : v === '');
+const canon = (v) =>
+  JSON.stringify(v, (_k, x) =>
+    x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x,
+  );
 
 const sectionTag = (id, section) => ({ type: 'AgentSection', id: `${id}:${section}` });
 
 export const flowApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
     // Agents (AGT-01) ------------------------------------------------------
-    listAgents: b.query({ query: (params = {}) => C.flow('/customer/agents', { params }), providesTags: ['Agent'] }),
-    getAgent: b.query({ query: (id) => C.flow(ag(id)), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
+    // The API only returns published_version_id; the screens want a truthy
+    // "is published" flag in lists and the version number on the editor.
+    listAgents: b.query({
+      query: (params = {}) => C.flow('/customer/agents', { params }),
+      transformResponse: (d) =>
+        d?.items ? { ...d, items: d.items.map((a) => ({ ...a, published_version: a.published_version ?? (a.published_version_id ? true : null) })) } : d,
+      providesTags: ['Agent'],
+    }),
+    getAgent: b.query({
+      async queryFn(id, _api, _extra, baseQuery) {
+        const r = await baseQuery(C.flow(ag(id)));
+        if (r.error || !r.data?.published_version_id || r.data.published_version) return r;
+        const v = await baseQuery(C.flow(`${ag(id)}/flow/versions`));
+        const cur = Array.isArray(v.data) ? (v.data.find((x) => x.id === r.data.published_version_id) ?? v.data.find((x) => x.is_current)) : null;
+        return { data: { ...r.data, published_version: cur?.version ?? true } };
+      },
+      providesTags: (_r, _e, id) => [{ type: 'Agent', id }],
+    }),
     createAgent: b.mutation({ query: (body) => C.flow('/customer/agents', { method: 'POST', body }), invalidatesTags: ['Agent'] }),
     updateAgent: b.mutation({ query: ({ id, ...body }) => C.flow(ag(id), { method: 'PATCH', body }), invalidatesTags: ['Agent'] }),
     deleteAgent: b.mutation({ query: (id) => C.flow(ag(id), { method: 'DELETE' }), invalidatesTags: ['Agent', 'Number'] }),
-    duplicateAgent: b.mutation({ query: (id) => C.flow(`${ag(id)}/duplicate`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
+    // arg: agent id, or { id, name } ("<name> (copy)" by default).
+    duplicateAgent: b.mutation({
+      query: (arg) => {
+        const { id, name } = typeof arg === 'string' ? { id: arg } : arg;
+        return C.flow(`${ag(id)}/duplicate`, { method: 'POST', body: name ? { name } : {} });
+      },
+      invalidatesTags: ['Agent'],
+    }),
     pauseAgent: b.mutation({ query: (id) => C.flow(`${ag(id)}/pause`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
     resumeAgent: b.mutation({ query: (id) => C.flow(`${ag(id)}/resume`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
     exportAgent: b.query({ query: (id) => C.flow(`${ag(id)}/export`), keepUnusedDataFor: 0 }),
-    importAgent: b.mutation({ query: (config) => C.flow('/customer/agents/import', { method: 'POST', body: config }), invalidatesTags: ['Agent'] }),
+    // arg: the export file, or { export, name }. 409 agent_name_in_use if the name is taken.
+    importAgent: b.mutation({
+      query: (arg) =>
+        C.flow('/customer/agents/import', {
+          method: 'POST',
+          body: arg?.export ? { export: arg.export, ...(arg.name ? { name: arg.name } : {}) } : { export: arg },
+        }),
+      invalidatesTags: ['Agent'],
+    }),
 
     // Editor sections (AGT-03, 07..14, 17, 18; KNW-01.7; ACT-01.6, 03; PCA-01/02; CMP-01; CON-02.2; WID-01; WA-03.2/06.2)
     getAgentSection: b.query({
       query: ({ id, section }) => C.flow(`${ag(id)}/${AGENT_SECTIONS[section].path}`),
+      transformResponse: (d, _m, { section }) => (AGENT_SECTIONS[section].from ? AGENT_SECTIONS[section].from(d) : d),
       providesTags: (_r, _e, { id, section }) => [sectionTag(id, section)],
     }),
     putAgentSection: b.mutation({
@@ -75,8 +202,36 @@ export const flowApi = baseApi.injectEndpoints({
     listGuidelinePresets: b.query({ query: () => C.flow('/customer/guideline-presets'), providesTags: ['Catalog'] }),
 
     // Publish & versions (AGT-03.3, AGT-04) -------------------------------
-    validateFlow: b.mutation({ query: (id) => C.flow(`${ag(id)}/flow/validate`, { method: 'POST', body: {} }) }),
-    getAgentDiff: b.query({ query: (id) => C.flow(`${ag(id)}/flow/diff`), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
+    // API: { valid, issues: [{ field, message }] }; the screens read errors / warnings.
+    validateFlow: b.mutation({
+      query: (id) => C.flow(`${ag(id)}/flow/validate`, { method: 'POST', body: {} }),
+      transformResponse: (d) => ({
+        ...d,
+        errors: d?.errors ?? d?.issues ?? [],
+        warnings: d?.warnings ?? [],
+      }),
+    }),
+    // No diff route on the backend: compare each draft tab with the live
+    // version's config. Never published -> every non-empty tab counts as changed.
+    getAgentDiff: b.query({
+      async queryFn(id, _api, _extra, baseQuery) {
+        const versions = await baseQuery(C.flow(`${ag(id)}/flow/versions`));
+        if (versions.error) return versions;
+        const cur = (versions.data ?? []).find((v) => v.is_current);
+        const live = cur ? await baseQuery(C.flow(`${ag(id)}/flow/versions/${cur.version}`)) : null;
+        if (live?.error) return live;
+        const keys = Object.keys(DIFF_SECTIONS);
+        const drafts = await Promise.all(keys.map((k) => baseQuery(C.flow(`${ag(id)}/${DIFF_SECTIONS[k]}`))));
+        const changed = keys.filter((k, i) => {
+          if (drafts[i].error) return false;
+          const d = drafts[i].data;
+          const was = live?.data?.config?.[k];
+          return live ? canon(isEmpty(d) ? null : d) !== canon(isEmpty(was) ? null : was) : !isEmpty(d);
+        });
+        return { data: { changed_sections: changed, published: !!cur, current_version: cur?.version ?? null } };
+      },
+      providesTags: (_r, _e, id) => [{ type: 'Agent', id }, 'Version'],
+    }),
     publishAgent: b.mutation({
       query: ({ id, note }) => C.flow(`${ag(id)}/flow/publish`, { method: 'POST', body: { note } }),
       invalidatesTags: ['Agent', 'Version', 'Number'],
@@ -94,7 +249,23 @@ export const flowApi = baseApi.injectEndpoints({
       query: ({ template_id, name }) => C.flow('/customer/agents/from-template', { method: 'POST', body: { template_id, name } }),
       invalidatesTags: ['Agent'],
     }),
-    generateDraft: b.mutation({ query: (description) => C.flow('/customer/agents/generate-draft', { method: 'POST', body: { description } }) }),
+    // API: { template_id, name, config: { flow, persona, guidelines, variables, ... }, simulated }.
+    // The "describe it" screen edits { name, flow, persona, guidelines, variables }.
+    generateDraft: b.mutation({
+      query: (description) => C.flow('/customer/agents/generate-draft', { method: 'POST', body: { description } }),
+      transformResponse: (d) => {
+        const c = d?.config ?? d ?? {};
+        return {
+          template_id: d?.template_id,
+          simulated: !!d?.simulated,
+          name: d?.name ?? 'New agent',
+          flow: { greeting: '', system_prompt: '', steps: [], ...(c.flow ?? { greeting: d?.greeting, system_prompt: d?.system_prompt }) },
+          persona: { name: '', role: '', ...(c.persona ?? {}) },
+          guidelines: { always: [], never: [], blocked_topics: [], ...(c.guidelines ?? {}) },
+          variables: Array.isArray(c.variables) ? c.variables : [],
+        };
+      },
+    }),
 
     // Testing (AGT-06, QTY-01, QTY-02) -----------------------------------
     createTestSession: b.mutation({ query: (id) => C.flow(`${ag(id)}/test-session`, { method: 'POST', body: {} }) }),
@@ -160,8 +331,20 @@ export const flowApi = baseApi.injectEndpoints({
     testTool: b.mutation({ query: ({ id, params }) => C.flow(`/customer/tools/${id}/test`, { method: 'POST', body: { params } }), invalidatesTags: ['Tool'] }),
 
     // Pronunciations, voices, teams -------------------------------------
-    listPronunciations: b.query({ query: () => C.flow('/customer/pronunciations'), providesTags: ['Pronunciation'] }),
-    putPronunciations: b.mutation({ query: (body) => C.flow('/customer/pronunciations', { method: 'PUT', body }), invalidatesTags: ['Pronunciation'] }),
+    // Company-wide list: { entries: [{ word, say_as }] } on the wire, a plain array in the UI.
+    listPronunciations: b.query({
+      query: () => C.flow('/customer/pronunciations'),
+      transformResponse: (d) => (Array.isArray(d) ? d : (d?.entries ?? d?.items ?? [])),
+      providesTags: ['Pronunciation'],
+    }),
+    putPronunciations: b.mutation({
+      query: (list) =>
+        C.flow('/customer/pronunciations', {
+          method: 'PUT',
+          body: { entries: (Array.isArray(list) ? list : (list?.entries ?? [])).filter((e) => e.word?.trim()) },
+        }),
+      invalidatesTags: ['Pronunciation'],
+    }),
     listCustomVoices: b.query({ query: () => C.flow('/customer/voices'), providesTags: ['Voice'] }),
     createCustomVoice: b.mutation({ query: (body) => C.flow('/customer/voices', { method: 'POST', body }), invalidatesTags: ['Voice'] }),
     deleteCustomVoice: b.mutation({ query: (id) => C.flow(`/customer/voices/${id}`, { method: 'DELETE' }), invalidatesTags: ['Voice'] }),

@@ -356,42 +356,44 @@ function BuyNumberModal({ open, onClose, onBought }) {
           <Async state={results}>
             {(r) =>
               r?.length ? (
-                <table className="table">
-                  <tbody>
-                    {r.map((n) => (
-                      <tr key={n.e164}>
-                        <td className="mono cell-main">{n.e164}</td>
-                        <td className="muted">{[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}</td>
-                        <td className="num">
-                          {money(n.monthly_price, country === 'IN' ? 'INR' : 'USD')}
-                          /mo
-                        </td>
-                        <td className="actions">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            loading={busy === n.e164}
-                            onClick={async () => {
-                              setBusy(n.e164);
-                              try {
-                                await purchaseNumber(n.e164).unwrap();
-                                toast(`${n.e164} is yours`);
-                                onBought();
-                                onClose();
-                              } catch (e) {
-                                toast(errMsg(e), 'error');
-                              } finally {
-                                setBusy(null);
-                              }
-                            }}
-                          >
-                            Buy
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="table-wrap">
+                  <table className="table">
+                    <tbody>
+                      {r.map((n) => (
+                        <tr key={n.e164}>
+                          <td className="mono cell-main">{n.e164}</td>
+                          <td className="muted">{[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}</td>
+                          <td className="num">
+                            {money(n.monthly_price, country === 'IN' ? 'INR' : 'USD')}
+                            /mo
+                          </td>
+                          <td className="actions">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              loading={busy === n.e164}
+                              onClick={async () => {
+                                setBusy(n.e164);
+                                try {
+                                  await purchaseNumber(n.e164).unwrap();
+                                  toast(`${n.e164} is yours`);
+                                  onBought();
+                                  onClose();
+                                } catch (e) {
+                                  toast(errMsg(e), 'error');
+                                } finally {
+                                  setBusy(null);
+                                }
+                              }}
+                            >
+                              Buy
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <EmptyState title="No numbers found" description="Try another country or fewer digits." />
               )
@@ -471,20 +473,22 @@ function CarrierCard() {
         <Async state={conns}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <tbody>
-                  {list.map((c) => (
-                    <tr key={c.id}>
-                      <td className="cell-main">{c.type === 'sip_trunk' ? 'SIP trunk' : 'Carrier account'}</td>
-                      <td>{c.provider}</td>
-                      <td>
-                        <StatusBadge status={c.status} />
-                      </td>
-                      <td className="muted">{dateTime(c.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table className="table">
+                  <tbody>
+                    {list.map((c) => (
+                      <tr key={c.id}>
+                        <td className="cell-main">{c.type === 'sip_trunk' ? 'SIP trunk' : 'Carrier account'}</td>
+                        <td>{c.provider}</td>
+                        <td>
+                          <StatusBadge status={c.status} />
+                        </td>
+                        <td className="muted">{dateTime(c.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="Using Aurlynn's carrier" description="Connect your own carrier account or SIP trunk to bring your numbers." />
             )

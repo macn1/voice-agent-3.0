@@ -368,42 +368,44 @@ function SyncLog({ log }) {
       <Async state={log}>
         {(runs) =>
           runs.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>What</th>
-                  <th>Result</th>
-                  <th className="num">Created</th>
-                  <th className="num">Updated</th>
-                  <th className="num">Failed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((r) => (
-                  <tr key={r.id}>
-                    <td className="muted">{dateTime(r.started_at)}</td>
-                    <td>
-                      {titleCase(r.kind)} · {r.direction === 'in' ? 'in' : 'out'}
-                    </td>
-                    <td>
-                      <StatusBadge
-                        status={r.status === 'ok' ? 'active' : r.status === 'running' ? 'pending' : r.status === 'partial' ? 'expired' : 'failed'}
-                        label={titleCase(r.status)}
-                      />
-                      {r.errors.map((e, i) => (
-                        <div key={i} className="cell-sub" style={{ color: 'var(--red)' }}>
-                          {e.record}: {e.error}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="num">{r.counts.created}</td>
-                    <td className="num">{r.counts.updated}</td>
-                    <td className="num">{r.counts.failed}</td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Started</th>
+                    <th>What</th>
+                    <th>Result</th>
+                    <th className="num">Created</th>
+                    <th className="num">Updated</th>
+                    <th className="num">Failed</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id}>
+                      <td className="muted">{dateTime(r.started_at)}</td>
+                      <td>
+                        {titleCase(r.kind)} · {r.direction === 'in' ? 'in' : 'out'}
+                      </td>
+                      <td>
+                        <StatusBadge
+                          status={r.status === 'ok' ? 'active' : r.status === 'running' ? 'pending' : r.status === 'partial' ? 'expired' : 'failed'}
+                          label={titleCase(r.status)}
+                        />
+                        {r.errors.map((e, i) => (
+                          <div key={i} className="cell-sub" style={{ color: 'var(--red)' }}>
+                            {e.record}: {e.error}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="num">{r.counts.created}</td>
+                      <td className="num">{r.counts.updated}</td>
+                      <td className="num">{r.counts.failed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="No syncs yet" />
           )
@@ -625,36 +627,38 @@ function BookingTab() {
         <Async state={appts}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Who</th>
-                    <th>Details</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((a) => (
-                    <tr key={a.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{dateTime(a.starts_at)}</td>
-                      <td>
-                        <div className="cell-main">{a.contact_name}</div>
-                        <div className="cell-sub">{a.agent_name}</div>
-                      </td>
-                      <td className="small muted">{Object.values(a.details).join(' · ')}</td>
-                      <td>
-                        <StatusBadge
-                          status={a.status === 'booked' ? 'active' : a.status === 'cancelled' ? 'cancelled' : 'pending'}
-                          label={titleCase(a.status)}
-                        />
-                      </td>
-                      <td>{a.call_id && <Link to={`/calls/${a.call_id}`}>Call</Link>}</td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Who</th>
+                      <th>Details</th>
+                      <th>Status</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {list.map((a) => (
+                      <tr key={a.id}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{dateTime(a.starts_at)}</td>
+                        <td>
+                          <div className="cell-main">{a.contact_name}</div>
+                          <div className="cell-sub">{a.agent_name}</div>
+                        </td>
+                        <td className="small muted">{Object.values(a.details).join(' · ')}</td>
+                        <td>
+                          <StatusBadge
+                            status={a.status === 'booked' ? 'active' : a.status === 'cancelled' ? 'cancelled' : 'pending'}
+                            label={titleCase(a.status)}
+                          />
+                        </td>
+                        <td>{a.call_id && <Link to={`/calls/${a.call_id}`}>Call</Link>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No appointments yet" />
             )

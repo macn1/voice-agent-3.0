@@ -115,22 +115,24 @@ export function DocsPage() {
             <div className="eyebrow" style={{ padding: '16px 20px 6px' }}>
               {g.group}
             </div>
-            <table className="table">
-              <tbody>
-                {g.rows.map(([m, path, what]) => (
-                  <tr key={m + path}>
-                    <td style={{ width: 80 }}>
-                      <span className="tag">{m}</span>
-                    </td>
-                    <td className="mono small">
-                      {g.base}
-                      {path}
-                    </td>
-                    <td className="muted">{what}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {g.rows.map(([m, path, what]) => (
+                    <tr key={m + path}>
+                      <td style={{ width: 80 }}>
+                        <span className="tag">{m}</span>
+                      </td>
+                      <td className="mono small">
+                        {g.base}
+                        {path}
+                      </td>
+                      <td className="muted">{what}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ))}
       </div>

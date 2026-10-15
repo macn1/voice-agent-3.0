@@ -199,6 +199,7 @@ function Describe({ initial }) {
   const [error, setError] = useState(null);
   const [generateDraft] = useGenerateDraftMutation();
   const [createAgent] = useCreateAgentMutation();
+  const [createFromTemplate] = useCreateFromTemplateMutation();
   const [putSection] = usePutAgentSectionMutation();
 
   const generate = async () => {
@@ -223,11 +224,14 @@ function Describe({ initial }) {
     if (!draft) return;
     setBusy(true);
     try {
-      const a = await createAgent({
-        name: draft.name,
-        greeting: draft.flow.greeting,
-        system_prompt: draft.flow.system_prompt,
-      }).unwrap();
+      // The suggestion is based on a template: start from it, then apply the edits made above.
+      const a = draft.template_id
+        ? await createFromTemplate({ template_id: draft.template_id, name: draft.name }).unwrap()
+        : await createAgent({
+            name: draft.name,
+            greeting: draft.flow.greeting,
+            system_prompt: draft.flow.system_prompt,
+          }).unwrap();
       await Promise.allSettled(
         [
           ['persona', draft.persona],
@@ -261,6 +265,11 @@ function Describe({ initial }) {
       {draft && (
         <div className="card card-pad stack">
           <div className="card-title">Review the draft</div>
+          {draft.simulated && (
+            <div className="banner info" style={{ margin: 0 }}>
+              <span className="grow">This draft is simulated: it picks the closest template by keywords. Edit anything below before creating.</span>
+            </div>
+          )}
           <div className="form-grid">
             <Field label="Agent name">
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />

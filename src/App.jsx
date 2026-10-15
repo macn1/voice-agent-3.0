@@ -43,7 +43,10 @@ import { CustomersPage } from './pages/admin/CustomersPage';
 import { CustomerDetailPage } from './pages/admin/CustomerDetailPage';
 import { PackagesPage } from './pages/admin/PackagesPage';
 import { AdminProfilePage, AdminRolesPage, AdminStaffPage } from './pages/admin/TeamPages';
-import { AdminAuditPage, AdminOverviewPage, NumberPoolPage, TemplatesAdminPage } from './pages/admin/AdminExtraPages';
+import { AdminAuditPage, NumberPoolPage } from './pages/admin/AdminExtraPages';
+import { AdminAgentsPage } from './pages/admin/AgentsPage';
+import { AdminTemplatesPage } from './pages/admin/TemplatesPage';
+import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 
 function Realm({ realm }) {
   return (
@@ -74,7 +77,8 @@ export function App() {
               <Route path="customers/:id" element={<CustomerDetailPage />} />
               <Route path="packages" element={<PackagesPage />} />
               <Route path="numbers" element={<NumberPoolPage />} />
-              <Route path="templates" element={<TemplatesAdminPage />} />
+              <Route path="agents" element={<AdminAgentsPage />} />
+              <Route path="templates" element={<AdminTemplatesPage />} />
               <Route path="staff" element={<AdminStaffPage />} />
               <Route path="roles" element={<AdminRolesPage />} />
               <Route path="audit" element={<AdminAuditPage />} />

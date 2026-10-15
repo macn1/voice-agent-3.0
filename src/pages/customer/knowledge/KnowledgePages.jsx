@@ -80,29 +80,31 @@ export function KnowledgeListPage() {
             <Async state={list}>
               {(kbs) =>
                 kbs.length ? (
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th className="num">Sources</th>
-                        <th className="num">Agents using it</th>
-                        <th>Updated</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {kbs.map((kb) => (
-                        <tr key={kb.id} className="clickable" onClick={() => navigate(`/knowledge/${kb.id}`)}>
-                          <td>
-                            <div className="cell-main">{kb.name}</div>
-                            {kb.description && <div className="cell-sub">{kb.description}</div>}
-                          </td>
-                          <td className="num">{kb.sources_count}</td>
-                          <td className="num">{kb.agents_count}</td>
-                          <td className="muted">{date(kb.updated_at)}</td>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th className="num">Sources</th>
+                          <th className="num">Agents using it</th>
+                          <th>Updated</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {kbs.map((kb) => (
+                          <tr key={kb.id} className="clickable" onClick={() => navigate(`/knowledge/${kb.id}`)}>
+                            <td>
+                              <div className="cell-main">{kb.name}</div>
+                              {kb.description && <div className="cell-sub">{kb.description}</div>}
+                            </td>
+                            <td className="num">{kb.sources_count}</td>
+                            <td className="num">{kb.agents_count}</td>
+                            <td className="muted">{date(kb.updated_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <EmptyState icon={<LibraryBig />} title="No knowledge yet" description="Create a knowledge base, then add files, a website or FAQs." />
                 )
@@ -202,78 +204,80 @@ export function KnowledgeDetailPage() {
         <Async state={sources}>
           {(list) =>
             list.length ? (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th>Status</th>
-                    <th>Re-sync</th>
-                    <th>Last synced</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((s) => {
-                    const Icon = SOURCE_ICON[s.type] ?? FileText;
-                    return (
-                      <tr key={s.id}>
-                        <td>
-                          <div className="row">
-                            <Icon size={16} />
-                            <div>
-                              <div className="cell-main">{s.title}</div>
-                              <div className="cell-sub">
-                                {titleCase(s.type)}
-                                {s.url ? ` · ${s.url}` : ''}
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Status</th>
+                      <th>Re-sync</th>
+                      <th>Last synced</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((s) => {
+                      const Icon = SOURCE_ICON[s.type] ?? FileText;
+                      return (
+                        <tr key={s.id}>
+                          <td>
+                            <div className="row">
+                              <Icon size={16} />
+                              <div>
+                                <div className="cell-main">{s.title}</div>
+                                <div className="cell-sub">
+                                  {titleCase(s.type)}
+                                  {s.url ? ` · ${s.url}` : ''}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-                        <td>
-                          <StatusBadge
-                            status={s.status === 'ready' ? 'active' : s.status}
-                            label={s.status === 'processing' ? 'Processing…' : titleCase(s.status)}
-                          />
-                          {s.error && (
-                            <div className="cell-sub" style={{ color: 'var(--red)', maxWidth: 320 }}>
-                              {s.error}
-                            </div>
-                          )}
-                        </td>
-                        <td className="muted">{s.resync_schedule ? titleCase(s.resync_schedule) : '—'}</td>
-                        <td className="muted">{dateTime(s.last_synced_at)}</td>
-                        <td className="actions">
-                          {(s.type === 'url' || s.status === 'failed') && (
+                          </td>
+                          <td>
+                            <StatusBadge
+                              status={s.status === 'ready' ? 'active' : s.status}
+                              label={s.status === 'processing' ? 'Processing…' : titleCase(s.status)}
+                            />
+                            {s.error && (
+                              <div className="cell-sub" style={{ color: 'var(--red)', maxWidth: 320 }}>
+                                {s.error}
+                              </div>
+                            )}
+                          </td>
+                          <td className="muted">{s.resync_schedule ? titleCase(s.resync_schedule) : '—'}</td>
+                          <td className="muted">{dateTime(s.last_synced_at)}</td>
+                          <td className="actions">
+                            {(s.type === 'url' || s.status === 'failed') && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={<RefreshCw />}
+                                onClick={() =>
+                                  resyncSource({ kbId: id, id: s.id })
+                                    .unwrap()
+                                    .then(() => toast('Re-sync started'))
+                                    .catch((e) => toast(errMsg(e), 'error'))
+                                }
+                              >
+                                Re-sync
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"
-                              icon={<RefreshCw />}
+                              icon={<Trash2 />}
                               onClick={() =>
-                                resyncSource({ kbId: id, id: s.id })
+                                removeSource({ kbId: id, id: s.id })
                                   .unwrap()
-                                  .then(() => toast('Re-sync started'))
                                   .catch((e) => toast(errMsg(e), 'error'))
                               }
-                            >
-                              Re-sync
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Trash2 />}
-                            onClick={() =>
-                              removeSource({ kbId: id, id: s.id })
-                                .unwrap()
-                                .catch((e) => toast(errMsg(e), 'error'))
-                            }
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState title="No sources yet" description="Upload files, add your website, write FAQs or paste text." />
             )
@@ -373,41 +377,43 @@ function UnansweredCard() {
       <Async state={list}>
         {(qs) =>
           qs.filter((q) => !q.resolved).length ? (
-            <table className="table">
-              <tbody>
-                {qs
-                  .filter((q) => !q.resolved)
-                  .map((q) => (
-                    <tr key={q.id}>
-                      <td>
-                        <div className="cell-main">{q.question}</div>
-                        <div className="cell-sub">
-                          {q.agent_name ?? 'Agent'} · asked {q.occurrences}× · last {dateTime(q.last_seen_at)}
-                          {q.example_call_id && (
-                            <>
-                              {' · '}
-                              <Link to={`/calls/${q.example_call_id}`}>example call</Link>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="actions">
-                        <Button
-                          size="sm"
-                          icon={<Plus />}
-                          onClick={() => {
-                            setFaqFor(q.question);
-                            setAnswer('');
-                            setKb(kbs.data?.[0]?.id ?? '');
-                          }}
-                        >
-                          Add as FAQ
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {qs
+                    .filter((q) => !q.resolved)
+                    .map((q) => (
+                      <tr key={q.id}>
+                        <td>
+                          <div className="cell-main">{q.question}</div>
+                          <div className="cell-sub">
+                            {q.agent_name ?? 'Agent'} · asked {q.occurrences}× · last {dateTime(q.last_seen_at)}
+                            {q.example_call_id && (
+                              <>
+                                {' · '}
+                                <Link to={`/calls/${q.example_call_id}`}>example call</Link>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="actions">
+                          <Button
+                            size="sm"
+                            icon={<Plus />}
+                            onClick={() => {
+                              setFaqFor(q.question);
+                              setAnswer('');
+                              setKb(kbs.data?.[0]?.id ?? '');
+                            }}
+                          >
+                            Add as FAQ
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState title="Nothing unanswered" description="Questions agents couldn't answer will show up here." />
           )

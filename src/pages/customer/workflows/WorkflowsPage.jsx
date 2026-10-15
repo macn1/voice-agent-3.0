@@ -124,48 +124,50 @@ function TriggersTab() {
       <Async state={list}>
         {(ts) =>
           ts.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Trigger</th>
-                  <th>Source</th>
-                  <th>Calls with</th>
-                  <th>Delay</th>
-                  <th>On</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {ts.map((t) => (
-                  <tr key={t.id}>
-                    <td className="cell-main">{t.name}</td>
-                    <td>
-                      {titleCase(t.source)}
-                      {t.source_config.provider && <div className="cell-sub">{`${t.source_config.provider} · ${t.source_config.event}`}</div>}
-                    </td>
-                    <td>{t.agent_name ?? t.agent_id}</td>
-                    <td>{t.delay_seconds < 60 ? `${t.delay_seconds}s` : `${Math.round(t.delay_seconds / 60)} min`}</td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={t.is_enabled}
-                        onChange={(e) =>
-                          updateTrigger({ id: t.id, is_enabled: e.target.checked })
-                            .unwrap()
-                            .catch((err) => toast(errMsg(err), 'error'))
-                        }
-                      />
-                    </td>
-                    <td className="actions">
-                      <Button size="sm" variant="ghost" icon={<History />} onClick={() => setRunsFor(t)}>
-                        Runs
-                      </Button>
-                      <Button size="sm" variant="ghost" icon={<Pencil />} onClick={() => setEditing(t)} />
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Trigger</th>
+                    <th>Source</th>
+                    <th>Calls with</th>
+                    <th>Delay</th>
+                    <th>On</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {ts.map((t) => (
+                    <tr key={t.id}>
+                      <td className="cell-main">{t.name}</td>
+                      <td>
+                        {titleCase(t.source)}
+                        {t.source_config.provider && <div className="cell-sub">{`${t.source_config.provider} · ${t.source_config.event}`}</div>}
+                      </td>
+                      <td>{t.agent_name ?? t.agent_id}</td>
+                      <td>{t.delay_seconds < 60 ? `${t.delay_seconds}s` : `${Math.round(t.delay_seconds / 60)} min`}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={t.is_enabled}
+                          onChange={(e) =>
+                            updateTrigger({ id: t.id, is_enabled: e.target.checked })
+                              .unwrap()
+                              .catch((err) => toast(errMsg(err), 'error'))
+                          }
+                        />
+                      </td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" icon={<History />} onClick={() => setRunsFor(t)}>
+                          Runs
+                        </Button>
+                        <Button size="sm" variant="ghost" icon={<Pencil />} onClick={() => setEditing(t)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Zap />} title="No triggers" description="Connect a web form, CRM or webhook so new leads get a call instantly." />
           )
@@ -198,26 +200,28 @@ function TriggersTab() {
             <Async state={runs}>
               {(rs) =>
                 rs.length ? (
-                  <table className="table">
-                    <tbody>
-                      {rs.map((r) => (
-                        <tr key={r.id}>
-                          <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                            {dateTime(r.created_at)}
-                          </td>
-                          <td>
-                            <StatusBadge
-                              status={r.status === 'called' ? 'active' : r.status === 'queued' ? 'pending' : r.status === 'skipped' ? 'cancelled' : 'failed'}
-                              label={titleCase(r.status)}
-                            />
-                            {r.detail && <div className="cell-sub">{r.detail}</div>}
-                          </td>
-                          <td className="mono small">{JSON.stringify(r.payload).slice(0, 80)}</td>
-                          <td>{r.call_id && <Link to={`/calls/${r.call_id}`}>Call</Link>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <tbody>
+                        {rs.map((r) => (
+                          <tr key={r.id}>
+                            <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                              {dateTime(r.created_at)}
+                            </td>
+                            <td>
+                              <StatusBadge
+                                status={r.status === 'called' ? 'active' : r.status === 'queued' ? 'pending' : r.status === 'skipped' ? 'cancelled' : 'failed'}
+                                label={titleCase(r.status)}
+                              />
+                              {r.detail && <div className="cell-sub">{r.detail}</div>}
+                            </td>
+                            <td className="mono small">{JSON.stringify(r.payload).slice(0, 80)}</td>
+                            <td>{r.call_id && <Link to={`/calls/${r.call_id}`}>Call</Link>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <EmptyState title="No runs yet" />
                 )
@@ -396,44 +400,46 @@ function ScheduledTab() {
       <Async state={list}>
         {(cs) =>
           cs.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Who</th>
-                  <th>Agent</th>
-                  <th>Reason</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {cs.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{dateTime(c.run_at)}</td>
-                    <td>
-                      <div className="cell-main">{c.contact_name ?? c.to_number}</div>
-                      <div className="cell-sub mono">{c.to_number}</div>
-                    </td>
-                    <td>{c.agent_name ?? c.agent_id}</td>
-                    <td>
-                      {c.reason ?? '—'}
-                      <div className="cell-sub">{c.source === 'agent_promise' ? 'Promised by the agent' : 'Scheduled manually'}</div>
-                    </td>
-                    <td>
-                      <StatusBadge status={c.status === 'scheduled' ? 'pending' : c.status === 'done' ? 'active' : 'cancelled'} label={titleCase(c.status)} />
-                    </td>
-                    <td className="actions">
-                      {c.status === 'scheduled' && (
-                        <Button size="sm" variant="ghost" icon={<X />} onClick={() => setCancelling(c.id)}>
-                          Cancel
-                        </Button>
-                      )}
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Who</th>
+                    <th>Agent</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {cs.map((c) => (
+                    <tr key={c.id}>
+                      <td style={{ whiteSpace: 'nowrap' }}>{dateTime(c.run_at)}</td>
+                      <td>
+                        <div className="cell-main">{c.contact_name ?? c.to_number}</div>
+                        <div className="cell-sub mono">{c.to_number}</div>
+                      </td>
+                      <td>{c.agent_name ?? c.agent_id}</td>
+                      <td>
+                        {c.reason ?? '—'}
+                        <div className="cell-sub">{c.source === 'agent_promise' ? 'Promised by the agent' : 'Scheduled manually'}</div>
+                      </td>
+                      <td>
+                        <StatusBadge status={c.status === 'scheduled' ? 'pending' : c.status === 'done' ? 'active' : 'cancelled'} label={titleCase(c.status)} />
+                      </td>
+                      <td className="actions">
+                        {c.status === 'scheduled' && (
+                          <Button size="sm" variant="ghost" icon={<X />} onClick={() => setCancelling(c.id)}>
+                            Cancel
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<CalendarClock />} title="Nothing scheduled" />
           )
@@ -509,51 +515,53 @@ function MessagesTab() {
       <Async state={list}>
         {(p) =>
           p.items.length ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Sent</th>
-                  <th>To</th>
-                  <th>Channel</th>
-                  <th>Message</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {p.items.map((m) => (
-                  <tr key={m.id}>
-                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                      {dateTime(m.created_at)}
-                    </td>
-                    <td className="mono">{m.to_address}</td>
-                    <td>{titleCase(m.channel)}</td>
-                    <td>
-                      <div
-                        style={{
-                          maxWidth: 380,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {m.body}
-                      </div>
-                      {m.call_id && (
-                        <Link to={`/calls/${m.call_id}`} className="cell-sub">
-                          From call
-                        </Link>
-                      )}
-                    </td>
-                    <td>
-                      <StatusBadge
-                        status={['delivered', 'read', 'sent'].includes(m.status) ? 'active' : m.status === 'failed' ? 'failed' : 'pending'}
-                        label={titleCase(m.status)}
-                      />
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Sent</th>
+                    <th>To</th>
+                    <th>Channel</th>
+                    <th>Message</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {p.items.map((m) => (
+                    <tr key={m.id}>
+                      <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                        {dateTime(m.created_at)}
+                      </td>
+                      <td className="mono">{m.to_address}</td>
+                      <td>{titleCase(m.channel)}</td>
+                      <td>
+                        <div
+                          style={{
+                            maxWidth: 380,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {m.body}
+                        </div>
+                        {m.call_id && (
+                          <Link to={`/calls/${m.call_id}`} className="cell-sub">
+                            From call
+                          </Link>
+                        )}
+                      </td>
+                      <td>
+                        <StatusBadge
+                          status={['delivered', 'read', 'sent'].includes(m.status) ? 'active' : m.status === 'failed' ? 'failed' : 'pending'}
+                          label={titleCase(m.status)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Send />} title="No messages sent yet" />
           )
@@ -585,17 +593,19 @@ function TeamsTab() {
       <Async state={list}>
         {(ts) =>
           ts.length ? (
-            <table className="table">
-              <tbody>
-                {ts.map((t) => (
-                  <tr key={t.id} className="clickable" onClick={() => setEditing(structuredClone(t))}>
-                    <td className="cell-main">{t.name}</td>
-                    <td>{t.members.map(name).join(', ')}</td>
-                    <td className="muted">{t.handoff_rules.length} handoff rules</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-wrap">
+              <table className="table">
+                <tbody>
+                  {ts.map((t) => (
+                    <tr key={t.id} className="clickable" onClick={() => setEditing(structuredClone(t))}>
+                      <td className="cell-main">{t.name}</td>
+                      <td>{t.members.map(name).join(', ')}</td>
+                      <td className="muted">{t.handoff_rules.length} handoff rules</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <EmptyState icon={<Users />} title="No teams" />
           )

@@ -52,7 +52,18 @@ export const authApi = baseApi.injectEndpoints({
     }),
     forgotPassword: b.mutation({ query: (email) => P.auth('/auth/customer/forgot-password', { method: 'POST', body: { email } }) }),
     resetPassword: b.mutation({ query: (body) => P.auth('/auth/customer/reset-password', { method: 'POST', body }) }),
-    changePassword: b.mutation({ query: (body) => C.auth('/customer/me/change-password', { method: 'POST', body }) }),
+    // Other sessions are signed out; the response carries NEW tokens that replace the stored ones.
+    changePassword: b.mutation({
+      query: (body) => C.auth('/customer/me/change-password', { method: 'POST', body }),
+      async onQueryStarted(_a, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          if (data?.access_token && data.refresh_token) dispatch(tokensReceived({ realm: 'customer', tokens: data }));
+        } catch {
+          /* shown by the form (422 wrong_password) */
+        }
+      },
+    }),
     signup: b.mutation({ query: (body) => P.auth('/auth/customer/signup', { method: 'POST', body }) }),
     verifyEmail: b.mutation({
       query: (token) => P.auth('/auth/customer/verify-email', { method: 'POST', body: { token } }),

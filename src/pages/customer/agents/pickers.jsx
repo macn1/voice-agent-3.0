@@ -89,7 +89,8 @@ export function VoicePicker({ language, value, onChange }) {
 export function ModelSelect({ kind, value, onChange, placeholder }) {
   const models = useModels();
   const opts = (models.data ?? [])
-    .filter((m) => m.kind === kind)
+    // The catalog names speech-to-text models kind "stt"; older screens say "asr".
+    .filter((m) => m.kind === kind || (kind === 'asr' && m.kind === 'stt'))
     .map((m) => ({
       value: m.id,
       label: `${m.name}${m.tier ? ` · ${m.tier}` : ''}`,
