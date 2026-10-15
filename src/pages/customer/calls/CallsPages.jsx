@@ -92,7 +92,7 @@ export function CallFilters({ params, set, agentOptions }) {
 export function CallsTable({ calls, onOpen }) {
   return (
     <div className="table-wrap">
-      <table className="table">
+      <table className="table table-stack">
         <thead>
           <tr>
             <th>Time</th>
@@ -109,10 +109,10 @@ export function CallsTable({ calls, onOpen }) {
             const other = c.direction === 'outbound' ? c.to_number : c.from_number;
             return (
               <tr key={c.id} className="clickable" onClick={() => onOpen(c)}>
-                <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                <td className="muted" data-label="Time" style={{ whiteSpace: 'nowrap' }}>
                   {dateTime(c.started_at)}
                 </td>
-                <td>
+                <td data-label="">
                   <div className="row" style={{ gap: 8 }}>
                     {c.direction === 'outbound' ? <PhoneOutgoing size={15} /> : <PhoneIncoming size={15} />}
                     <div>
@@ -122,13 +122,17 @@ export function CallsTable({ calls, onOpen }) {
                     {c.flagged && <Flag size={14} color="var(--accent)" />}
                   </div>
                 </td>
-                <td>{c.agent_name ?? '—'}</td>
-                <td className="num mono">{duration(c.duration_seconds)}</td>
-                <td>
+                <td data-label="Agent">{c.agent_name ?? '—'}</td>
+                <td className="num mono" data-label="Duration">
+                  {duration(c.duration_seconds)}
+                </td>
+                <td data-label="Result">
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
                 </td>
-                <td>{c.outcome ? <Badge tone={OUTCOME_TONE(c.is_success)}>{titleCase(c.outcome)}</Badge> : <span className="muted">—</span>}</td>
-                <td>
+                <td data-label="Outcome">
+                  {c.outcome ? <Badge tone={OUTCOME_TONE(c.is_success)}>{titleCase(c.outcome)}</Badge> : <span className="muted">—</span>}
+                </td>
+                <td data-label="Sentiment">
                   {c.sentiment ? (
                     <Badge plain tone={c.sentiment === 'positive' ? 'green' : c.sentiment === 'negative' ? 'red' : ''}>
                       {titleCase(c.sentiment)}
@@ -390,7 +394,7 @@ export function CallDetailPage() {
 
   const activeSeq = useMemo(() => {
     const raw = transcript.data;
-    const t = Array.isArray(raw) ? raw : raw?.turns ?? [];
+    const t = Array.isArray(raw) ? raw : (raw?.turns ?? []);
     let a = -1;
     t.forEach((x) => x.offset_ms <= pos && (a = x.seq));
     return a;
@@ -521,7 +525,7 @@ export function CallDetailPage() {
                     ) : (
                       <Async state={transcript}>
                         {(data) => {
-                          const turns = Array.isArray(data) ? data : data?.turns ?? [];
+                          const turns = Array.isArray(data) ? data : (data?.turns ?? []);
                           return turns.length ? (
                             <>
                               {turns.map((t) => (

@@ -17,7 +17,7 @@ import { CallsTable } from './calls/CallsPages';
 export function HomeDashboard() {
   const navigate = useNavigate();
   const { minutesRatio, usage, includedMinutes } = useBilling();
-  const summary = useGetAnalyticsQuery({ report: 'summary', range: '1d' });
+  const summary = useGetAnalyticsQuery({ report: 'summary', range: '365d' });
   const ts = useGetAnalyticsQuery({ report: 'timeseries', range: '14d' });
   const recent = useListCallsQuery({ range: '7d', limit: 10 });
   const failedQ = useListCallsQuery({ range: '1d', status: 'failed', limit: 1 });
@@ -66,7 +66,7 @@ export function HomeDashboard() {
   return (
     <section style={{ marginTop: 48, position: 'relative', zIndex: 1 }}>
       <div className="row between" style={{ marginBottom: 16 }}>
-        <div className="eyebrow">Today at a glance</div>
+        <div className="eyebrow">Overall at a glance</div>
         <Link to="/analytics" className="small row" style={{ gap: 4 }}>
           Analytics <ArrowRight size={14} />
         </Link>
@@ -79,7 +79,7 @@ export function HomeDashboard() {
             marginBottom: 14,
           }}
         >
-          <Stat label="Calls today" value={number(summary.data.calls)} onClick={() => navigate('/calls?range=1d')} />
+          <Stat label="Total calls" hint="Last 12 months" value={number(summary.data.calls)} onClick={() => navigate('/calls')} />
           <Stat
             label="Minutes this period"
             value={number(usage?.callMinutes ?? summary.data.minutes)}

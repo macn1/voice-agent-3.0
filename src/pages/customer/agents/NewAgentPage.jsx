@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Building2, FileText, LayoutTemplate, Mic2, Sparkles, SpellCheck2, Users, Wrench } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Building2, ChevronRight, FileText, LayoutTemplate, Mic2, Plus, Sparkles, SpellCheck2, Users, Wrench } from 'lucide-react';
 import {
   useCreateAgentMutation,
   useCreateFromTemplateMutation,
@@ -13,107 +13,108 @@ import { Textarea } from '../../../components/forms';
 import { USE_CASES } from '../useCases';
 import { LanguageSelect, ModelSelect, VoicePicker } from './pickers';
 
-/** P-08 New agent: template gallery, one-line description, or blank (AGT-01, AGT-11). */
+const START_OPTIONS = [
+  { value: 'template', icon: LayoutTemplate, title: 'From a template', text: 'Pick a ready-made agent for your use case.' },
+  { value: 'describe', icon: Sparkles, title: 'Describe it', text: 'Explain the job in a line and get a draft.' },
+  { value: 'blank', icon: Plus, title: 'Blank agent', text: 'Start empty and configure everything yourself.' },
+];
+
+const BUILDING_BLOCKS = [
+  { to: '/company', icon: Building2, title: 'Company profile', text: 'Business facts every agent can use.' },
+  { to: '/knowledge', icon: FileText, title: 'Knowledge base', text: 'Documents, websites and FAQs.' },
+  { to: '/tools', icon: Wrench, title: 'Tools', text: 'Let agents call your APIs mid-conversation.' },
+  { to: '/settings/voices', icon: Mic2, title: 'Custom voices', text: 'Cloned or custom voices for your agents.' },
+  { to: '/settings/pronunciations', icon: SpellCheck2, title: 'Pronunciations', text: 'How to say brand names and terms.' },
+  { to: '/workflows?tab=teams', icon: Users, title: 'Agent teams', text: 'Hand callers between agents.' },
+];
+
+/** P-08 New agent: template gallery, one-line description, or blank (AGT-01, AGT-11).
+ *  `hub` is the Build page: a guided "how do you want to start" picker beside the shared building blocks. */
 export function NewAgentPage({ hub = false }) {
   const [params] = useSearchParams();
-  const initialMode = params.get('prompt') ? 'describe' : params.get('template') ? 'template' : 'template';
+  const initialMode = params.get('prompt') ? 'describe' : 'template';
   const [mode, setMode] = useState(initialMode);
 
-  return (
+  const panel = (
     <>
-      {!hub && (
-        <Link to="/agents" className="back-link">
-          <ArrowLeft /> Agents
-        </Link>
-      )}
-      <PageHeader
-        eyebrow="Build"
-        title={hub ? 'Build a voice agent' : 'New agent'}
-        description="Start from a template, describe the job in one line, or begin from a blank agent. You'll land in the editor afterwards."
-      />
-
-      <SegmentTabs
-        value={mode}
-        onChange={setMode}
-        items={[
-          { value: 'template', label: 'From a template' },
-          { value: 'describe', label: 'Describe it' },
-          { value: 'blank', label: 'Blank' },
-        ]}
-      />
-
       {mode === 'template' && <FromTemplate preselect={params.get('template')} />}
       {mode === 'describe' && <Describe initial={params.get('prompt') ?? ''} />}
       {mode === 'blank' && <Blank />}
+    </>
+  );
 
-      {hub && (
-        <div style={{ marginTop: 36 }}>
-          <div className="card-title text-title" style={{ marginBottom: 14 }}>
-            Shared building blocks
+  if (hub) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Build"
+          title="Build a voice agent"
+          description="Choose how you want to start. Shared building blocks are on the right, set them up once and every agent can use them."
+        />
+        <div className="build-layout">
+          <div className="build-main">
+            <div className="build-step-label">
+              <span>1</span> How do you want to start?
+            </div>
+            <div className="build-options" role="tablist" aria-label="How to start">
+              {START_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  role="tab"
+                  aria-selected={mode === o.value}
+                  className={`build-option ${mode === o.value ? 'active' : ''}`}
+                  onClick={() => setMode(o.value)}
+                >
+                  <o.icon aria-hidden />
+                  <span>
+                    <b>{o.title}</b>
+                    <small>{o.text}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="build-step-label">
+              <span>2</span> {START_OPTIONS.find((o) => o.value === mode).title}
+            </div>
+            <div className="build-panel">{panel}</div>
           </div>
-          <div className="grid-3">
-            {[
-              {
-                to: '/company',
-                icon: Building2,
-                title: 'Company profile',
-                text: 'Business facts every agent can use.',
-              },
-              {
-                to: '/tools',
-                icon: Wrench,
-                title: 'Tools',
-                text: 'Let agents call your APIs mid-conversation.',
-              },
-              {
-                to: '/knowledge',
-                icon: FileText,
-                title: 'Knowledge base',
-                text: 'Documents, websites and FAQs.',
-              },
-              {
-                to: '/settings/pronunciations',
-                icon: SpellCheck2,
-                title: 'Pronunciations',
-                text: 'How to say brand names and terms.',
-              },
-              {
-                to: '/settings/voices',
-                icon: Mic2,
-                title: 'Custom voices',
-                text: 'Cloned or custom voices for your agents.',
-              },
-              {
-                to: '/workflows?tab=teams',
-                icon: Users,
-                title: 'Agent teams',
-                text: 'Hand callers between agents.',
-              },
-            ].map((b) => (
-              <Link
-                key={b.to}
-                to={b.to}
-                className="usecase"
-                style={{
-                  gridTemplateColumns: '48px minmax(0,1fr) 34px',
-                  minHeight: 0,
-                }}
-              >
-                <span className="clay" style={{ width: 48, height: 48, borderRadius: 14 }}>
-                  <b.icon style={{ width: 22, height: 22 }} />
-                </span>
-                <span>
-                  <h3 style={{ marginTop: 2 }}>{b.title}</h3>
-                  <p style={{ marginTop: 4 }}>{b.text}</p>
-                </span>
-                <span className="arrow-btn">
-                  <ArrowRight />
-                </span>
-              </Link>
-            ))}
-          </div>
+
+          <aside className="build-side card">
+            <div className="card-head">
+              <h2>Shared building blocks</h2>
+            </div>
+            <ul>
+              {BUILDING_BLOCKS.map((b) => (
+                <li key={b.to}>
+                  <Link to={b.to} className="build-block">
+                    <b.icon aria-hidden />
+                    <span>
+                      <b>{b.title}</b>
+                      <small>{b.text}</small>
+                    </span>
+                    <ChevronRight aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </aside>
         </div>
-      )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Link to="/agents" className="back-link">
+        <ArrowLeft /> Agents
+      </Link>
+      <PageHeader
+        eyebrow="Build"
+        title="New agent"
+        description="Start from a template, describe the job in one line, or begin from a blank agent. You'll land in the editor afterwards."
+      />
+      <SegmentTabs value={mode} onChange={setMode} items={START_OPTIONS.map((o) => ({ value: o.value, label: o.value === 'blank' ? 'Blank' : o.title }))} />
+      {panel}
     </>
   );
 }

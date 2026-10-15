@@ -45,7 +45,7 @@ export function AgentsPage() {
           <Bot />
         </span>
         <h1>What should your voice agent do?</h1>
-        <AgentPromptBox placeholder="Create a voice agent to call leads and qualify them for sales" />
+        <AgentPromptBox />
       </section>
 
       <UseCaseGallery centered />

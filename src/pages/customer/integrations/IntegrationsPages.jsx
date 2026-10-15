@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, CheckCircle2, LayoutGrid, Plug, RefreshCw, Search, Unplug } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Plug, RefreshCw, Unplug } from 'lucide-react';
 import {
   useConnectCalendarMutation,
   useConnectIntegrationMutation,
@@ -10,7 +10,6 @@ import {
   useGetIntegrationSettingQuery,
   useGetIntegrationStatusQuery,
   useListAppointmentsQuery,
-  useListIntegrationCatalogQuery,
   useListIntegrationEventsQuery,
   useListIntegrationFieldsQuery,
   useListSheetsQuery,
@@ -23,121 +22,32 @@ import {
 } from '../../../store/api/integrationApi';
 import { dateTime, titleCase } from '../../../lib/format';
 import { PixelHero } from '../../../components/PixelHero';
-import {
-  Async,
-  Badge,
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  errMsg,
-  Field,
-  Input,
-  SegmentTabs,
-  Skeleton,
-  StatusBadge,
-  Toggle,
-  useToast,
-} from '../../../components/ui';
+import { Async, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, SegmentTabs, Skeleton, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { MappingEditor, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
 
-const CATEGORIES = ['all', 'crm', 'helpdesk', 'calendar', 'sheets', 'automation', 'messaging'];
-const CAT_LABEL = {
-  all: 'All',
-  crm: 'CRM',
-  helpdesk: 'Helpdesk',
-  calendar: 'Calendar',
-  sheets: 'Sheets',
-  automation: 'Automation',
-  messaging: 'Messaging',
-};
-
-/** P-31 Integrations catalog (INT-F3). */
 /** Sync / call-logging / lookup / ticket settings: GET + PUT for one kind. */
 function useIntegrationSetting(provider, kind) {
   return useSection(useGetIntegrationSettingQuery({ provider, kind }), usePutIntegrationSettingMutation(), (body) => ({ provider, kind, body }));
 }
 
 export function IntegrationsPage() {
-  const navigate = useNavigate();
-  const catalog = useListIntegrationCatalogQuery();
-  const [cat, setCat] = useState('all');
-  const [q, setQ] = useState('');
   return (
-    <>
-      <PixelHero
-        compact
-        icon={Plug}
-        motion="nudge"
-        title="Connect the tools your team already uses"
-        description="Link your CRM, calendar, helpdesk and automation tools so agents can look things up, book meetings and log every call."
-        actions={
-          <>
-            <Link to="/docs" className="btn">
-              <BookOpen /> Read docs
-            </Link>
-            <Button
-              variant="primary"
-              icon={<LayoutGrid />}
-              onClick={() => document.getElementById('integration-catalog')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              Browse integrations
-            </Button>
-          </>
-        }
-      />
-      <div id="integration-catalog" className="row between wrap" style={{ marginBottom: 18, scrollMarginTop: 16 }}>
-        <div className="tabs" style={{ margin: 0 }}>
-          {CATEGORIES.map((c) => (
-            <button key={c} className={`chip ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>
-              {CAT_LABEL[c]}
-            </button>
-          ))}
-        </div>
-        <div className="search">
-          <Search />
-          <Input placeholder="Search integrations" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-      </div>
-      <Async state={catalog} skeleton={<Skeleton h={300} />}>
-        {(items) => {
-          const rows = items.filter((i) => (cat === 'all' || i.category === cat) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
-          return rows.length ? (
-            <div className="grid-3">
-              {rows.map((i) => (
-                <button
-                  key={i.provider}
-                  className="usecase"
-                  style={{
-                    gridTemplateColumns: '48px minmax(0,1fr)',
-                    minHeight: 0,
-                  }}
-                  onClick={() => navigate(`/integrations/${i.provider}`)}
-                >
-                  <span className="clay fw-bold text-title" style={{ width: 48, height: 48, borderRadius: 14 }}>
-                    {i.name[0]}
-                  </span>
-                  <span>
-                    <span className="row between">
-                      <h3 style={{ marginTop: 0 }}>{i.name}</h3>
-                      {i.connected ? (
-                        <Badge tone={i.status === 'error' ? 'red' : 'green'}>{i.status === 'error' ? 'Error' : 'Connected'}</Badge>
-                      ) : (
-                        <Badge plain>{CAT_LABEL[i.category]}</Badge>
-                      )}
-                    </span>
-                    <p style={{ marginTop: 6 }}>{i.description}</p>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="card">
-              <EmptyState title="No integrations match" />
-            </div>
-          );
-        }}
-      </Async>
-    </>
+    <PixelHero
+      icon={Plug}
+      motion="nudge"
+      title="Connect the tools your team already uses"
+      description="Link your CRM, calendar, helpdesk and automation tools so agents can look things up, book meetings and log every call."
+      actions={
+        <>
+          <Link to="/docs" className="btn">
+            <BookOpen /> Read docs
+          </Link>
+          <Link to="/developers" className="btn primary">
+            Build with API <ArrowRight />
+          </Link>
+        </>
+      }
+    />
   );
 }
 
