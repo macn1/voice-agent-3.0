@@ -24,7 +24,9 @@ import {
   useAssignNumberAgentMutation,
   useGetNumberQuery,
   useGetRoutingQuery,
+  useDeleteConnectionMutation,
   useListConnectionsQuery,
+  useTestConnectionMutation,
   useListHolidaysQuery,
   useListNumbersQuery,
   usePurchaseNumberMutation,
@@ -34,7 +36,7 @@ import {
   useSimulateRoutingMutation,
   useUnassignNumberAgentMutation,
 } from '../../../store/api/callsApi';
-import { date, dateTime, money } from '../../../lib/format';
+import { date, dateTime, money, titleCase } from '../../../lib/format';
 import {
   Async,
   Badge,
@@ -48,6 +50,7 @@ import {
   PageHeader,
   SegmentTabs,
   StatusBadge,
+  Toggle,
   useToast,
 } from '../../../components/ui';
 import { SectionCard, Select, Textarea, useSection } from '../../../components/forms';
@@ -323,9 +326,21 @@ export function NumbersPage() {
   );
 }
 
+const AREA_CODES = [
+  { value: '80', label: 'Bengaluru (80)' },
+  { value: '11', label: 'Delhi (11)' },
+  { value: '22', label: 'Mumbai (22)' },
+  { value: '20', label: 'Pune (20)' },
+  { value: '40', label: 'Hyderabad (40)' },
+  { value: '44', label: 'Chennai (44)' },
+  { value: '33', label: 'Kolkata (33)' },
+  { value: '79', label: 'Ahmedabad (79)' },
+];
+
 function BuyNumberModal({ open, onClose, onBought }) {
   const toast = useToast();
-  const [country, setCountry] = useState('IN');
+  const [type, setType] = useState('local');
+  const [areaCode, setAreaCode] = useState('80');
   const [contains, setContains] = useState('');
   const [busy, setBusy] = useState(null);
   // Search runs when the button is pressed; `at` makes each press a fresh query.
@@ -338,33 +353,33 @@ function BuyNumberModal({ open, onClose, onBought }) {
         <div className="row wrap">
           <Select
             style={{ width: 160 }}
-            value={country}
+            value={type}
             options={[
-              { value: 'IN', label: 'India' },
-              { value: 'US', label: 'United States' },
-              { value: 'GB', label: 'United Kingdom' },
-              { value: 'AE', label: 'UAE' },
+              { value: 'local', label: 'Local' },
+              { value: 'mobile', label: 'Mobile' },
+              { value: 'toll_free', label: 'Toll-free' },
             ]}
-            onChange={(e) => setCountry(e.target.value)}
+            onChange={(e) => setType(e.target.value)}
           />
+          {type === 'local' && <Select style={{ width: 180 }} value={areaCode} options={AREA_CODES} onChange={(e) => setAreaCode(e.target.value)} />}
           <Input style={{ flex: 1, minWidth: 160 }} placeholder="Contains digits (optional)" value={contains} onChange={(e) => setContains(e.target.value)} />
-          <Button icon={<Search />} onClick={() => setSearch({ country, contains: contains || undefined, at: Date.now() })}>
+          <Button icon={<Search />} onClick={() => setSearch({ type, area_code: type === 'local' ? areaCode : undefined, contains: contains || undefined, at: Date.now() })}>
             Search
           </Button>
         </div>
         {search && (
           <Async state={results}>
             {(r) =>
-              r?.length ? (
+              r?.items?.length ? (
                 <div className="table-wrap">
                   <table className="table">
                     <tbody>
-                      {r.map((n) => (
+                      {r.items.map((n) => (
                         <tr key={n.e164}>
                           <td className="mono cell-main">{n.e164}</td>
-                          <td className="muted">{[n.capabilities.voice && 'Voice', n.capabilities.sms && 'SMS'].filter(Boolean).join(' + ')}</td>
+                          <td className="muted">{[n.locality, n.capabilities?.voice && 'Voice', n.capabilities?.sms && 'SMS'].filter(Boolean).join(' · ')}</td>
                           <td className="num">
-                            {money(n.monthly_price, country === 'IN' ? 'INR' : 'USD')}
+                            {money(n.monthly_price, n.currency ?? 'INR')}
                             /mo
                           </td>
                           <td className="actions">
@@ -380,7 +395,7 @@ function BuyNumberModal({ open, onClose, onBought }) {
                                   onBought();
                                   onClose();
                                 } catch (e) {
-                                  toast(errMsg(e), 'error');
+                                  toast(e?.status === 409 ? 'Someone just took that number — pick another.' : errMsg(e), 'error');
                                 } finally {
                                   setBusy(null);
                                 }
@@ -395,12 +410,11 @@ function BuyNumberModal({ open, onClose, onBought }) {
                   </table>
                 </div>
               ) : (
-                <EmptyState title="No numbers found" description="Try another country or fewer digits." />
+                <EmptyState title="No numbers found" description="Try another area or fewer digits." />
               )
             }
           </Async>
         )}
-        <p className="muted small">Can't buy in-app yet? Ask Aurlynn support to allocate a number to your account.</p>
       </div>
     </Modal>
   );
@@ -455,15 +469,25 @@ function HolidaysCard() {
   );
 }
 
+const CARRIERS = [
+  { value: 'sip_trunk', label: 'SIP trunk' },
+  { value: 'twilio', label: 'Twilio' },
+  { value: 'plivo', label: 'Plivo' },
+  { value: 'exotel', label: 'Exotel' },
+];
+
 function CarrierCard() {
   const toast = useToast();
   const conns = useListConnectionsQuery();
   const [addConnection] = useAddConnectionMutation();
-  const [type, setType] = useState('carrier_account');
-  const [provider, setProvider] = useState('twilio');
+  const [testConnection] = useTestConnectionMutation();
+  const [deleteConnection] = useDeleteConnectionMutation();
+  const [type, setType] = useState('sip_trunk');
   const [fields, setFields] = useState({});
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(null);
   const set = (k, v) => setFields((f) => ({ ...f, [k]: v }));
+  const sip = type === 'sip_trunk';
   return (
     <div className="stack">
       <div className="card">
@@ -478,12 +502,37 @@ function CarrierCard() {
                   <tbody>
                     {list.map((c) => (
                       <tr key={c.id}>
-                        <td className="cell-main">{c.type === 'sip_trunk' ? 'SIP trunk' : 'Carrier account'}</td>
-                        <td>{c.provider}</td>
+                        <td>
+                          <div className="cell-main">{c.name}</div>
+                          <div className="cell-sub">
+                            {c.type === 'sip_trunk' ? `SIP trunk · ${c.config?.host ?? ''}` : titleCase(c.type)}
+                            {c.config?.numbers?.length ? ` · ${c.config.numbers.length} number${c.config.numbers.length === 1 ? '' : 's'}` : ''}
+                          </div>
+                        </td>
                         <td>
                           <StatusBadge status={c.status} />
+                          {c.last_error && (
+                            <div className="cell-sub" style={{ color: 'var(--red)' }}>
+                              {c.last_error}
+                            </div>
+                          )}
                         </td>
-                        <td className="muted">{dateTime(c.created_at)}</td>
+                        <td className="muted">{c.last_checked_at ? `Checked ${dateTime(c.last_checked_at)}` : dateTime(c.created_at)}</td>
+                        <td className="actions">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              testConnection(c.id)
+                                .unwrap()
+                                .then((r) => toast(r.status === 'active' ? 'Connection works' : `Connection check: ${r.status}`, r.status === 'active' ? undefined : 'error'))
+                                .catch((e) => toast(errMsg(e), 'error'))
+                            }
+                          >
+                            Test
+                          </Button>
+                          <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(c)} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -497,42 +546,44 @@ function CarrierCard() {
       </div>
       <div className="card card-pad stack">
         <div className="card-title">Connect your own</div>
-        <SegmentTabs
-          value={type}
-          onChange={setType}
-          items={[
-            { value: 'carrier_account', label: 'Carrier account' },
-            { value: 'sip_trunk', label: 'SIP trunk' },
-          ]}
-        />
+        <SegmentTabs value={type} onChange={setType} items={CARRIERS} />
 
         <div className="form-grid">
-          {type === 'carrier_account' ? (
+          <Field label="Name" className="full">
+            <Input placeholder="Office PBX" value={fields.name ?? ''} onChange={(e) => set('name', e.target.value)} />
+          </Field>
+          {sip ? (
             <>
-              <Field label="Provider">
-                <Select value={provider} options={['twilio', 'plivo', 'exotel', 'vonage']} onChange={(e) => setProvider(e.target.value)} />
-              </Field>
-              <Field label="Account SID / ID">
-                <Input value={fields.account_id ?? ''} onChange={(e) => set('account_id', e.target.value)} />
-              </Field>
-              <Field label="Auth token" className="full">
-                <Input type="password" value={fields.auth_token ?? ''} onChange={(e) => set('auth_token', e.target.value)} />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="SIP host">
+              <Field label="SIP host" hint="A public address">
                 <Input className="mono" placeholder="sip.example.com" value={fields.host ?? ''} onChange={(e) => set('host', e.target.value)} />
+              </Field>
+              <Field label="Port">
+                <Input type="number" placeholder="5060" value={fields.port ?? ''} onChange={(e) => set('port', e.target.value)} />
               </Field>
               <Field label="Username">
                 <Input value={fields.username ?? ''} onChange={(e) => set('username', e.target.value)} />
               </Field>
-              <Field label="Password" className="full">
+              <Field label="Password">
                 <Input type="password" value={fields.password ?? ''} onChange={(e) => set('password', e.target.value)} />
               </Field>
             </>
+          ) : (
+            <>
+              <Field label="Account SID / ID">
+                <Input value={fields.account_sid ?? ''} onChange={(e) => set('account_sid', e.target.value)} />
+              </Field>
+              <Field label="Auth token">
+                <Input type="password" value={fields.auth_token ?? ''} onChange={(e) => set('auth_token', e.target.value)} />
+              </Field>
+            </>
           )}
+          <Field label="Numbers to bring" hint="Comma-separated, international format (optional)" className="full">
+            <Input className="mono" placeholder="+918044440000, +918044440001" value={fields.numbers ?? ''} onChange={(e) => set('numbers', e.target.value)} />
+          </Field>
         </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Secrets are stored encrypted and never shown again. The connection check is simulated for now.
+        </p>
         <div>
           <Button
             variant="primary"
@@ -540,22 +591,14 @@ function CarrierCard() {
             onClick={async () => {
               setBusy(true);
               try {
-                const sip = type === 'sip_trunk';
+                const body = sip
+                  ? { host: fields.host ?? '', ...(fields.port ? { port: Number(fields.port) } : {}), transport: 'udp', username: fields.username ?? '', password: fields.password ?? '' }
+                  : { account_sid: fields.account_sid ?? '', auth_token: fields.auth_token ?? '' };
                 await addConnection({
+                  name: fields.name?.trim() || CARRIERS.find((c) => c.value === type).label,
                   type,
-                  provider: sip ? 'sip' : provider,
-                  credentials: sip
-                    ? { password: fields.password ?? '' }
-                    : {
-                        account_id: fields.account_id ?? '',
-                        auth_token: fields.auth_token ?? '',
-                      },
-                  sip_config: sip
-                    ? {
-                        host: fields.host ?? '',
-                        username: fields.username ?? '',
-                      }
-                    : undefined,
+                  ...body,
+                  numbers: (fields.numbers ?? '').split(/[,\s]+/).filter(Boolean),
                 }).unwrap();
                 toast('Connection added');
                 setFields({});
@@ -570,6 +613,18 @@ function CarrierCard() {
           </Button>
         </div>
       </div>
+      <ConfirmDialog
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        danger
+        title={`Remove ${removing?.name ?? 'this connection'}?`}
+        description="Numbers that came with it stop working here."
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          await deleteConnection(removing.id).unwrap();
+          toast('Connection removed');
+        }}
+      />
     </div>
   );
 }
@@ -620,8 +675,8 @@ export function NumberRoutingPage() {
           {sim && (
             <div className="banner info" style={{ margin: 0 }}>
               <span className="grow">
-                <b>{sim.outcome}</b> — {sim.detail}
-                {sim.agent_name ? ` (${sim.agent_name})` : ''} · local time {sim.local_time}
+                <b>{sim.outcome}</b>
+                {sim.agent_name ? ` (${sim.agent_name})` : ''} — {sim.detail} · local time {sim.local_time}
               </span>
             </div>
           )}
@@ -636,7 +691,13 @@ export function NumberRoutingPage() {
                   onChange={(e) => patch({ timezone: e.target.value })}
                 />
               </Field>
-              <div>
+              <Toggle
+                checked={r.always_open}
+                onChange={(v) => patch({ always_open: v })}
+                label="Open around the clock"
+                description="The agent answers at any time. Turn off to set business hours; calls outside them follow the after-hours rule."
+              />
+              <div style={r.always_open ? { display: 'none' } : undefined}>
                 <span className="field-label">Business hours</span>
                 <div className="stack" style={{ gap: 8, marginTop: 8 }}>
                   {days.map((d) => {
@@ -743,6 +804,7 @@ export function NumberRoutingPage() {
                         label: 'A different agent answers',
                       },
                       { value: 'voicemail', label: 'Take a voicemail' },
+                      { value: 'forward', label: 'Forward to another number' },
                     ]}
                     onChange={(e) => patch({ after_hours_action: e.target.value })}
                   />
@@ -762,7 +824,7 @@ export function NumberRoutingPage() {
                     <Textarea rows={2} value={r.after_hours_message ?? ''} onChange={(e) => patch({ after_hours_message: e.target.value })} />
                   </Field>
                 )}
-                <Field label="Fallback number" hint="Called if the agent fails or is paused.">
+                <Field label={r.after_hours_action === 'forward' ? 'Forward to' : 'Fallback number'} hint={r.after_hours_action === 'forward' ? 'International format, e.g. +918045678999' : 'Used when after hours is “Forward to another number”.'}>
                   <Input
                     className="mono"
                     placeholder="+918045678999"

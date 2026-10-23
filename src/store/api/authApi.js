@@ -85,9 +85,15 @@ export const authApi = baseApi.injectEndpoints({
     revokeApiKey: b.mutation({ query: (id) => C.auth(`/customer/api-keys/${id}`, { method: 'DELETE' }), invalidatesTags: ['ApiKey'] }),
 
     // Privacy (CMP-02) -------------------------------------------------
-    getPrivacy: b.query({ query: () => C.auth('/customer/privacy-settings'), providesTags: ['Privacy'] }),
-    putPrivacy: b.mutation({ query: (body) => C.auth('/customer/privacy-settings', { method: 'PUT', body }), invalidatesTags: ['Privacy'] }),
-    privacyDeleteRequest: b.mutation({ query: (phone) => C.auth('/customer/privacy/delete-request', { method: 'POST', body: { phone } }) }),
+    // Served by voice-analytics-be.
+    getPrivacy: b.query({ query: () => C.analytics('/customer/privacy-settings'), providesTags: ['Privacy'] }),
+    putPrivacy: b.mutation({ query: (body) => C.analytics('/customer/privacy-settings', { method: 'PUT', body }), invalidatesTags: ['Privacy'] }),
+    // Erases the number's calls, transcripts, reviews and its contact (logged with the number masked).
+    privacyDeleteRequest: b.mutation({
+      query: (phone) => C.analytics('/customer/privacy/delete-request', { method: 'POST', body: { phone } }),
+      invalidatesTags: ['Privacy', 'Call', 'Contact'],
+    }),
+    listPrivacyDeleteRequests: b.query({ query: () => C.analytics('/customer/privacy/delete-requests'), providesTags: ['Privacy'] }),
 
     // Sub-accounts (EXT-04) -------------------------------------------
     listSubAccounts: b.query({ query: () => C.auth('/customer/sub-accounts'), providesTags: ['SubAccount'] }),
@@ -126,6 +132,7 @@ export const {
   useGetPrivacyQuery,
   usePutPrivacyMutation,
   usePrivacyDeleteRequestMutation,
+  useListPrivacyDeleteRequestsQuery,
   useListSubAccountsQuery,
   useCreateSubAccountMutation,
   useSwitchSubAccountMutation,

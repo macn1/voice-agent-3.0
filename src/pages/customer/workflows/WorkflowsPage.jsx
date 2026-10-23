@@ -89,6 +89,19 @@ export function WorkflowsPage() {
   );
 }
 
+/** A sample event shaped like the trigger's mapping: { 'lead.mobile': 'phone' } -> { lead: { mobile: '+919800000000' } }. */
+function samplePayload(mapping = {}) {
+  const out = {};
+  Object.entries(mapping).forEach(([path, target]) => {
+    const keys = path.split('.').filter(Boolean);
+    if (!keys.length) return;
+    let node = out;
+    keys.slice(0, -1).forEach((k) => (node = node[k] ??= {}));
+    node[keys.at(-1)] = target === 'phone' ? '+919800000000' : 'Test';
+  });
+  return out;
+}
+
 function TriggersTab() {
   const toast = useToast();
   const list = useListTriggersQuery();
@@ -97,7 +110,8 @@ function TriggersTab() {
   const runs = useListTriggerRunsQuery(runsFor?.id, { skip: !runsFor });
   const [updateTrigger] = useUpdateTriggerMutation();
   const [fireTrigger] = useFireTriggerMutation();
-  const hookUrl = (t) => `${window.location.origin}/outbound/api/v1/hooks/triggers/${t.trigger_key}`;
+  const { agents } = useAgentOptions();
+  const agentName = (id) => agents.find((a) => a.id === id)?.name ?? id;
 
   return (
     <div className="card">
@@ -144,7 +158,7 @@ function TriggersTab() {
                         {titleCase(t.source)}
                         {t.source_config.provider && <div className="cell-sub">{`${t.source_config.provider} · ${t.source_config.event}`}</div>}
                       </td>
-                      <td>{t.agent_name ?? t.agent_id}</td>
+                      <td>{t.agent_name ?? agentName(t.agent_id)}</td>
                       <td>{t.delay_seconds < 60 ? `${t.delay_seconds}s` : `${Math.round(t.delay_seconds / 60)} min`}</td>
                       <td>
                         <input
@@ -177,9 +191,9 @@ function TriggersTab() {
       <Drawer open={!!runsFor} onClose={() => setRunsFor(null)} width={600} title={runsFor?.name ?? ''} subtitle="Run log">
         {runsFor && (
           <div className="stack">
-            {runsFor.source !== 'crm_event' && (
+            {runsFor.source !== 'crm_event' && runsFor.hook_url && (
               <Field label="Inbound webhook URL" hint="POST lead data here (JSON). Fields are mapped to call variables.">
-                <CopyField value={hookUrl(runsFor)} />
+                <CopyField value={runsFor.hook_url} />
               </Field>
             )}
             <Button
@@ -188,7 +202,7 @@ function TriggersTab() {
               onClick={() =>
                 fireTrigger({
                   key: runsFor.trigger_key,
-                  payload: Object.fromEntries(Object.keys(runsFor.field_mapping).map((k) => [k, k === 'phone' ? '+919800000000' : 'Test'])),
+                  payload: samplePayload(runsFor.field_mapping),
                 })
                   .unwrap()
                   .then(() => toast('Test event sent'))
@@ -210,7 +224,7 @@ function TriggersTab() {
                             </td>
                             <td>
                               <StatusBadge
-                                status={r.status === 'called' ? 'active' : r.status === 'queued' ? 'pending' : r.status === 'skipped' ? 'cancelled' : 'failed'}
+                                status={['placed', 'called'].includes(r.status) ? 'active' : ['scheduled', 'queued'].includes(r.status) ? 'pending' : r.status === 'skipped' ? 'cancelled' : 'failed'}
                                 label={titleCase(r.status)}
                               />
                               {r.detail && <div className="cell-sub">{r.detail}</div>}
@@ -268,7 +282,7 @@ function TriggerEditor({ value, onClose, onSaved }) {
             variant="primary"
             loading={busy}
             onClick={async () => {
-              if (!t.name?.trim() || !t.agent_id || !t.from_number_id) return setError('Fill in the name, agent and from-number');
+              if (!t.name?.trim() || !t.agent_id) return setError('Fill in the name and agent');
               if (!Object.values(t.field_mapping ?? {}).includes('phone')) return setError('Map one incoming field to “phone”');
               setBusy(true);
               setError(null);
@@ -299,8 +313,7 @@ function TriggerEditor({ value, onClose, onSaved }) {
             <Select
               value={t.source ?? 'webhook'}
               options={[
-                { value: 'webhook', label: 'A webhook is received' },
-                { value: 'form', label: 'A web form is submitted' },
+                { value: 'webhook', label: 'A webhook is received (web form, automation)' },
                 { value: 'crm_event', label: 'Something happens in the CRM' },
               ]}
               onChange={(e) => setT({ ...t, source: e.target.value })}
@@ -346,23 +359,23 @@ function TriggerEditor({ value, onClose, onSaved }) {
           <Field label="Call with agent">
             <Select value={t.agent_id ?? ''} options={agentOptions} placeholder="Choose" onChange={(e) => setT({ ...t, agent_id: e.target.value })} />
           </Field>
-          <Field label="From number">
+          <Field label="From number" hint="Optional — defaults to your first number">
             <Select
               value={t.from_number_id ?? ''}
               options={numberOptions}
-              placeholder="Choose"
+              placeholder="Default"
               onChange={(e) => setT({ ...t, from_number_id: e.target.value })}
             />
           </Field>
         </div>
         <Field
           label="Map incoming fields to call variables"
-          hint="Left: field name in the incoming data. Right: variable name (use “phone” for the number to call)."
+          hint="Left: where the field is in the incoming JSON (e.g. lead.mobile). Right: the call variable — use “phone” for the number to call and “name” for the person's name."
         >
           <MappingEditor
             value={t.field_mapping ?? {}}
             onChange={(field_mapping) => setT({ ...t, field_mapping })}
-            keyLabel="Incoming field"
+            keyLabel="Incoming field (path)"
             valueLabel="Call variable"
           />
         </Field>
@@ -420,15 +433,24 @@ function ScheduledTab() {
                         <div className="cell-main">{c.contact_name ?? c.to_number}</div>
                         <div className="cell-sub mono">{c.to_number}</div>
                       </td>
-                      <td>{c.agent_name ?? c.agent_id}</td>
+                      <td>{c.agent_name ?? options.find((o) => o.value === c.agent_id)?.label ?? c.agent_id}</td>
                       <td>
                         {c.reason ?? '—'}
                         <div className="cell-sub">{c.source === 'agent_promise' ? 'Promised by the agent' : 'Scheduled manually'}</div>
                       </td>
                       <td>
-                        <StatusBadge status={c.status === 'scheduled' ? 'pending' : c.status === 'done' ? 'active' : 'cancelled'} label={titleCase(c.status)} />
+                        <StatusBadge
+                          status={['scheduled', 'placing'].includes(c.status) ? 'pending' : ['placed', 'done'].includes(c.status) ? 'active' : c.status === 'failed' ? 'failed' : 'cancelled'}
+                          label={titleCase(c.status)}
+                        />
+                        {c.detail && <div className="cell-sub">{c.detail}</div>}
                       </td>
                       <td className="actions">
+                        {c.call_id && (
+                          <Link to={`/calls/${c.call_id}`} className="btn sm ghost">
+                            Open call
+                          </Link>
+                        )}
                         {c.status === 'scheduled' && (
                           <Button size="sm" variant="ghost" icon={<X />} onClick={() => setCancelling(c.id)}>
                             Cancel
@@ -509,7 +531,7 @@ function MessagesTab() {
       <div className="card-head">
         <div>
           <h2>Follow-up messages</h2>
-          <div className="card-sub">Messages sent because of a call. Set up rules on an agent's Follow-ups tab.</div>
+          <div className="card-sub">Messages sent because of a call. Set up rules on an agent's Follow-ups tab. They stay “Queued” until an SMS or email provider is connected.</div>
         </div>
       </div>
       <Async state={list}>

@@ -37,8 +37,6 @@ export function ToolsPage() {
                     <tr>
                       <th>Tool</th>
                       <th>Endpoint</th>
-                      <th className="num">Agents</th>
-                      <th>Last call</th>
                       <th />
                     </tr>
                   </thead>
@@ -51,14 +49,6 @@ export function ToolsPage() {
                         </td>
                         <td className="mono small">
                           <Badge plain>{t.method}</Badge> {t.url}
-                        </td>
-                        <td className="num">{t.agents_count ?? 0}</td>
-                        <td>
-                          {t.last_status ? (
-                            <Badge tone={t.last_status.startsWith('2') ? 'green' : 'red'}>{t.last_status}</Badge>
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
                         </td>
                         <td className="actions">
                           <Button size="sm" variant="ghost" icon={<FlaskConical />} onClick={() => setTesting(t)}>
@@ -203,7 +193,7 @@ function ToolEditor({ value, onClose, onSaved }) {
         </Field>
         <Field
           label="Authorization secret"
-          hint={t.has_secret ? 'A secret is saved and hidden. Enter a new one to replace it.' : 'Sent as the Authorization header. Hidden after saving.'}
+          hint={t.has_secret ? 'A secret is saved and hidden. Enter a new one to replace it.' : 'Sent as the Authorization header, or wherever you put {{secret}} in a header. Hidden after saving.'}
         >
           <div className="input-wrap">
             <Input
@@ -323,7 +313,7 @@ function ToolTester({ tool, onClose }) {
       <div className="stack">
         {error && <div className="alert-inline">{error}</div>}
         <div className="form-grid">
-          {tool?.parameters.map((p) => (
+          {(tool?.parameters ?? []).map((p) => (
             <Field key={p.name} label={`${p.name}${p.required ? ' *' : ''}`} hint={p.description}>
               <Input value={values[p.name] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [p.name]: e.target.value }))} />
             </Field>
@@ -341,10 +331,18 @@ function ToolTester({ tool, onClose }) {
               <div className="row between" style={{ marginBottom: 6 }}>
                 <span className="field-label">Response</span>
                 <span className="muted small">
-                  <Badge tone={result.response.status < 300 ? 'green' : 'red'}>{result.response.status}</Badge> {result.duration_ms} ms
+                  <Badge tone={result.response.status >= 200 && result.response.status < 300 ? 'green' : 'red'}>{result.response.status || 'No response'}</Badge>{' '}
+                  {result.response.duration_ms} ms
                 </span>
               </div>
-              <pre className="code">{JSON.stringify(result.response.body, null, 2)}</pre>
+              {result.response.error && <div className="alert-inline" style={{ marginBottom: 8 }}>{result.response.error}</div>}
+              {result.missing_arguments?.length > 0 && (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  Nothing was sent — fill in: <b>{result.missing_arguments.join(', ')}</b>
+                </p>
+              )}
+              <pre className="code">{result.response.body != null ? JSON.stringify(result.response.body, null, 2) : '—'}</pre>
+              {result.response.truncated && <p className="muted small">The response was cut at 64 KB.</p>}
             </div>
           </div>
         )}

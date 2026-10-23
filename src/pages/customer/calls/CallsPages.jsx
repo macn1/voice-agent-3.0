@@ -38,9 +38,10 @@ import {
   useUpdateCallMutation,
 } from '../../../store/api/callsApi';
 import { useGetAgentSectionQuery } from '../../../store/api/flowApi';
+import { useGetLiveSessionQuery, useListLiveSessionsQuery } from '../../../store/api/orchestratorApi';
 import { useCreateExportMutation } from '../../../store/api/analyticsApi';
 import { dateTime, money, number, titleCase } from '../../../lib/format';
-import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, Pager, Skeleton, StatusBadge, useToast } from '../../../components/ui';
+import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, Pager, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { PixelHero } from '../../../components/PixelHero';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
@@ -290,11 +291,11 @@ export function LiveCallsPage({ embedded = false }) {
                   {calls.map((c) => (
                     <tr key={c.id}>
                       <td>
-                        <div className="cell-main">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</div>
+                        <div className="cell-main">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number) ?? '—'}</div>
                         <div className="cell-sub">{titleCase(c.direction)}</div>
                       </td>
-                      <td>{c.agent_name}</td>
-                      <td className="num mono">{duration(Math.round((Date.now() - Date.parse(c.started_at)) / 1000))}</td>
+                      <td>{c.agent_name ?? c.agent?.name ?? '—'}</td>
+                      <td className="num mono">{duration(Math.max(0, Math.round((Date.now() - Date.parse(c.started_at ?? c.created_at)) / 1000)) || 0)}</td>
                       <td>
                         <StatusBadge status="active" label={titleCase(c.status)} />
                       </td>
@@ -306,7 +307,7 @@ export function LiveCallsPage({ embedded = false }) {
                           onClick={() =>
                             listenToCall(c.id)
                               .unwrap()
-                              .then((r) => window.open(r.media_url, '_blank'))
+                              .then((r) => (r?.media_url ? window.open(r.media_url, '_blank') : toast('Listening in…')))
                               .catch((e) => toast(errMsg(e), 'error'))
                           }
                         >
@@ -338,11 +339,13 @@ export function LiveCallsPage({ embedded = false }) {
             <EmptyState
               icon={<AudioLines />}
               title="No calls right now"
-              description="Calls in progress appear here as they happen. You can simulate calls to preview live behavior."
+              description="Phone calls in progress appear here as they happen."
               action={
-                <Button icon={<Zap />} onClick={() => setSimulating(true)}>
-                  Simulate a call
-                </Button>
+                embedded ? undefined : (
+                  <Button icon={<Zap />} onClick={() => setSimulating(true)}>
+                    Simulate a call
+                  </Button>
+                )
               }
             />
           )
@@ -360,14 +363,116 @@ export function LiveCallsPage({ embedded = false }) {
       <PageHeader
         eyebrow="Monitor"
         title="Live calls"
+        description="Phone calls in progress, and test conversations running through the call runtime."
         actions={
           <Button icon={<Zap />} onClick={() => setSimulating(true)}>
             Simulate call
           </Button>
         }
       />
-      {body}
+      <div className="stack">
+        {body}
+        <LiveSessionsCard />
+      </div>
     </>
+  );
+}
+
+/** Conversations and calls running through the orchestrator (typed tests now; voice once the media server is connected). */
+function LiveSessionsCard() {
+  const [mode, setMode] = useState('');
+  const sessions = useListLiveSessionsQuery(mode || undefined, { pollingInterval: 4000 });
+  const [open, setOpen] = useState(null);
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>Live sessions</h2>
+          <div className="card-sub">Test conversations and calls handled by the call runtime. Refreshes every few seconds.</div>
+        </div>
+        <SegmentTabs
+          value={mode}
+          onChange={setMode}
+          items={[
+            { value: '', label: 'All' },
+            { value: 'text', label: 'Text' },
+            { value: 'voice', label: 'Voice' },
+          ]}
+        />
+      </div>
+      <Async state={sessions}>
+        {(list) =>
+          list.length ? (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Mode</th>
+                    <th>Channel</th>
+                    <th className="num">Turns</th>
+                    <th>Started</th>
+                    <th>Last activity</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((x) => (
+                    <tr key={x.id}>
+                      <td>{x.agent_name ?? x.agent?.name ?? '—'}</td>
+                      <td>
+                        <Badge tone={x.mode === 'voice' ? 'blue' : ''}>{titleCase(x.mode)}</Badge>
+                      </td>
+                      <td>{titleCase(x.channel ?? '—')}</td>
+                      <td className="num">{x.turn_count ?? 0}</td>
+                      <td>{dateTime(x.started_at)}</td>
+                      <td>{dateTime(x.last_activity_at)}</td>
+                      <td className="actions">
+                        <Button size="sm" variant="ghost" onClick={() => setOpen(x)}>
+                          Transcript
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState icon={<AudioLines />} title="No sessions in progress" description="Start a published-agent conversation from an agent's Test panel to see it here." />
+          )
+        }
+      </Async>
+      <LiveSessionModal session={open} onClose={() => setOpen(null)} />
+    </div>
+  );
+}
+
+function LiveSessionModal({ session, onClose }) {
+  const q = useGetLiveSessionQuery(session?.id, { skip: !session, pollingInterval: session ? 3000 : 0 });
+  const turns = q.data?.turns ?? [];
+  return (
+    <Modal open={!!session} onClose={onClose} wide title={session?.agent_name ?? 'Session'} description={session ? `${titleCase(session.mode)} · started ${dateTime(session.started_at)}` : undefined}>
+      <Async state={q} skeleton={<Skeleton h={200} />}>
+        {() =>
+          turns.length ? (
+            <div className="chat" style={{ maxHeight: 420, overflow: 'auto' }}>
+              {turns.map((t) => (
+                <div key={t.id ?? t.seq} className={`bubble ${t.speaker === 'caller' ? 'me' : t.speaker === 'tool' ? 'sys' : 'them'}`}>
+                  {t.text}
+                  <div className="meta">
+                    {[t.speaker === 'tool' ? 'Tool' : null, t.rule && `Rule: ${t.rule}`, t.latency_ms != null && `${t.latency_ms} ms`, t.offset_ms != null && `+${(t.offset_ms / 1000).toFixed(1)}s`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No turns yet" />
+          )
+        }
+      </Async>
+    </Modal>
   );
 }
 

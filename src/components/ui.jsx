@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Construction, Inbox, Lock, RotateCw, X, XCircle } from 'lucide-react';
 import { titleCase } from '../lib/format';
+import { REFUSAL_COPY } from '../lib/refusals';
 import { SERVICE_LABEL } from '../store/api/services';
 
 /* Buttons ------------------------------------------------------------ */
@@ -359,4 +360,6 @@ export const useToast = () => useContext(ToastContext);
 export const errMsg = (e) =>
   e?.notAvailable
     ? `Not available yet — ${SERVICE_LABEL[e.service]} doesn't serve this route.`
-    : (e?.message ?? (typeof e === 'string' ? e : 'Something went wrong.'));
+    : e?.fields?.length
+      ? e.fields.map((f) => (f.field_id ? `${f.field_id}: ${f.message}` : f.message)).join('; ')
+      : (e?.message ?? REFUSAL_COPY[e?.code] ?? (typeof e === 'string' ? e : 'Something went wrong.'));

@@ -10,7 +10,7 @@ import {
   useSaveViewMutation,
 } from '../../../store/api/analyticsApi';
 import { useListCampaignsQuery } from '../../../store/api/callsApi';
-import { money, number, titleCase } from '../../../lib/format';
+import { money, number, percent, titleCase } from '../../../lib/format';
 import { Async, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, useToast } from '../../../components/ui';
 import { Select, ListEditor } from '../../../components/forms';
 import { delta, Heatmap, HBars, SERIES, ShareBar, Stat, TimeChart } from '../../../components/charts';
@@ -56,7 +56,7 @@ export function AnalyticsPage() {
               onClick={async () => {
                 try {
                   await exportAnalytics(filters).unwrap();
-                  toast('Export started — download it from Settings → Exports');
+                  toast('Export ready — download it from Settings → Exports');
                 } catch (e) {
                   toast(errMsg(e), 'error');
                 }
@@ -162,7 +162,7 @@ export function AnalyticsPage() {
           <Input autoFocus value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Riya — last 7 days" />
         </Field>
       </Modal>
-      <ScheduleReportModal open={scheduling} onClose={() => setScheduling(false)} views={views.data ?? []} />
+      <ScheduleReportModal open={scheduling} onClose={() => setScheduling(false)} />
     </>
   );
 }
@@ -172,6 +172,8 @@ function Overview({ filters }) {
   const summary = useGetAnalyticsQuery({ report: 'summary', ...filters });
   const ts = useGetAnalyticsQuery({ report: 'timeseries', ...filters });
   const agents = useGetAnalyticsQuery({ report: 'agents', ...filters });
+  const { agents: agentList } = useAgentOptions();
+  const agentName = (id) => agentList.find((a) => a.id === id)?.name ?? `${String(id).slice(0, 8)}…`;
   return (
     <div className="stack">
       <Async state={summary} skeleton={<Skeleton h={110} />}>
@@ -179,7 +181,7 @@ function Overview({ filters }) {
           <div className="grid-3" style={{ '--grid-cols': 'repeat(4, minmax(0, 1fr))' }}>
             <Stat label="Calls" value={number(s.calls)} hint={delta(s.calls, s.prev?.calls)} onClick={() => navigate('/calls')} />
             <Stat label="Minutes" value={number(s.minutes)} hint={delta(s.minutes, s.prev?.minutes)} />
-            <Stat label="Success rate" value={`${Math.round(s.success_rate * 100)}%`} hint={delta(s.success_rate, s.prev?.success_rate)} />
+            <Stat label="Success rate" value={percent(s.success_rate)} hint={delta(s.success_rate, s.prev?.success_rate)} />
             <Stat
               label="Avg duration"
               value={`${Math.floor(s.avg_duration / 60)}:${String(Math.round(s.avg_duration % 60)).padStart(2, '0')}`}
@@ -230,10 +232,10 @@ function Overview({ filters }) {
                   <tbody>
                     {rows.map((r) => (
                       <tr key={r.agent_id} className="clickable" onClick={() => navigate(`/calls?agent_id=${r.agent_id}`)}>
-                        <td className="cell-main">{r.agent_name}</td>
+                        <td className="cell-main">{r.agent_name ?? agentName(r.agent_id)}</td>
                         <td className="num">{number(r.calls)}</td>
                         <td className="num">{number(r.minutes)}</td>
-                        <td className="num">{Math.round(r.success_rate * 100)}%</td>
+                        <td className="num">{percent(r.success_rate)}</td>
                         <td className="num">{Math.round(r.avg_duration)}s</td>
                       </tr>
                     ))}
@@ -254,7 +256,6 @@ function Outcomes({ filters }) {
   const navigate = useNavigate();
   const outcomes = useGetAnalyticsQuery({ report: 'outcomes', ...filters });
   const funnel = useGetAnalyticsQuery({ report: 'funnel', ...filters });
-  const fields = useGetAnalyticsQuery({ report: 'extracted-fields', ...filters });
   return (
     <div className="stack">
       <div className="grid-2" style={{ alignItems: 'start' }}>
@@ -285,32 +286,6 @@ function Outcomes({ filters }) {
           <Async state={funnel}>{(rows) => <HBars color={SERIES[2]} rows={rows.map((r) => ({ label: r.stage, value: r.count }))} />}</Async>
         </div>
       </div>
-      <div className="card">
-        <div className="card-head">
-          <h2>Extracted field totals</h2>
-        </div>
-        <Async state={fields}>
-          {(rows) =>
-            rows.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={i}>
-                        <td className="mono">{r.field}</td>
-                        <td>{r.value}</td>
-                        <td className="num">{number(r.count)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState title="No extracted fields" description="Define fields on an agent's Analysis tab." />
-            )
-          }
-        </Async>
-      </div>
     </div>
   );
 }
@@ -325,49 +300,38 @@ function Usage({ filters }) {
           <div className="grid-3" style={{ '--grid-cols': 'repeat(4, minmax(0, 1fr))' }}>
             <Stat label="Total cost" value={money(c.total, c.currency)} />
             <Stat label="Cost per call" value={money(c.per_call, c.currency)} />
-            <Stat label="Cost per success" value={money(c.per_success, c.currency)} />
-            <Stat
-              label="Forecast this period"
-              value={`${number(c.forecast_minutes)} min`}
-              hint={c.plan_minutes ? `${Math.round((c.forecast_minutes / c.plan_minutes) * 100)}% of plan` : undefined}
-            />
+            <Stat label="Cost per minute" value={money(c.per_minute, c.currency)} />
+            <Stat label="Minutes" value={number(c.total_minutes)} hint={`${number(c.inbound_minutes)} inbound · ${number(c.outbound_minutes)} outbound`} />
           </div>
         )}
       </Async>
       <Async state={usage}>
         {(u) => (
-          <>
+          <div className="grid-2" style={{ alignItems: 'start' }}>
             <div className="card card-pad">
               <div className="card-title" style={{ marginBottom: 12 }}>
                 Minutes per day
               </div>
-              <TimeChart data={u.by_day} x="day" series={[{ key: 'minutes', label: 'Minutes' }]} />
+              {u.by_day.length ? (
+                <TimeChart
+                  data={u.by_day}
+                  x="day"
+                  series={[
+                    { key: 'inbound_minutes', label: 'Inbound' },
+                    { key: 'outbound_minutes', label: 'Outbound' },
+                  ]}
+                />
+              ) : (
+                <EmptyState title="No usage in this period" />
+              )}
             </div>
-            <div className="grid-3">
-              {[
-                ['By agent', u.by_agent],
-                ['By campaign', u.by_campaign],
-                ['By number', u.by_number],
-              ].map(([t, rows]) => (
-                <div key={t} className="card card-pad">
-                  <div className="card-title" style={{ marginBottom: 12 }}>
-                    {t}
-                  </div>
-                  {rows.length ? (
-                    <HBars
-                      rows={rows.map((r) => ({
-                        label: r.name,
-                        value: r.minutes,
-                      }))}
-                      format={(v) => `${number(v)}m`}
-                    />
-                  ) : (
-                    <span className="muted small">No data</span>
-                  )}
-                </div>
-              ))}
+            <div className="card card-pad">
+              <div className="card-title" style={{ marginBottom: 12 }}>
+                Cost per day
+              </div>
+              {u.by_day.length ? <TimeChart data={u.by_day} x="day" series={[{ key: 'cost', label: 'Cost' }]} format={(v) => number(v, 2)} /> : <EmptyState title="No usage in this period" />}
             </div>
-          </>
+          </div>
         )}
       </Async>
     </div>
@@ -378,24 +342,25 @@ function Quality({ filters }) {
   const navigate = useNavigate();
   const q = useGetAnalyticsQuery({ report: 'quality', ...filters });
   const sentiment = useGetAnalyticsQuery({ report: 'sentiment', ...filters });
-  const topics = useGetAnalyticsQuery({ report: 'topics', ...filters });
   return (
     <div className="stack">
       <Async state={q} skeleton={<Skeleton h={110} />}>
         {(x) => (
-          <div className="grid-3">
-            <Stat label="Transferred to a human" value={`${Math.round(x.transfer_rate * 100)}%`} />
-            <Stat
-              label="Agent didn't know"
-              value={`${Math.round(x.didnt_know_rate * 100)}%`}
-              onClick={() => navigate('/knowledge')}
-              hint="See unanswered questions"
-            />
-            <Stat label="Median response time" value={`${number(x.p50_latency_ms)} ms`} hint="Target under 500 ms" />
-            <Stat label="Interruptions per call" value={x.interruptions_per_call.toFixed(1)} />
-            <Stat label="Long silences" value={number(x.long_silences)} />
-            <Stat label="Short hang-ups" value={number(x.short_hangups)} hint="Calls under 10 seconds" />
-          </div>
+          <>
+            <div className="grid-3">
+              <Stat label="Flagged for review" value={percent(x.flagged_rate)} hint={`${number(x.flagged_calls)} of ${number(x.answered_calls)} answered calls`} onClick={() => navigate('/review')} />
+              <Stat label="Reviewed" value={percent(x.reviewed_rate)} hint={`${number(x.reviewed_calls)} calls scored`} />
+              <Stat label="Average review score" value={x.avg_review_score != null ? x.avg_review_score.toFixed(1) : '—'} hint={x.avg_review_score == null ? 'No reviews yet' : undefined} />
+            </div>
+            {x.flag_reasons?.length > 0 && (
+              <div className="card card-pad">
+                <div className="card-title" style={{ marginBottom: 12 }}>
+                  Why calls were flagged
+                </div>
+                <HBars rows={x.flag_reasons.map((r) => ({ label: titleCase(r.reason ?? r.flag ?? r.key ?? ''), value: r.calls ?? r.count ?? 0 }))} />
+              </div>
+            )}
+          </>
         )}
       </Async>
       <div className="card card-pad">
@@ -403,7 +368,8 @@ function Quality({ filters }) {
           Sentiment
         </div>
         <Async state={sentiment}>
-          {(rows) => {
+          {(d) => {
+            const rows = d.rows;
             const tot = rows.reduce(
               (a, r) => ({
                 positive: a.positive + r.positive,
@@ -416,17 +382,9 @@ function Quality({ filters }) {
               <div className="stack">
                 <ShareBar
                   parts={[
-                    {
-                      label: 'Positive',
-                      value: tot.positive,
-                      color: SERIES[2],
-                    },
+                    { label: 'Positive', value: tot.positive, color: SERIES[2] },
                     { label: 'Neutral', value: tot.neutral, color: '#b8b6b1' },
-                    {
-                      label: 'Negative',
-                      value: tot.negative,
-                      color: SERIES[1],
-                    },
+                    { label: 'Negative', value: tot.negative, color: SERIES[1] },
                   ]}
                 />
 
@@ -446,23 +404,7 @@ function Quality({ filters }) {
           }}
         </Async>
       </div>
-      <div className="card card-pad">
-        <div className="card-title" style={{ marginBottom: 12 }}>
-          What callers ask about most
-        </div>
-        <Async state={topics}>
-          {(rows) =>
-            rows.length ? (
-              <HBars
-                rows={rows.map((r) => ({ label: r.topic, value: r.count }))}
-                onClick={(i) => rows[i].example_call_id && navigate(`/calls/${rows[i].example_call_id}`)}
-              />
-            ) : (
-              <EmptyState title="No topics yet" />
-            )
-          }
-        </Async>
-      </div>
+      <p className="muted small">Topics callers ask about, drop-off points and response-time figures aren't available yet.</p>
     </div>
   );
 }
@@ -523,8 +465,8 @@ function Patterns({ filters }) {
                           <tr key={r.name}>
                             <td className="cell-main">{r.name}</td>
                             <td className="num">{number(r.calls)}</td>
-                            <td className="num">{Math.round(r.connect_rate * 100)}%</td>
-                            <td className="num">{Math.round(r.success_rate * 100)}%</td>
+                            <td className="num">{percent(r.connect_rate)}</td>
+                            <td className="num">{percent(r.success_rate)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -543,12 +485,11 @@ function Patterns({ filters }) {
 }
 
 /** ANA-F7 / EXT-03.2 scheduled email reports. */
-function ScheduleReportModal({ open, onClose, views }) {
+function ScheduleReportModal({ open, onClose }) {
   const toast = useToast();
   const reports = useListScheduledReportsQuery(undefined, { skip: !open });
   const [putReports] = usePutScheduledReportsMutation();
   const [name, setName] = useState('Weekly summary');
-  const [view, setView] = useState('');
   const [freq, setFreq] = useState('weekly');
   const [to, setTo] = useState([]);
   return (
@@ -556,7 +497,7 @@ function ScheduleReportModal({ open, onClose, views }) {
       open={open}
       onClose={onClose}
       title="Email a report"
-      description="Sends the chosen saved view as a report on a schedule."
+      description="Emails the summary (calls, minutes, success rate) on a schedule — mornings at 9."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -565,18 +506,20 @@ function ScheduleReportModal({ open, onClose, views }) {
             disabled={!to.length}
             onClick={async () => {
               try {
-                const existing = (reports.data ?? []).map(({ id: _id, ...r }) => r);
                 await putReports([
-                  ...existing,
+                  ...(reports.data ?? []),
                   {
                     name,
-                    saved_view_id: view || null,
+                    type: 'summary',
                     frequency: freq,
+                    weekday: 1,
+                    hour: 9,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     recipients: to,
-                    is_enabled: true,
+                    enabled: true,
                   },
                 ]).unwrap();
-                toast('Report scheduled');
+                toast('Report saved — it will be emailed once an email provider is connected');
                 onClose();
               } catch (e) {
                 toast(errMsg(e), 'error');
@@ -593,14 +536,6 @@ function ScheduleReportModal({ open, onClose, views }) {
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <div className="form-grid">
-          <Field label="Saved view">
-            <Select
-              value={view}
-              options={views.map((v) => ({ value: v.id, label: v.name }))}
-              placeholder="Current filters"
-              onChange={(e) => setView(e.target.value)}
-            />
-          </Field>
           <Field label="How often">
             <Select value={freq} options={['daily', 'weekly', 'monthly']} onChange={(e) => setFreq(e.target.value)} />
           </Field>

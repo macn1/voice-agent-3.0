@@ -20,7 +20,7 @@ const qs = (params) => {
   return s ? `?${s}` : '';
 };
 
-// Domain "not found" codes (e.g. agent_not_found) mean the route exists.
+// Domain codes (agent_not_found, live_audio_unavailable, ...) mean the route exists.
 const GENERIC_NOT_FOUND = ['not_found', 'http_404', 'route_not_found'];
 
 async function send({ service = 'auth', url, method = 'GET', body, params }, token) {
@@ -56,13 +56,33 @@ async function send({ service = 'auth', url, method = 'GET', body, params }, tok
   const status = html ? 404 : res.status;
   const err = json?.error ?? {};
   const code = err.code ?? (html ? 'route_not_found' : `http_${status}`);
-  const notAvailable = [404, 405, 501, 502, 503].includes(status) && (status !== 404 || GENERIC_NOT_FOUND.includes(code));
+
+  // The gateway's rate limit answers 429 with a plain-text body, not our envelope.
+  if (status === 429 && !json?.error) {
+    const wait = Number(res.headers.get('retry-after'));
+    return {
+      error: {
+        status,
+        code: 'rate_limited',
+        retryAfter: Number.isFinite(wait) && wait > 0 ? wait : undefined,
+        message: wait > 0 ? `Too many attempts, try again in ${Math.ceil(wait)} seconds.` : 'Too many attempts, try again in a moment.',
+        service,
+        path: `${method} ${path}`,
+      },
+    };
+  }
+
+  // A route is "not served" when the status says so and the body carries no
+  // domain code of its own (live_audio_unavailable is a real 503 answer).
+  const domainCode = !!json?.error?.code && !GENERIC_NOT_FOUND.includes(code) && !/^http_\d+$/.test(code);
+  const notAvailable = [404, 405, 501, 502, 503].includes(status) && !domainCode;
   return {
     error: {
       status,
       code: notAvailable ? 'not_available' : code,
       message: notAvailable ? `${SERVICE_LABEL[service]} doesn't serve ${method} ${path} yet.` : (err.message ?? (res.statusText || 'Request failed')),
       notAvailable,
+      fields: json?.meta?.fields,
       service,
       path: `${method} ${path}`,
     },
@@ -110,13 +130,78 @@ export async function baseQueryWithReauth(args, api) {
   return (await demoFallback(args, result.error, live)) ?? result;
 }
 
-/** PUT a file to a pre-signed upload URL returned by the API (knowledge / agent documents). */
-export async function uploadToSignedUrl({ url, file }) {
+/**
+ * PUT a file's bytes to the upload_url the API returned (knowledge / agent documents).
+ * `authed` sends the customer token: our own upload routes need it.
+ */
+export async function uploadToSignedUrl({ url, file, authed }) {
+  const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+  let target = url;
+  if (authed) {
+    const { store } = await import('../index');
+    const token = store.getState().auth.customer.tokens?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    // upload_url is absolute; keep it on this app's API origin (dev proxy, no CORS).
+    try {
+      const u = new URL(url);
+      target = API_BASE + u.pathname + u.search;
+    } catch {
+      /* already relative */
+    }
+  }
   try {
-    const r = await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
-    if (!r.ok) return { error: { status: r.status, code: 'upload_failed', message: `Upload of ${file.name} failed (${r.status})` } };
+    const r = await fetch(target, { method: 'PUT', body: file, headers });
+    if (!r.ok) {
+      let message = `Upload of ${file.name} failed (${r.status})`;
+      try {
+        message = (await r.json())?.error?.message ?? message;
+      } catch {
+        /* not JSON */
+      }
+      return { error: { status: r.status, code: 'upload_failed', message } };
+    }
     return { data: { ok: true } };
   } catch {
     return { error: { status: 0, code: 'network_error', message: `Upload of ${file.name} failed` } };
   }
+}
+
+/**
+ * Fetch a non-JSON route (PDF / CSV) with the realm's token and save it as
+ * `filename`. Returns the Blob; throws an Error carrying the API's message.
+ */
+export async function downloadAuthed({ service, realm = 'customer', url, params, filename }) {
+  const { store } = await import('../index');
+  const run = (token) =>
+    fetch(`${API_BASE}${PREFIX[service]}/api/v1${url}${qs(params)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  let res;
+  try {
+    res = await run(store.getState().auth[realm].tokens?.access_token);
+    if (res.status === 401) {
+      const next = await refreshTokens(realm, store);
+      if (next) res = await run(next.access_token);
+    }
+  } catch {
+    throw new Error('Could not reach the server. Check your connection and try again.');
+  }
+  if (!res.ok) {
+    let message = `Download failed (${res.status})`;
+    try {
+      message = (await res.json())?.error?.message ?? message;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  if (filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  return blob;
 }

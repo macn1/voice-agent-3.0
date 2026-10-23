@@ -28,7 +28,7 @@ import { PixelHero } from '../../../components/PixelHero';
 import { useListUnansweredQuestionsQuery } from '../../../store/api/analyticsApi';
 import { date, dateTime, titleCase } from '../../../lib/format';
 import { asList } from '../../../lib/normalize';
-import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, StatusBadge, useToast } from '../../../components/ui';
+import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, StatusBadge, useToast } from '../../../components/ui';
 import { Select, Textarea } from '../../../components/forms';
 
 /** P-12 Knowledge list (KNW-01). */
@@ -86,7 +86,6 @@ export function KnowledgeListPage() {
                         <tr>
                           <th>Name</th>
                           <th className="num">Sources</th>
-                          <th className="num">Agents using it</th>
                           <th>Updated</th>
                         </tr>
                       </thead>
@@ -97,8 +96,7 @@ export function KnowledgeListPage() {
                               <div className="cell-main">{kb.name}</div>
                               {kb.description && <div className="cell-sub">{kb.description}</div>}
                             </td>
-                            <td className="num">{kb.sources_count}</td>
-                            <td className="num">{kb.agents_count}</td>
+                            <td className="num">{kb.source_count ?? kb.sources_count ?? 0}</td>
                             <td className="muted">{date(kb.updated_at)}</td>
                           </tr>
                         ))}
@@ -174,8 +172,8 @@ export function KnowledgeDetailPage() {
   const [adding, setAdding] = useState(null);
   const kb = kbs.data?.find((k) => k.id === id);
 
-  // Refresh while anything is still processing.
-  useEffect(() => setPoll(sources.data?.some((s) => s.status === 'processing') ? 4000 : 0), [sources.data]);
+  // Poll every 2.5 s while a source is being processed or waiting for its file.
+  useEffect(() => setPoll(sources.data?.some((s) => s.status === 'processing' || s.status === 'awaiting_upload') ? 2500 : 0), [sources.data]);
 
   return (
     <>
@@ -210,7 +208,7 @@ export function KnowledgeDetailPage() {
                     <tr>
                       <th>Source</th>
                       <th>Status</th>
-                      <th>Re-sync</th>
+                      <th className="num">Passages</th>
                       <th>Last synced</th>
                       <th />
                     </tr>
@@ -235,7 +233,7 @@ export function KnowledgeDetailPage() {
                           <td>
                             <StatusBadge
                               status={s.status === 'ready' ? 'active' : s.status}
-                              label={s.status === 'processing' ? 'Processing…' : titleCase(s.status)}
+                              label={s.status === 'processing' ? 'Processing…' : s.status === 'awaiting_upload' ? 'Waiting for file' : titleCase(s.status)}
                             />
                             {s.error && (
                               <div className="cell-sub" style={{ color: 'var(--red)', maxWidth: 320 }}>
@@ -243,10 +241,10 @@ export function KnowledgeDetailPage() {
                               </div>
                             )}
                           </td>
-                          <td className="muted">{s.resync_schedule ? titleCase(s.resync_schedule) : '—'}</td>
+                          <td className="num">{s.status === 'ready' ? (s.chunk_count ?? 0) : '—'}</td>
                           <td className="muted">{dateTime(s.last_synced_at)}</td>
                           <td className="actions">
-                            {(s.type === 'url' || s.status === 'failed') && (
+                            {(s.type === 'url' || s.type === 'file' || s.status === 'failed') && s.status !== 'awaiting_upload' && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -254,7 +252,7 @@ export function KnowledgeDetailPage() {
                                 onClick={() =>
                                   resyncSource({ kbId: id, id: s.id })
                                     .unwrap()
-                                    .then(() => toast('Re-sync started'))
+                                    .then(() => toast(s.type === 'url' ? 'Fetching the page again' : 'Re-reading the source'))
                                     .catch((e) => toast(errMsg(e), 'error'))
                                 }
                               >
@@ -475,8 +473,6 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
   const [addSource] = useAddSourceMutation();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
-  const [scope, setScope] = useState('site');
-  const [schedule, setSchedule] = useState('weekly');
   const [text, setText] = useState('');
   const [faqs, setFaqs] = useState([{ question: '', answer: '' }]);
   const [files, setFiles] = useState([]);
@@ -510,10 +506,8 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
         await addSource({
           kbId,
           type: 'url',
-          title: title.trim() || url.trim(),
+          title: title.trim(),
           url: url.trim(),
-          content: { scope },
-          resync_schedule: schedule || null,
         }).unwrap();
       } else if (type === 'faq') {
         const pairs = faqs.filter((f) => f.question.trim() && f.answer.trim());
@@ -572,7 +566,7 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               type="file"
               multiple
               hidden
-              accept=".pdf,.doc,.docx,.txt,.md,.csv,.html"
+              accept=".pdf,.docx,.txt,.md,.csv"
               onChange={(e) => setFiles([...(e.target.files ?? [])])}
             />
             <button
@@ -590,7 +584,7 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               <div className="fw-medium" style={{ marginTop: 8 }}>
                 Choose files
               </div>
-              <div className="muted small">PDF, Word, text, Markdown, CSV</div>
+              <div className="muted small">PDF, Word (.docx), text, Markdown, CSV · up to 10 MB. Scanned PDFs have no text to read.</div>
             </button>
             {files.map((f) => (
               <div key={f.name} className="row between small">
@@ -605,26 +599,12 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
             <Field label="Website URL">
               <Input autoFocus placeholder="https://example.com/help" value={url} onChange={(e) => setUrl(e.target.value)} />
             </Field>
-            <SegmentTabs
-              value={scope}
-              onChange={setScope}
-              items={[
-                { value: 'site', label: 'Whole site' },
-                { value: 'page', label: 'This page only' },
-              ]}
-            />
-
-            <Field label="Re-sync">
-              <Select
-                value={schedule}
-                options={[
-                  { value: '', label: 'Never' },
-                  { value: 'daily', label: 'Daily' },
-                  { value: 'weekly', label: 'Weekly' },
-                ]}
-                onChange={(e) => setSchedule(e.target.value)}
-              />
+            <Field label="Title" hint="Optional — the page's own title is used when you leave this empty">
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </Field>
+            <p className="muted small" style={{ margin: 0 }}>
+              One page is fetched (public addresses only). Re-sync it any time to read it again.
+            </p>
           </>
         )}
         {(type === 'faq' || type === 'text') && (

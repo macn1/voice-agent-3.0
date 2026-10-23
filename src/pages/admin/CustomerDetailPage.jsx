@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Ban, Check, FileText, Globe, Key, Pencil, Phone, Play, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Ban, Check, Download, FileText, Globe, Key, Pencil, Phone, Play, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
-import { date, dateTime, money, number, titleCase } from '../../lib/format';
+import { date, dateTime, money, number, percent, titleCase } from '../../lib/format';
 import { asList, normalizeUsage } from '../../lib/normalize';
 import {
   useActivateCustomerMutation,
@@ -10,12 +10,15 @@ import {
   useAllocateNumberMutation,
   useAssignPackageMutation,
   useDeleteDomainMutation,
+  useGetCustomerAnalyticsQuery,
   useGetCustomerQuery,
   useGetTenantSettingsQuery,
   useGetTenantSubscriptionHistoryQuery,
   useGetTenantSubscriptionQuery,
   useGetTenantUsageQuery,
   useLazyGetTenantInvoiceQuery,
+  useListAdminAgentsQuery,
+  useListAdminAuditQuery,
   useListAdminPackagesQuery,
   useListDomainsQuery,
   useListLlmProvidersQuery,
@@ -47,6 +50,9 @@ import {
   useToast,
 } from '../../components/ui';
 import { InvoiceTable, PackageFeatures } from '../customer/settings/BillingPages';
+import { downloadAuthed } from '../../store/api/baseQuery';
+import { HBars, TimeChart } from '../../components/charts';
+import { ActivityLogPage } from '../customer/settings/MoreSettings';
 
 export function CustomerDetailPage() {
   const { id = '' } = useParams();
@@ -61,9 +67,12 @@ export function CustomerDetailPage() {
     ...(can('settings.manage') ? [{ value: 'settings', label: 'Settings' }] : []),
     { value: 'plan', label: 'Plan' },
     { value: 'invoices', label: 'Invoices' },
+    { value: 'activity', label: 'Call activity' },
+    { value: 'agents', label: 'Agents' },
     { value: 'usage', label: 'Usage' },
     { value: 'numbers', label: 'Numbers' },
     { value: 'staff', label: 'Staff' },
+    { value: 'audit', label: 'Audit log' },
   ];
 
   return (
@@ -95,9 +104,12 @@ export function CustomerDetailPage() {
           {tab === 'settings' && <SettingsTab tenant={tenant.data} />}
           {tab === 'plan' && <PlanTab tenantId={id} />}
           {tab === 'invoices' && <InvoicesTab tenantId={id} />}
+          {tab === 'activity' && <ActivityTab tenantId={id} />}
+          {tab === 'agents' && <AgentsTab tenantId={id} />}
           {tab === 'usage' && <UsageTab tenantId={id} />}
           {tab === 'numbers' && <NumbersTab tenantId={id} />}
           {tab === 'staff' && <StaffTab tenantId={id} />}
+          {tab === 'audit' && <ActivityLogPage useLog={useListAdminAuditQuery} showTenant tenantId={id} />}
         </>
       )}
     </>
@@ -729,6 +741,21 @@ function InvoicesTab({ tenantId }) {
               <span className="muted">Total</span>
               <b>{money(open.total_amount, open.currency)}</b>
             </div>
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <Button
+                icon={<Download />}
+                onClick={() =>
+                  downloadAuthed({
+                    service: 'billing',
+                    realm: 'admin',
+                    url: `/admin/customers/${tenantId}/invoices/${open.id}/pdf`,
+                    filename: `${open.invoice_number ?? 'invoice'}.pdf`,
+                  }).catch((e) => toast(errMsg(e), 'error'))
+                }
+              >
+                Download PDF
+              </Button>
+            </div>
           </div>
         )}
       </Modal>
@@ -969,6 +996,168 @@ function StaffTab({ tenantId }) {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+/* Call activity (analytics service) ---------------------------------- */
+
+const RANGE_DAYS = [
+  { value: '7', label: '7 days' },
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+];
+
+function ActivityTab({ tenantId }) {
+  const [days, setDays] = useState('30');
+  const from = useMemo(() => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - Number(days));
+    return d.toISOString();
+  }, [days]);
+  const q = useGetCustomerAnalyticsQuery({ tenantId, from });
+  const agents = useListAdminAgentsQuery({ tenant_id: tenantId, limit: 200 });
+  const agentName = (aid) => asList(agents.data).find((a) => a.id === aid)?.name ?? `${String(aid).slice(0, 8)}…`;
+  return (
+    <div className="stack">
+      <div className="row between wrap">
+        <div className="muted small">Calls handled for this customer.</div>
+        <SegmentTabs value={days} onChange={setDays} items={RANGE_DAYS} />
+      </div>
+      <Async state={q} skeleton={<Skeleton h={220} />}>
+        {(d) => {
+          const s = d.summary ?? {};
+          const points = (d.points ?? []).map((p) => ({ ...p, day: (p.bucket ?? '').slice(0, 10) }));
+          return (
+            <>
+              <div className="grid-3">
+                <div className="card stat">
+                  <div className="label">Calls</div>
+                  <div className="value">{number(s.total_calls)}</div>
+                  <div className="hint muted small">
+                    {number(s.inbound_calls)} inbound · {number(s.outbound_calls)} outbound
+                  </div>
+                </div>
+                <div className="card stat">
+                  <div className="label">Minutes</div>
+                  <div className="value">{number(s.total_minutes)}</div>
+                  <div className="hint muted small">Average call {number(s.avg_duration_seconds)} s</div>
+                </div>
+                <div className="card stat">
+                  <div className="label">Success rate</div>
+                  <div className="value">{percent(s.success_rate)}</div>
+                  <div className="hint muted small">
+                    {number(s.successful_calls)} of {number(s.answered_calls)} answered
+                  </div>
+                </div>
+              </div>
+              {points.length > 0 && (
+                <div className="card card-pad">
+                  <div className="card-title">Calls per day</div>
+                  <TimeChart
+                    data={points}
+                    x="day"
+                    series={[
+                      { key: 'calls', label: 'Calls' },
+                      { key: 'successful_calls', label: 'Successful' },
+                    ]}
+                  />
+                </div>
+              )}
+              <div className="grid-2" style={{ alignItems: 'start' }}>
+                <div className="card">
+                  <div className="card-head">
+                    <h2>By agent</h2>
+                  </div>
+                  {d.agents?.length ? (
+                    <div className="table-wrap">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Agent</th>
+                            <th className="num">Calls</th>
+                            <th className="num">Success</th>
+                            <th className="num">Minutes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {d.agents.map((a) => (
+                            <tr key={a.agent_id}>
+                              <td className="cell-main">{agentName(a.agent_id)}</td>
+                              <td className="num">{number(a.calls)}</td>
+                              <td className="num">{percent(a.success_rate)}</td>
+                              <td className="num">{number(a.minutes)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <EmptyState title="No calls in this period" />
+                  )}
+                </div>
+                <div className="card card-pad">
+                  <div className="card-title">Outcomes</div>
+                  {d.outcomes?.length ? (
+                    <div style={{ marginTop: 12 }}>
+                      <HBars color="var(--accent)" rows={d.outcomes.map((o) => ({ label: titleCase(o.outcome), value: o.calls }))} />
+                    </div>
+                  ) : (
+                    <p className="muted small">No outcomes recorded yet.</p>
+                  )}
+                </div>
+              </div>
+            </>
+          );
+        }}
+      </Async>
+    </div>
+  );
+}
+
+/* Agents (flow service, read-only) ------------------------------------ */
+
+function AgentsTab({ tenantId }) {
+  const agents = useListAdminAgentsQuery({ tenant_id: tenantId, limit: 200 });
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Agents</h2>
+      </div>
+      <Async state={agents}>
+        {(data) => {
+          const list = asList(data);
+          return list.length ? (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Live version</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((a) => (
+                    <tr key={a.id}>
+                      <td className="cell-main">{a.name}</td>
+                      <td>
+                        <StatusBadge status={a.status} />
+                      </td>
+                      <td className="muted">{a.published_version ? `v${a.published_version}` : '—'}</td>
+                      <td className="muted">{date(a.updated_at ?? a.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="No agents yet" />
+          );
+        }}
+      </Async>
     </div>
   );
 }

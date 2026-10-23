@@ -19,6 +19,8 @@ export const baseApi = createApi({
     'Invoice',
     'Usage',
     'Wallet',
+    'Entitlements',
+    'TextSession',
     'ApiKey',
     'Privacy',
     'SubAccount',

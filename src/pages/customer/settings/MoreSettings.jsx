@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { downloadAuthed } from '../../../store/api/baseQuery';
 import { useNavigate } from 'react-router-dom';
 import { Download, KeyRound, Mic2, Plus, Search, Trash2, Upload, Volume2, Wallet as WalletIcon, Building, ArrowRightLeft } from 'lucide-react';
 import {
@@ -6,11 +7,12 @@ import {
   useCreateSubAccountMutation,
   useGetPrivacyQuery,
   useListSubAccountsQuery,
+  useListPrivacyDeleteRequestsQuery,
   usePrivacyDeleteRequestMutation,
   usePutPrivacyMutation,
   useSwitchSubAccountMutation,
 } from '../../../store/api/authApi';
-import { useGetWalletQuery, useListWalletTransactionsQuery, useSetAutoRechargeMutation, useTopUpWalletMutation } from '../../../store/api/customerApi';
+import { useGetWalletQuery, useListStaffQuery, useListWalletTransactionsQuery, useSetAutoRechargeMutation, useTopUpWalletMutation } from '../../../store/api/customerApi';
 import { useAddDndMutation, useGetCallingRulesQuery, useListDndQuery, usePutCallingRulesMutation, useRemoveDndMutation } from '../../../store/api/callsApi';
 import {
   useCreateExportMutation,
@@ -237,10 +239,12 @@ export function DoNotCallPage() {
 
 /* Calling rules (CMP-03) ------------------------------------------------ */
 
+const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney', 'UTC'];
+
 export function CallingRulesPage() {
   const s = useSection(useGetCallingRulesQuery(), usePutCallingRulesMutation());
   return (
-    <SectionCard title="Calling rules" description="Company-wide limits every outbound call obeys, in the contact's own time zone." section={s}>
+    <SectionCard title="Calling rules" description="Company-wide limits every outbound call obeys. Campaigns use these hours unless they set their own." section={s}>
       {(r, patch) => (
         <>
           <div className="field">
@@ -278,6 +282,9 @@ export function CallingRulesPage() {
                 }
               />
             </Field>
+            <Field label="Time zone" hint="The hours above are in this time zone">
+              <Select value={r.timezone} options={TIMEZONES.includes(r.timezone) ? TIMEZONES : [r.timezone, ...TIMEZONES]} onChange={(e) => patch({ timezone: e.target.value })} />
+            </Field>
             <Field label="Max attempts per number per day" hint="Empty = no limit">
               <Input
                 type="number"
@@ -311,13 +318,64 @@ export function CallingRulesPage() {
 
 /* Privacy (CMP-02) ------------------------------------------------------ */
 
-const REDACTIONS = [
-  { key: 'card', label: 'Card numbers' },
-  { key: 'national_id', label: 'Aadhaar / PAN / national IDs' },
-  { key: 'bank_account', label: 'Bank account numbers' },
-  { key: 'email', label: 'Email addresses' },
-  { key: 'address', label: 'Street addresses' },
-];
+
+const deletionSummary = (r = {}) => {
+  const o = r.outbound ?? {};
+  const parts = [
+    [r.calls_deleted, 'calls'],
+    [r.transcript_lines_deleted, 'transcript lines'],
+    [r.reviews_deleted, 'reviews'],
+    [o.contacts_deleted, 'contacts'],
+    [o.scheduled_calls_deleted, 'scheduled calls'],
+  ].filter(([n]) => n > 0);
+  return parts.length ? `removed ${parts.map(([n, l]) => `${n} ${l}`).join(', ')}` : 'nothing was stored for this number';
+};
+
+function DeleteRequestHistory() {
+  const list = useListPrivacyDeleteRequestsQuery();
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>Deletion requests</h2>
+          <div className="card-sub">Numbers are masked in this list.</div>
+        </div>
+      </div>
+      <Async state={list}>
+        {(rows) =>
+          rows.length ? (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Number</th>
+                    <th>Status</th>
+                    <th>Result</th>
+                    <th>Requested</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <td className="mono">{r.phone}</td>
+                      <td>
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td className="muted">{deletionSummary(r.result)}</td>
+                      <td className="muted">{dateTime(r.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="No deletion requests yet" />
+          )
+        }
+      </Async>
+    </div>
+  );
+}
 
 export function PrivacyPage() {
   const toast = useToast();
@@ -331,25 +389,19 @@ export function PrivacyPage() {
       <SectionCard title="Privacy" description="Mask sensitive data and decide how long recordings and transcripts are kept." section={s}>
         {(p, patch) => (
           <>
-            <Toggle checked={p.redact_pii} onChange={(v) => patch({ redact_pii: v })} label="Mask sensitive data in transcripts and recordings" />
-            {p.redact_pii && (
-              <div className="perm-grid">
-                {REDACTIONS.map((r) => (
-                  <label key={r.key} className="check">
-                    <input
-                      type="checkbox"
-                      checked={p.redaction_types.includes(r.key)}
-                      onChange={(e) =>
-                        patch({
-                          redaction_types: e.target.checked ? [...p.redaction_types, r.key] : p.redaction_types.filter((x) => x !== r.key),
-                        })
-                      }
-                    />
-                    {r.label}
-                  </label>
-                ))}
-              </div>
+            <Toggle checked={p.record_calls} onChange={(v) => patch({ record_calls: v })} label="Record calls" />
+            {p.record_calls && (
+              <>
+                <Toggle checked={p.announce_recording} onChange={(v) => patch({ announce_recording: v })} label="Tell callers the call is recorded" />
+                {p.announce_recording && (
+                  <Field label="What the agent says" hint="Spoken at the start of the call">
+                    <Input value={p.consent_message ?? ''} onChange={(e) => patch({ consent_message: e.target.value })} />
+                  </Field>
+                )}
+              </>
             )}
+            <Toggle checked={p.store_transcripts} onChange={(v) => patch({ store_transcripts: v })} label="Keep transcripts" />
+            <Toggle checked={p.redact_pii} onChange={(v) => patch({ redact_pii: v })} label="Mask sensitive data in transcripts" />
             <div className="form-grid">
               <Field label="Keep recordings for (days)" hint="Empty = keep forever">
                 <Input
@@ -390,20 +442,19 @@ export function PrivacyPage() {
             Delete data
           </Button>
         </div>
-        {result && (
-          <div className="banner info" style={{ margin: 0 }}>
-            <span className="grow">
-              Request {result.status}: {result.affected.calls} calls, {result.affected.recordings} recordings, {result.affected.contacts} contacts.
-            </span>
-          </div>
-        )}
+        {result && <div className="banner info" style={{ margin: 0 }}>
+          <span className="grow">
+            Request {result.status} for {result.phone}: {deletionSummary(result.result)}.
+          </span>
+        </div>}
       </div>
+      <DeleteRequestHistory />
       <ConfirmDialog
         open={confirming}
         onClose={() => setConfirming(false)}
         danger
         title={`Delete all data for ${phone}?`}
-        description="Calls, recordings, transcripts and the contact record are permanently removed."
+        description="Calls, transcripts, reviews and the contact record for this number are permanently removed."
         confirmLabel="Delete permanently"
         onConfirm={async () => {
           setResult(await deleteRequest(phone).unwrap());
@@ -416,11 +467,49 @@ export function PrivacyPage() {
 
 /* Activity log (CMP-04.1) ----------------------------------------------- */
 
-export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = false }) {
-  const [q, setQ] = useState('');
+const AUDIT_SERVICES = [
+  { value: 'auth', label: 'Team & access' },
+  { value: 'billing', label: 'Billing' },
+  { value: 'flow', label: 'Agents' },
+  { value: 'outbound', label: 'Campaigns & calls' },
+  { value: 'inbound', label: 'Numbers' },
+  { value: 'telephony', label: 'Telephony' },
+  { value: 'integration', label: 'Integrations' },
+  { value: 'analytics', label: 'Analytics & privacy' },
+  { value: 'orchestrator', label: 'Call runtime' },
+];
+
+const shortId = (id) => (id ? `${String(id).slice(0, 8)}…` : '—');
+
+/**
+ * Audit log: successful changes across every service. Each row carries
+ * action (e.g. campaigns.start), entity_type / entity_id, actor_type / actor_id,
+ * service and detail { method, route, status, ip }. Filters are action prefix,
+ * service, and (admin) tenant_id.
+ *
+ * `actors` maps actor ids to names and `tenants` tenant ids to company names,
+ * when the caller has them; otherwise ids are shown shortened.
+ */
+export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = false, tenantId, tenantOptions, actors: given, tenants }) {
+  // The company's own log names people from its staff list.
+  const staff = useListStaffQuery(undefined, { skip: !!given || showTenant });
+  const actors = given ?? new Map((staff.data?.items ?? staff.data ?? []).map((x) => [x.id, x.name]));
+  const [action, setAction] = useState('');
   const [service, setService] = useState('');
+  const [tenant, setTenant] = useState('');
   const [offset, setOffset] = useState(0);
-  const list = useLog({ q: q || undefined, service: service || undefined, limit: 50, offset });
+  const [open, setOpen] = useState(null);
+  const reset = (fn) => (e) => {
+    fn(e.target.value);
+    setOffset(0);
+  };
+  const list = useLog({
+    action: action.trim() || undefined,
+    service: service || undefined,
+    tenant_id: tenantId || tenant || undefined,
+    limit: 50,
+    offset,
+  });
   return (
     <div className="card">
       <div className="card-head">
@@ -431,31 +520,12 @@ export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = fa
         <div className="filters">
           <div className="search">
             <Search />
-            <Input
-              placeholder="Person, action or item"
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setOffset(0);
-              }}
-            />
+            <Input placeholder="Action, e.g. campaigns" value={action} onChange={reset(setAction)} />
           </div>
-          <Select
-            value={service}
-            options={[
-              { value: 'auth', label: 'Team & access' },
-              { value: 'billing', label: 'Billing' },
-              { value: 'flow', label: 'Agents' },
-              { value: 'outbound', label: 'Campaigns & calls' },
-              { value: 'inbound', label: 'Numbers' },
-              { value: 'integration', label: 'Integrations' },
-            ]}
-            placeholder="All areas"
-            onChange={(e) => {
-              setService(e.target.value);
-              setOffset(0);
-            }}
-          />
+          <Select value={service} options={AUDIT_SERVICES} placeholder="All areas" onChange={reset(setService)} />
+          {showTenant && !tenantId && tenantOptions?.length > 0 && (
+            <Select value={tenant} options={tenantOptions} placeholder="All customers" onChange={reset(setTenant)} />
+          )}
         </div>
       </div>
       <Async state={list}>
@@ -469,25 +539,59 @@ export function ActivityLogPage({ useLog = useListAuditLogQuery, showTenant = fa
                       <th>When</th>
                       <th>Who</th>
                       <th>What</th>
-                      {showTenant && <th>Customer</th>}
+                      {showTenant && !tenantId && <th>Customer</th>}
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {p.items.map((a) => (
-                      <tr key={a.id}>
-                        <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                          {dateTime(a.created_at)}
-                        </td>
-                        <td>
-                          <div className="cell-main">{a.actor_name}</div>
-                          <div className="cell-sub">{titleCase(a.actor_type)}</div>
-                        </td>
-                        <td>
-                          <span className="tag">{a.action}</span> {a.entity_name}
-                        </td>
-                        {showTenant && <td>{a.tenant_name ?? '—'}</td>}
-                      </tr>
-                    ))}
+                    {p.items.map((a) => {
+                      const d = a.detail ?? {};
+                      return (
+                        <Fragment key={a.id}>
+                          <tr>
+                            <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                              {dateTime(a.created_at)}
+                            </td>
+                            <td>
+                              <div className="cell-main">{actors?.get?.(a.actor_id) ?? a.actor_name ?? shortId(a.actor_id)}</div>
+                              <div className="cell-sub">{titleCase(a.actor_type ?? '')}</div>
+                            </td>
+                            <td>
+                              <span className="tag">{a.action}</span>{' '}
+                              <span className="muted small">
+                                {a.entity_name ?? (a.entity_id ? `${a.entity_type ?? ''} ${shortId(a.entity_id)}` : '')}
+                              </span>
+                            </td>
+                            {showTenant && !tenantId && <td>{tenants?.get?.(a.tenant_id) ?? a.tenant_name ?? shortId(a.tenant_id)}</td>}
+                            <td className="actions">
+                              <Button size="sm" variant="ghost" onClick={() => setOpen(open === a.id ? null : a.id)}>
+                                {open === a.id ? 'Hide' : 'Details'}
+                              </Button>
+                            </td>
+                          </tr>
+                          {open === a.id && (
+                            <tr>
+                              <td colSpan={5}>
+                                <dl className="kv" style={{ gridTemplateColumns: '120px 1fr', rowGap: 6, margin: '4px 0' }}>
+                                  <dt>Request</dt>
+                                  <dd className="mono small">
+                                    {d.method} {d.route} → {d.status}
+                                  </dd>
+                                  <dt>Area</dt>
+                                  <dd>{titleCase(a.service ?? '')}</dd>
+                                  <dt>From</dt>
+                                  <dd className="mono small">{d.ip ?? '—'}</dd>
+                                  <dt>Item</dt>
+                                  <dd className="mono small">
+                                    {a.entity_type} {a.entity_id}
+                                  </dd>
+                                </dl>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -664,21 +768,22 @@ export function VoicesPage() {
 
 export function ExportsPage() {
   const toast = useToast();
-  const [pollJobs, setPollJobs] = useState(0);
-  const jobs = useListExportsQuery(undefined, { pollingInterval: pollJobs });
-  useEffect(() => setPollJobs(jobs.data?.some((j) => j.status === 'queued') ? 3000 : 0), [jobs.data]);
+  const jobs = useListExportsQuery();
   const [createExport] = useCreateExportMutation();
-  const reports = useSection(useListScheduledReportsQuery(), usePutScheduledReportsMutation(), (v) => v.map(({ id: _id, ...r }) => r));
+  const reports = useSection(useListScheduledReportsQuery(), usePutScheduledReportsMutation());
   return (
     <div className="stack">
       <div className="card">
         <div className="card-head">
           <div>
             <h2>Exports</h2>
-            <div className="card-sub">CSV downloads of calls, contacts, campaign results and analytics.</div>
+            <div className="card-sub">CSV downloads of your calls and daily figures for the last 30 days. Each file is ready to download for 24 hours.</div>
           </div>
           <div className="row">
-            {['calls', 'contacts', 'campaign_results'].map((k) => (
+            {[
+              ['calls', 'Calls'],
+              ['daily_summary', 'Daily figures'],
+            ].map(([k, label]) => (
               <Button
                 key={k}
                 size="sm"
@@ -686,10 +791,11 @@ export function ExportsPage() {
                 onClick={() =>
                   createExport({ kind: k })
                     .unwrap()
+                    .then(() => toast('Export ready'))
                     .catch((e) => toast(errMsg(e), 'error'))
                 }
               >
-                {titleCase(k)}
+                {label}
               </Button>
             ))}
           </div>
@@ -702,20 +808,29 @@ export function ExportsPage() {
                   <tbody>
                     {js.map((j) => (
                       <tr key={j.id}>
-                        <td className="cell-main">{titleCase(j.kind)}</td>
+                        <td className="cell-main">{j.kind === 'daily_summary' ? 'Daily figures' : titleCase(j.kind)}</td>
                         <td className="muted">{dateTime(j.created_at)}</td>
                         <td>
                           <StatusBadge
                             status={j.status === 'ready' ? 'active' : j.status === 'failed' ? 'failed' : 'pending'}
                             label={j.status === 'queued' ? 'Preparing…' : titleCase(j.status)}
                           />
+                          {j.row_count != null && <div className="cell-sub">{j.row_count} rows</div>}
                         </td>
                         <td className="muted">{j.expires_at ? `expires ${dateTime(j.expires_at)}` : ''}</td>
                         <td className="actions">
-                          {j.status === 'ready' && j.download_url && (
-                            <a className="btn sm" href={j.download_url}>
-                              <Download size={15} /> Download
-                            </a>
+                          {j.status === 'ready' && (
+                            <Button
+                              size="sm"
+                              icon={<Download size={15} />}
+                              onClick={() =>
+                                downloadAuthed({ service: 'analytics', url: `/customer/exports/${j.id}/download`, filename: `${j.kind}-${j.created_at.slice(0, 10)}.csv` }).catch((e) =>
+                                  toast(errMsg(e), 'error'),
+                                )
+                              }
+                            >
+                              Download
+                            </Button>
                           )}
                         </td>
                       </tr>
@@ -729,13 +844,13 @@ export function ExportsPage() {
           }
         </Async>
       </div>
-      <SectionCard title="Scheduled reports" description="Analytics views emailed on a schedule. Create one from Analytics → Email report." section={reports}>
+      <SectionCard title="Scheduled reports" description="Reports emailed on a schedule. Create one from Analytics → Email report. They are saved now and sent once an email provider is connected." section={reports}>
         {(rs, _p, set) =>
           rs.length ? (
             <>
               {rs.map((r, i) => (
                 <div key={r.id ?? i} className="row wrap" style={{ gap: 10 }}>
-                  <Toggle checked={r.is_enabled} onChange={(v) => set(rs.map((x, j) => (j === i ? { ...x, is_enabled: v } : x)))} label="" />
+                  <Toggle checked={r.enabled} onChange={(v) => set(rs.map((x, j) => (j === i ? { ...x, enabled: v } : x)))} label="" />
                   <b style={{ minWidth: 160 }}>{r.name}</b>
                   <Select
                     style={{ width: 130 }}
@@ -745,6 +860,8 @@ export function ExportsPage() {
                   />
                   <span className="muted small" style={{ flex: 1 }}>
                     to {r.recipients.join(', ')}
+                    {r.next_run_at ? ` · next ${dateTime(r.next_run_at)}` : ''}
+                    {r.delivery === 'email_not_connected' ? ' · email delivery isn’t connected yet' : ''}
                   </span>
                   <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => set(rs.filter((_, j) => j !== i))} />
                 </div>

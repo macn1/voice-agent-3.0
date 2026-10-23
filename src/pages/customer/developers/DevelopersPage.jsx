@@ -19,7 +19,6 @@ import {
   PhoneOutgoing,
   Play,
   Plus,
-  RefreshCw,
   Send,
   Share2,
   Terminal,
@@ -33,6 +32,7 @@ import {
   useCreateWebhookMutation,
   useDeleteWebhookMutation,
   useListWebhookDeliveriesQuery,
+  useListWebhookEventsQuery,
   useListWebhooksQuery,
   useTestWebhookMutation,
   useUpdateWebhookMutation,
@@ -53,7 +53,7 @@ import {
   StatusBadge,
   useToast,
 } from '../../../components/ui';
-import { CopyField, Drawer } from '../../../components/forms';
+import { CopyField, Drawer, Select } from '../../../components/forms';
 import { ClayIcon } from '../../../components/PixelHero';
 import { PREFIX } from '../../../store/api/services';
 
@@ -206,7 +206,12 @@ function DeployLanding() {
   );
 }
 
-const SCOPES = ['calls:write', 'calls:read', 'contacts:write', 'contacts:read', 'campaigns:write', 'analytics:read'];
+const EXPIRY = [
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: '365', label: '1 year' },
+  { value: '', label: 'Never' },
+];
 
 function KeysTab() {
   const toast = useToast();
@@ -215,7 +220,7 @@ function KeysTab() {
   const [revokeKey] = useRevokeApiKeyMutation();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
-  const [scopes, setScopes] = useState(['calls:write', 'calls:read']);
+  const [expiry, setExpiry] = useState('365');
   const [created, setCreated] = useState(null);
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -256,7 +261,8 @@ function KeysTab() {
                   <tr>
                     <th>Name</th>
                     <th>Key</th>
-                    <th>Scopes</th>
+                    <th>Access</th>
+                    <th>Expires</th>
                     <th>Last used</th>
                     <th>Created</th>
                     <th />
@@ -268,16 +274,11 @@ function KeysTab() {
                       <td className="cell-main">
                         {k.name} {k.revoked_at && <Badge tone="red">Revoked</Badge>}
                       </td>
-                      <td className="mono">{k.key_prefix}…</td>
-                      <td>
-                        <div className="tag-list">
-                          {k.scopes.map((s) => (
-                            <span key={s} className="tag">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
+                      <td className="mono">{k.prefix ?? k.key_prefix}…</td>
+                      <td className="muted small" title={(k.permissions ?? []).join(', ')}>
+                        {(k.permissions ?? []).length} permissions
                       </td>
+                      <td className="muted">{k.expires_at ? dateTime(k.expires_at) : 'Never'}</td>
                       <td className="muted">{k.last_used_at ? dateTime(k.last_used_at) : 'Never'}</td>
                       <td className="muted">{dateTime(k.created_at)}</td>
                       <td className="actions">
@@ -307,11 +308,11 @@ function KeysTab() {
             <Button
               variant="primary"
               loading={busy}
-              disabled={!name.trim() || !scopes.length}
+              disabled={!name.trim()}
               onClick={async () => {
                 setBusy(true);
                 try {
-                  setCreated(await createKey({ name: name.trim(), scopes }).unwrap());
+                  setCreated(await createKey({ name: name.trim(), ...(expiry ? { expires_in_days: Number(expiry) } : {}) }).unwrap());
                   setCreating(false);
                 } catch (e) {
                   toast(errMsg(e), 'error');
@@ -329,21 +330,9 @@ function KeysTab() {
           <Field label="Name">
             <Input autoFocus value={name} placeholder="CRM sync" onChange={(e) => setName(e.target.value)} />
           </Field>
-          <div className="field">
-            <span className="field-label">Scopes</span>
-            <div className="perm-grid">
-              {SCOPES.map((s) => (
-                <label key={s} className="check mono text-small">
-                  <input
-                    type="checkbox"
-                    checked={scopes.includes(s)}
-                    onChange={(e) => setScopes(e.target.checked ? [...scopes, s] : scopes.filter((x) => x !== s))}
-                  />
-                  {s}
-                </label>
-              ))}
-            </div>
-          </div>
+          <Field label="Expires after" hint="The key can use whatever you can, except managing people, keys, sub-accounts and billing.">
+            <Select value={expiry} options={EXPIRY} onChange={(e) => setExpiry(e.target.value)} />
+          </Field>
         </div>
       </Modal>
       <Modal
@@ -357,7 +346,14 @@ function KeysTab() {
           </Button>
         }
       >
-        {created?.secret && <CopyField value={created.secret} />}
+        {created?.key && (
+          <div className="stack">
+            <CopyField value={created.key} />
+            <p className="muted small" style={{ margin: 0 }}>
+              Exchange it for a short-lived token with <span className="mono">POST /auth/api/v1/auth/api-key/token</span> and the body <span className="mono">{`{"api_key": "…"}`}</span>, then use that token as a Bearer token on any service.
+            </p>
+          </div>
+        )}
       </Modal>
       <ConfirmDialog
         open={!!revoking}
@@ -425,7 +421,8 @@ function WebhooksTab() {
                         </div>
                       </td>
                       <td>
-                        <StatusBadge status={w.status === 'failing' ? 'failed' : w.status === 'paused' ? 'pending' : 'active'} label={titleCase(w.status)} />
+                        <StatusBadge status={w.status === 'disabled' ? 'pending' : w.fail_count > 0 ? 'failed' : 'active'} label={w.status === 'disabled' ? 'Paused' : w.fail_count > 0 ? `Failing (${w.fail_count})` : 'Active'} />
+                        {w.description && <div className="cell-sub">{w.description}</div>}
                       </td>
                       <td className="muted">{dateTime(w.last_delivery_at)}</td>
                       <td className="actions">
@@ -435,10 +432,10 @@ function WebhooksTab() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          icon={w.status === 'paused' ? <Play /> : <Pause />}
-                          title={w.status === 'paused' ? 'Resume' : 'Pause'}
+                          icon={w.status === 'disabled' ? <Play /> : <Pause />}
+                          title={w.status === 'disabled' ? 'Resume' : 'Pause'}
                           onClick={() =>
-                            updateWebhook({ id: w.id, status: w.status === 'paused' ? 'active' : 'paused' })
+                            updateWebhook({ id: w.id, status: w.status === 'disabled' ? 'active' : 'disabled' })
                               .unwrap()
                               .catch((e) => toast(errMsg(e), 'error'))
                           }
@@ -471,7 +468,7 @@ function WebhooksTab() {
         open={!!secret}
         onClose={() => setSecret(null)}
         title="Signing secret"
-        description="Use it to verify our signature header. It's shown once — regenerate it from Edit if you lose it."
+        description="Use it to verify the X-Aurlynn-Signature header (t=<unix>,v1=<HMAC-SHA256 of 't.body'>). It's shown once, so copy it now."
         footer={
           <Button variant="primary" onClick={() => setSecret(null)}>
             Done
@@ -497,18 +494,17 @@ function WebhooksTab() {
 }
 
 function WebhookEditor({ value, onClose, onSaved }) {
-  const toast = useToast();
   const [createWebhook] = useCreateWebhookMutation();
   const [updateWebhook] = useUpdateWebhookMutation();
   const [w, setW] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [newSecret, setNewSecret] = useState(null);
+  const eventsQ = useListWebhookEventsQuery();
+  const events = eventsQ.data?.length ? eventsQ.data : EVENTS.map((key) => ({ key }));
   useEffect(() => {
     if (value) {
       setW(value);
       setError(null);
-      setNewSecret(null);
     }
   }, [value]);
   return (
@@ -523,14 +519,14 @@ function WebhookEditor({ value, onClose, onSaved }) {
             variant="primary"
             loading={busy}
             onClick={async () => {
-              if (!/^https:\/\//.test(w.url ?? '')) return setError('The URL must start with https://');
+              if (!/^https?:\/\/.+\..+/.test(w.url ?? '')) return setError('Enter a public http(s) address, e.g. https://hooks.example.com/voice');
               if (!w.events?.length) return setError('Pick at least one event');
               setBusy(true);
               setError(null);
               try {
                 const saved = value?.id
-                  ? await updateWebhook({ id: value.id, url: w.url, events: w.events }).unwrap()
-                  : await createWebhook({ url: w.url, events: w.events }).unwrap();
+                  ? await updateWebhook({ id: value.id, url: w.url, events: w.events, description: w.description ?? '' }).unwrap()
+                  : await createWebhook({ url: w.url, events: w.events, ...(w.description ? { description: w.description } : {}) }).unwrap();
                 onSaved(saved, !value?.id);
                 onClose();
               } catch (e) {
@@ -553,8 +549,8 @@ function WebhookEditor({ value, onClose, onSaved }) {
         <div className="field">
           <span className="field-label">Events</span>
           <div className="perm-grid">
-            {EVENTS.map((e) => (
-              <label key={e} className="check mono text-small">
+            {events.map(({ key: e, description }) => (
+              <label key={e} className="check mono text-small" title={description}>
                 <input
                   type="checkbox"
                   checked={(w.events ?? []).includes(e)}
@@ -570,31 +566,9 @@ function WebhookEditor({ value, onClose, onSaved }) {
             ))}
           </div>
         </div>
-        {value?.id && (
-          <div className="field">
-            <span className="field-label">Signing secret</span>
-            {newSecret ? (
-              <CopyField value={newSecret} />
-            ) : (
-              <div>
-                <Button
-                  size="sm"
-                  icon={<RefreshCw />}
-                  onClick={async () => {
-                    try {
-                      const r = await updateWebhook({ id: value.id, regenerate_secret: true }).unwrap();
-                      setNewSecret(r.secret ?? '');
-                    } catch (e) {
-                      toast(errMsg(e), 'error');
-                    }
-                  }}
-                >
-                  Regenerate secret
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+        <Field label="Description" hint="Optional">
+          <Input value={w.description ?? ''} onChange={(e) => setW({ ...w, description: e.target.value })} placeholder="Our CRM bridge" />
+        </Field>
       </div>
     </Modal>
   );
@@ -656,9 +630,13 @@ function DeliveriesDrawer({ endpoint, onClose }) {
       </Async>
       {open && (
         <div className="stack" style={{ marginTop: 16 }}>
-          <div className="field-label">Payload</div>
-          <pre className="code">{JSON.stringify(open.payload, null, 2)}</pre>
-          <div className="field-label">Response</div>
+          {open.payload !== undefined && (
+            <>
+              <div className="field-label">Payload</div>
+              <pre className="code">{JSON.stringify(open.payload, null, 2)}</pre>
+            </>
+          )}
+          <div className="field-label">Response{open.response_code ? ` (${open.response_code})` : ''}</div>
           <pre className="code">{open.response_body ?? '—'}</pre>
         </div>
       )}
@@ -677,7 +655,7 @@ function Quickstart() {
   -H "Content-Type: application/json" \\
   -d '{
     "agent_id": "AGENT_ID",
-    "to": "+919876543210",
+    "to_number": "+919876543210",
     "variables": { "customer_name": "Priya", "amount_due": "4500" }
   }'`}</pre>
       </div>

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Ban, Copy, Download, History, Pause, Play, Plus, RotateCw, Send, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Ban, Copy, Download, History, Pause, Play, Plus, RotateCw, Send, Trash2, Upload } from 'lucide-react';
 import {
   useCampaignActionMutation,
   useCreateCampaignMutation,
@@ -10,22 +10,21 @@ import {
   useGetCampaignSettingsQuery,
   useGetCampaignSummaryQuery,
   useGetCampaignTimeseriesQuery,
-  useGetCampaignVariantsQuery,
   useLazyGetCampaignEstimateQuery,
-  useLazyGetCampaignResultsQuery,
   useListCampaignContactsQuery,
+  useListCampaignsQuery,
   useListContactAttemptsQuery,
   useListContactListsQuery,
   usePutCampaignSettingsMutation,
-  usePutCampaignVariantsMutation,
   useRemoveCampaignContactMutation,
   useRetryCampaignContactMutation,
   useUpdateCampaignMutation,
   useUploadCampaignContactsMutation,
   useValidateCampaignContactsMutation,
 } from '../../../store/api/callsApi';
+import { downloadAuthed } from '../../../store/api/baseQuery';
 import { useGetAgentSectionQuery } from '../../../store/api/flowApi';
-import { dateTime, number, titleCase } from '../../../lib/format';
+import { dateTime, number, percent, titleCase } from '../../../lib/format';
 import {
   Async,
   Badge,
@@ -40,41 +39,140 @@ import {
   SegmentTabs,
   Skeleton,
   StatusBadge,
+  Toggle,
   useToast,
 } from '../../../components/ui';
-import { downloadText, Drawer, parseCsv, readFileText, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
+import { Drawer, parseCsv, readFileText, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
 import { HBars, Stat, TimeChart } from '../../../components/charts';
 import { PixelHero } from '../../../components/PixelHero';
 import { useAgentOptions, useNumberOptions } from '../shared';
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
+/** Why a campaign isn't dialling right now (waiting_reason) and what happens next. */
+const WAITING_COPY = {
+  plan_limit_reached: "Your plan doesn't allow calls right now (no plan, or minutes and wallet used up). The campaign continues on its own once calls are allowed again.",
+  outside_calling_hours: 'Outside calling hours — it continues when the next calling window opens.',
+  waiting_for_retries: 'Waiting for the retry delay before trying the remaining numbers again.',
+};
+const waitingText = (r) => WAITING_COPY[r] ?? titleCase(r);
+
+const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'canceled'];
+const statusTone = (s) => (s === 'running' ? 'active' : s === 'canceled' ? 'cancelled' : s);
+
 /** P-20 Campaigns list (CALL-03). */
 export function CampaignsPage() {
-  return <PixelHero icon={Send} motion="fly" warm title="Reach thousands of customers by phone" description="Create an agent to launch your first campaign." />;
+  const navigate = useNavigate();
+  const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const { agents } = useAgentOptions();
+  const list = useListCampaignsQuery({ status: status || undefined, q: q.trim() || undefined, limit: 100 }, { pollingInterval: 15000 });
+  const items = list.data?.items ?? [];
+  const nameOf = (id) => agents.find((a) => a.id === id)?.name ?? '—';
+
+  if (list.isSuccess && !items.length && !status && !q) {
+    return (
+      <PixelHero
+        icon={Send}
+        motion="fly"
+        warm
+        title="Reach thousands of customers by phone"
+        description={agents.length ? 'Upload your numbers, pick an agent and let it make the calls.' : 'Create an agent to launch your first campaign.'}
+        actions={
+          agents.length ? (
+            <Link to="/campaigns/new" className="btn primary">
+              <Plus /> New campaign
+            </Link>
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Deploy"
+        title="Outbound campaigns"
+        description="Call a list of numbers with an agent, with calling hours, pacing and retries."
+        actions={
+          <Link to="/campaigns/new" className="btn primary">
+            <Plus /> New campaign
+          </Link>
+        }
+      />
+      <div className="card">
+        <div className="card-head">
+          <div className="filters">
+            <Input placeholder="Search campaigns" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Select value={status} options={CAMPAIGN_STATUSES.map((s) => ({ value: s, label: titleCase(s) }))} placeholder="All statuses" onChange={(e) => setStatus(e.target.value)} />
+          </div>
+        </div>
+        <Async state={list}>
+          {() =>
+            items.length ? (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Campaign</th>
+                      <th>Status</th>
+                      <th>Progress</th>
+                      <th className="num">Numbers</th>
+                      <th className="num">Successful</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((c) => (
+                      <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
+                        <td>
+                          <div className="cell-main">{c.name}</div>
+                          <div className="cell-sub">
+                            {nameOf(c.agent_id)} · from {c.from_number ?? '—'}
+                          </div>
+                        </td>
+                        <td>
+                          <StatusBadge status={statusTone(c.status)} label={titleCase(c.status)} />
+                          {c.waiting_reason && <div className="cell-sub">{titleCase(c.waiting_reason)}</div>}
+                        </td>
+                        <td style={{ minWidth: 140 }}>
+                          <div className="bar">
+                            <span style={{ width: `${Math.min(100, c.stats?.progress_percent ?? 0)}%` }} />
+                          </div>
+                          <div className="cell-sub">{Math.round(c.stats?.progress_percent ?? 0)}%</div>
+                        </td>
+                        <td className="num">{number(c.stats?.total)}</td>
+                        <td className="num">{number(c.stats?.successful)}</td>
+                        <td className="muted">{dateTime(c.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState title="No campaigns match" />
+            )
+          }
+        </Async>
+      </div>
+    </>
+  );
 }
 
 /* Wizard (P-21) ------------------------------------------------------- */
 
+// Settings use the API's own shape. calling_windows null = follow the company's calling rules.
 const DEFAULT_SETTINGS = {
-  calling_windows: {
-    days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
-    from: '10:00',
-    to: '19:00',
-    timezone_mode: 'contact',
-    timezone: 'Asia/Kolkata',
-  },
+  calling_windows: null,
   max_concurrent: 3,
-  calls_per_minute: 10,
-  retry_rules: {
-    no_answer: { attempts: 2, gap_minutes: 120 },
-    busy: { attempts: 2, gap_minutes: 30 },
-    voicemail: { attempts: 1, gap_minutes: 240 },
-    failed: { attempts: 1, gap_minutes: 60 },
-  },
+  calls_per_minute: null,
   budget_minutes: null,
-  end_at: null,
+  retry_rules: { max_attempts: 2, retry_delay_minutes: 60, retry_on: ['no_answer', 'busy', 'voicemail', 'failed'] },
+  variable_mapping: {},
 };
+
+const NAME_COLUMN = /^(full[_ ]?name|name|contact[_ ]?name)$/i;
 
 export function CampaignWizard() {
   const navigate = useNavigate();
@@ -114,42 +212,39 @@ export function CampaignWizard() {
   const varsQ = useGetAgentSectionQuery({ id: basics.agent_id, section: 'variables' }, { skip: !basics.agent_id });
   const vars = basics.agent_id ? (varsQ.data ?? []).filter((x) => x.direction === 'input').map((x) => x.name) : [];
 
+  // The numbers as the API wants them (CSV columns other than phone / name become variables on the number).
+  const numbersInput = () =>
+    source === 'csv'
+      ? { rows: csv.rows, phone_column: phoneCol, name_column: csv.headers.find((h) => h !== phoneCol && NAME_COLUMN.test(h)) }
+      : { contact_list_id: listId };
+  // agent variable -> the column that feeds it
+  const variableMapping = () => Object.fromEntries(Object.entries(mapping).filter(([, v]) => v).map(([col, v]) => [v, col]));
+
   const next = async () => {
     setError(null);
     try {
       if (step === 0) {
-        if (!basics.name.trim() || !basics.agent_id || !basics.from_number_id) throw new Error('Fill in the name, agent and from-number');
+        if (!basics.name.trim() || !basics.agent_id) throw new Error('Fill in the name and agent');
+        if (!numberOptions.length) throw new Error('Buy or connect a phone number first — campaigns call from one of your numbers');
         setStep(1);
       } else if (step === 1) {
+        if (source === 'csv' && (!csv || !phoneCol)) throw new Error('Upload a CSV and pick the phone column');
+        if (source === 'list' && !listId) throw new Error('Pick a contact list');
         setBusy(true);
         const c =
           campaign ??
           (await createCampaign({
-            ...basics,
             name: basics.name.trim(),
-            settings,
-            variable_mapping: mapping,
+            agent_id: basics.agent_id,
+            ...(basics.from_number_id ? { from_number_id: basics.from_number_id } : {}),
+            settings: { ...settings, variable_mapping: variableMapping() },
           }).unwrap());
         setCampaign(c);
-        if (source === 'csv') {
-          if (!csv || !phoneCol) throw new Error('Upload a CSV and pick the phone column');
-          await uploadContacts({
-            id: c.id,
-            rows: csv.rows,
-            phone_column: phoneCol,
-            mapping,
-          }).unwrap();
-        } else {
-          if (!listId) throw new Error('Pick a contact list');
-          await uploadContacts({
-            id: c.id,
-            rows: [],
-            phone_column: 'phone',
-            mapping,
-            contact_list_id: listId,
-          }).unwrap();
-        }
-        setReport(await validateContacts(c.id).unwrap());
+        // Dry run first so the next step can say what will and won't be called.
+        const dry = await validateContacts({ id: c.id, ...numbersInput() }).unwrap();
+        if (!dry.valid && !dry.will_add) throw new Error('None of those numbers can be called — check the phone column');
+        await uploadContacts({ id: c.id, ...numbersInput() }).unwrap();
+        setReport(dry);
         setStep(2);
       } else if (step === 2) {
         setBusy(true);
@@ -174,16 +269,11 @@ export function CampaignWizard() {
     try {
       if (!now) {
         if (!startAt) throw new Error('Pick a start time');
-        await updateCampaign({
-          id: campaign.id,
-          start_at: new Date(startAt).toISOString(),
-          status: 'scheduled',
-        }).unwrap();
-        toast('Campaign scheduled');
-      } else {
-        await campaignAction({ id: campaign.id, action: 'start' }).unwrap();
-        toast('Campaign started');
+        // A start time in the future makes Start schedule it instead of dialling now.
+        await updateCampaign({ id: campaign.id, start_at: new Date(startAt).toISOString() }).unwrap();
       }
+      await campaignAction({ id: campaign.id, action: 'start' }).unwrap();
+      toast(now ? 'Campaign started' : 'Campaign scheduled');
       navigate(`/campaigns/${campaign.id}`);
     } catch (e) {
       setError(errMsg(e));
@@ -225,14 +315,23 @@ export function CampaignWizard() {
                 onChange={(e) => setBasics({ ...basics, agent_id: e.target.value })}
               />
             </Field>
-            <Field label="Call from">
+            <Field label="Call from" hint="Optional — defaults to your first number">
               <Select
                 value={basics.from_number_id}
                 options={numberOptions}
-                placeholder="Choose a number"
+                placeholder="Default"
                 onChange={(e) => setBasics({ ...basics, from_number_id: e.target.value })}
               />
             </Field>
+            {!numberOptions.length && (
+              <div className="banner warn full" style={{ margin: 0 }}>
+                <AlertTriangle />
+                <span className="grow">You have no phone number yet. Campaigns call from one of your numbers.</span>
+                <Link to="/numbers" className="btn sm">
+                  Get a number
+                </Link>
+              </div>
+            )}
           </div>
         )}
         {step === 1 && (
@@ -252,7 +351,7 @@ export function CampaignWizard() {
                   value={listId}
                   options={(lists.data ?? []).map((l) => ({
                     value: l.id,
-                    label: `${l.name} (${l.count})`,
+                    label: `${l.name} (${l.member_count ?? l.count ?? 0})`,
                   }))}
                   placeholder="Choose"
                   onChange={(e) => setListId(e.target.value)}
@@ -276,7 +375,7 @@ export function CampaignWizard() {
                     setMapping(
                       Object.fromEntries(
                         parsed.headers
-                          .filter((h) => !/phone|mobile/i.test(h))
+                          .filter((h) => !/phone|mobile/i.test(h) && !NAME_COLUMN.test(h))
                           .map((h) => [h, vars.find((v) => v.toLowerCase() === h.toLowerCase().replace(/\W+/g, '_')) ?? '']),
                       ),
                     );
@@ -308,7 +407,7 @@ export function CampaignWizard() {
                     <div className="field">
                       <span className="field-label">Map columns to call variables</span>
                       {csv.headers
-                        .filter((h) => h !== phoneCol)
+                        .filter((h) => h !== phoneCol && !NAME_COLUMN.test(h))
                         .map((h) => (
                           <div key={h} className="mapping-row">
                             <span className="mono">{h}</span>
@@ -322,6 +421,9 @@ export function CampaignWizard() {
                             <span />
                           </div>
                         ))}
+                      <p className="muted small" style={{ marginBottom: 0 }}>
+                        Every column is saved on the number; mapped ones fill the agent's call variables.
+                      </p>
                     </div>
                     <div className="table-wrap card">
                       <table className="table">
@@ -356,21 +458,22 @@ export function CampaignWizard() {
             {report && (
               <div className="banner neutral" style={{ margin: 0 }}>
                 <span className="grow">
-                  <b>{number(report.valid)}</b> of {number(report.total)} contacts will be called · removed: {report.invalid} invalid, {report.duplicate}{' '}
-                  duplicate, {report.dnd} on do-not-call
+                  <b>{number(report.will_add ?? report.valid)}</b> of {number(report.total_rows)} numbers will be called · skipped: {number(report.invalid)} invalid,{' '}
+                  {number((report.duplicates_in_file ?? 0) + (report.already_in_campaign ?? 0))} duplicate, {number(report.do_not_call)} on do-not-call
                 </span>
               </div>
             )}
-            {report?.samples.length ? (
+            {report?.errors?.length ? (
               <details>
                 <summary className="small" style={{ cursor: 'pointer' }}>
-                  See what was removed
+                  See what was skipped
                 </summary>
                 <div className="table-wrap">
                   <table className="table" style={{ marginTop: 8 }}>
                     <tbody>
-                      {report.samples.map((s, i) => (
+                      {report.errors.slice(0, 50).map((s, i) => (
                         <tr key={i}>
+                          <td className="muted">Row {s.row}</td>
                           <td className="mono">{s.phone}</td>
                           <td className="muted">{titleCase(s.reason)}</td>
                         </tr>
@@ -386,18 +489,24 @@ export function CampaignWizard() {
         {step === 3 && (
           <>
             <div className="grid-3">
-              <Stat label="Contacts to call" value={number(estimate?.contacts ?? report?.valid ?? 0)} />
+              <Stat label="Numbers to call" value={number(estimate?.pending_contacts ?? report?.will_add ?? 0)} />
               <Stat
                 label="Estimated minutes"
-                value={estimate ? number(estimate.est_minutes) : '—'}
-                hint={estimate ? `about ${number(estimate.est_hours, 1)} hours of calling` : undefined}
+                value={estimate ? number(estimate.estimated_minutes) : '—'}
+                hint={estimate?.estimated_finish_at ? `finishes about ${dateTime(estimate.estimated_finish_at)}` : undefined}
               />
               <Stat
                 label="Minutes left on plan"
-                value={estimate?.plan_minutes_left != null ? number(estimate.plan_minutes_left) : '—'}
-                hint={estimate && !estimate.fits_plan ? 'Extra minutes will be billed as overage' : undefined}
+                value={estimate?.plan?.remaining_minutes != null ? number(estimate.plan.remaining_minutes) : '—'}
+                hint={estimate?.plan && !estimate.plan.fits ? `${number(estimate.plan.overage_minutes)} extra minutes will be billed as overage` : undefined}
               />
             </div>
+            {estimate?.within_budget === false && (
+              <div className="banner warn" style={{ margin: 0 }}>
+                <AlertTriangle />
+                <span className="grow">The estimate is above your minutes budget, so the campaign will stop when the budget is used.</span>
+              </div>
+            )}
             <div className="row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
               <Button variant="primary" icon={<Play />} loading={busy} onClick={() => launch(true)}>
                 Start now
@@ -427,74 +536,61 @@ export function CampaignWizard() {
   );
 }
 
+const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney', 'UTC'];
+const RETRY_REASONS = ['no_answer', 'busy', 'voicemail', 'failed'];
+// The first window is edited; any further windows are kept as they are.
+const EVERY_DAY = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+// <input type="time"> can't hold 24:00.
+const toInput = (t) => (t === '24:00' ? '23:59' : t);
+const fromInput = (t) => (t === '23:59' ? '24:00' : t);
+
 export function ScheduleForm({ value: s, onChange }) {
-  const w = s.calling_windows;
+  const cw = s.calling_windows;
+  const w = cw?.windows?.[0] ?? { days: EVERY_DAY, start: '09:00', end: '21:00' };
+  const setWindow = (patch) => onChange({ ...s, calling_windows: { timezone: cw?.timezone ?? 'Asia/Kolkata', windows: [{ ...w, ...patch }, ...(cw?.windows?.slice(1) ?? [])] } });
+  const retry = s.retry_rules ?? DEFAULT_SETTINGS.retry_rules;
+  const setRetry = (patch) => onChange({ ...s, retry_rules: { ...retry, ...patch } });
   return (
     <div className="stack">
-      <div className="field">
-        <span className="field-label">Calling days</span>
-        <WeekdayPicker value={w.days} onChange={(days) => onChange({ ...s, calling_windows: { ...w, days } })} />
-      </div>
+      <Toggle
+        checked={!cw}
+        onChange={(v) => onChange({ ...s, calling_windows: v ? null : { timezone: 'Asia/Kolkata', windows: [{ days: EVERY_DAY, start: '09:00', end: '21:00' }] } })}
+        label="Follow my company's calling rules"
+        description="Use the hours set in Settings → Calling rules. Turn off to set hours for this campaign only."
+      />
+      {cw && (
+        <>
+          <div className="field">
+            <span className="field-label">Calling days</span>
+            <WeekdayPicker value={w.days} onChange={(days) => setWindow({ days })} />
+          </div>
+          <div className="form-grid">
+            <Field label="From">
+              <input type="time" className="input" value={toInput(w.start)} onChange={(e) => setWindow({ start: e.target.value })} />
+            </Field>
+            <Field label="To">
+              <input type="time" className="input" value={toInput(w.end)} onChange={(e) => setWindow({ end: fromInput(e.target.value) })} />
+            </Field>
+            <Field label="Time zone">
+              <Select
+                value={cw.timezone}
+                options={TIMEZONES.includes(cw.timezone) ? TIMEZONES : [cw.timezone, ...TIMEZONES]}
+                onChange={(e) => onChange({ ...s, calling_windows: { ...cw, timezone: e.target.value } })}
+              />
+            </Field>
+          </div>
+        </>
+      )}
       <div className="form-grid">
-        <Field label="From">
-          <input
-            type="time"
-            className="input"
-            value={w.from}
-            onChange={(e) =>
-              onChange({
-                ...s,
-                calling_windows: { ...w, from: e.target.value },
-              })
-            }
-          />
-        </Field>
-        <Field label="To">
-          <input type="time" className="input" value={w.to} onChange={(e) => onChange({ ...s, calling_windows: { ...w, to: e.target.value } })} />
-        </Field>
-        <Field label="Hours are in">
-          <Select
-            value={w.timezone_mode}
-            options={[
-              { value: 'contact', label: "Each contact's time zone" },
-              { value: 'fixed', label: 'One time zone' },
-            ]}
-            onChange={(e) =>
-              onChange({
-                ...s,
-                calling_windows: { ...w, timezone_mode: e.target.value },
-              })
-            }
-          />
-        </Field>
-        {w.timezone_mode === 'fixed' && (
-          <Field label="Time zone">
-            <Select
-              value={w.timezone}
-              options={['Asia/Kolkata', 'Asia/Dubai', 'Europe/London', 'America/New_York', 'UTC']}
-              onChange={(e) =>
-                onChange({
-                  ...s,
-                  calling_windows: { ...w, timezone: e.target.value },
-                })
-              }
-            />
-          </Field>
-        )}
-        <Field label="Calls at once">
-          <Input type="number" min={1} value={s.max_concurrent} onChange={(e) => onChange({ ...s, max_concurrent: Number(e.target.value) })} />
+        <Field label="Calls at once" hint="1–50">
+          <Input type="number" min={1} max={50} value={s.max_concurrent} onChange={(e) => onChange({ ...s, max_concurrent: Number(e.target.value) })} />
         </Field>
         <Field label="Calls per minute" hint="Empty = no limit">
           <Input
             type="number"
             min={1}
             value={s.calls_per_minute ?? ''}
-            onChange={(e) =>
-              onChange({
-                ...s,
-                calls_per_minute: e.target.value ? Number(e.target.value) : null,
-              })
-            }
+            onChange={(e) => onChange({ ...s, calls_per_minute: e.target.value ? Number(e.target.value) : null })}
           />
         </Field>
         <Field label="Stop after (minutes used)" hint="Budget — empty = no limit">
@@ -502,74 +598,33 @@ export function ScheduleForm({ value: s, onChange }) {
             type="number"
             min={1}
             value={s.budget_minutes ?? ''}
-            onChange={(e) =>
-              onChange({
-                ...s,
-                budget_minutes: e.target.value ? Number(e.target.value) : null,
-              })
-            }
-          />
-        </Field>
-        <Field label="End date" hint="Optional">
-          <input
-            type="date"
-            className="input"
-            value={s.end_at?.slice(0, 10) ?? ''}
-            onChange={(e) =>
-              onChange({
-                ...s,
-                end_at: e.target.value ? new Date(e.target.value).toISOString() : null,
-              })
-            }
+            onChange={(e) => onChange({ ...s, budget_minutes: e.target.value ? Number(e.target.value) : null })}
           />
         </Field>
       </div>
       <div className="field">
         <span className="field-label">Retries</span>
-        {Object.keys(s.retry_rules).map((k) => (
-          <div key={k} className="row wrap" style={{ gap: 10 }}>
-            <span style={{ width: 110 }}>{titleCase(k)}</span>
-            <Input
-              style={{ width: 90 }}
-              type="number"
-              min={0}
-              max={5}
-              value={s.retry_rules[k].attempts}
-              onChange={(e) =>
-                onChange({
-                  ...s,
-                  retry_rules: {
-                    ...s.retry_rules,
-                    [k]: {
-                      ...s.retry_rules[k],
-                      attempts: Number(e.target.value),
-                    },
-                  },
-                })
-              }
-            />
-            <span className="muted small">more tries, every</span>
-            <Input
-              style={{ width: 100 }}
-              type="number"
-              min={5}
-              value={s.retry_rules[k].gap_minutes}
-              onChange={(e) =>
-                onChange({
-                  ...s,
-                  retry_rules: {
-                    ...s.retry_rules,
-                    [k]: {
-                      ...s.retry_rules[k],
-                      gap_minutes: Number(e.target.value),
-                    },
-                  },
-                })
-              }
-            />
-            <span className="muted small">minutes</span>
-          </div>
-        ))}
+        <div className="form-grid">
+          <Field label="Tries per number" hint="1–10, including the first call">
+            <Input type="number" min={1} max={10} value={retry.max_attempts} onChange={(e) => setRetry({ max_attempts: Number(e.target.value) })} />
+          </Field>
+          <Field label="Wait between tries (minutes)">
+            <Input type="number" min={1} value={retry.retry_delay_minutes} onChange={(e) => setRetry({ retry_delay_minutes: Number(e.target.value) })} />
+          </Field>
+        </div>
+        <div className="row wrap" style={{ gap: 14, marginTop: 8 }}>
+          <span className="muted small">Try again when the call was</span>
+          {RETRY_REASONS.map((r) => (
+            <label key={r} className="check">
+              <input
+                type="checkbox"
+                checked={retry.retry_on?.includes(r)}
+                onChange={(e) => setRetry({ retry_on: e.target.checked ? [...(retry.retry_on ?? []), r] : (retry.retry_on ?? []).filter((x) => x !== r) })}
+              />
+              {titleCase(r)}
+            </label>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -583,11 +638,11 @@ export function CampaignDetailPage() {
   const navigate = useNavigate();
   const [poll, setPoll] = useState(0);
   const camp = useGetCampaignQuery(id, { pollingInterval: poll });
-  useEffect(() => setPoll(camp.data?.status === 'running' ? 6000 : 0), [camp.data?.status]);
+  useEffect(() => setPoll(['running', 'scheduled'].includes(camp.data?.status) ? 6000 : 0), [camp.data?.status]);
   const [campaignAction] = useCampaignActionMutation();
-  const [loadResults] = useLazyGetCampaignResultsQuery();
   const [tab, setTab] = useState('overview');
   const [cancelling, setCancelling] = useState(false);
+  const { agents } = useAgentOptions();
 
   const act = async (action, msg) => {
     try {
@@ -610,16 +665,17 @@ export function CampaignDetailPage() {
               <div>
                 <div className="row" style={{ gap: 10 }}>
                   <h1 className="text-detail-title">{c.name}</h1>
-                  <StatusBadge status={c.status === 'running' ? 'active' : c.status} label={titleCase(c.status)} />
+                  <StatusBadge status={statusTone(c.status)} label={titleCase(c.status)} />
                 </div>
                 <p className="muted" style={{ marginTop: 6 }}>
-                  {c.agent_name} · from {c.from_number ?? '—'} · {c.start_at ? `started ${dateTime(c.start_at)}` : 'not started'}
+                  {agents.find((a) => a.id === c.agent_id)?.name ?? 'Agent'} · from {c.from_number ?? '—'} ·{' '}
+                  {c.started_at ? `started ${dateTime(c.started_at)}` : c.start_at ? `starts ${dateTime(c.start_at)}` : 'not started'}
                 </p>
               </div>
               <div className="row wrap">
                 {(c.status === 'draft' || c.status === 'scheduled') && (
-                  <Button variant="primary" icon={<Play />} onClick={() => act('start', 'Campaign started')}>
-                    Start
+                  <Button variant="primary" icon={<Play />} onClick={() => act('start', c.status === 'scheduled' ? 'Campaign scheduled' : 'Campaign started')}>
+                    {c.status === 'scheduled' ? 'Start now' : 'Start'}
                   </Button>
                 )}
                 {c.status === 'running' && (
@@ -637,6 +693,7 @@ export function CampaignDetailPage() {
                   onClick={async () => {
                     try {
                       const d = await campaignAction({ id, action: 'duplicate' }).unwrap();
+                      toast('Copied as a draft');
                       navigate(`/campaigns/${d.id}`);
                     } catch (e) {
                       toast(errMsg(e), 'error');
@@ -647,13 +704,14 @@ export function CampaignDetailPage() {
                 </Button>
                 <Button
                   icon={<Download />}
-                  onClick={async () => {
-                    try {
-                      downloadText(`${c.name.replace(/\W+/g, '-')}-results.csv`, (await loadResults(id).unwrap()).csv);
-                    } catch (e) {
-                      toast(errMsg(e), 'error');
-                    }
-                  }}
+                  onClick={() =>
+                    downloadAuthed({
+                      service: 'outbound',
+                      url: `/customer/campaigns/${id}/results`,
+                      params: { format: 'csv' },
+                      filename: `${c.name.replace(/\W+/g, '-')}-results.csv`,
+                    }).catch((e) => toast(errMsg(e), 'error'))
+                  }
                 >
                   Results
                 </Button>
@@ -664,12 +722,29 @@ export function CampaignDetailPage() {
                 )}
               </div>
             </header>
+            {c.waiting_reason && ['running', 'scheduled'].includes(c.status) && (
+              <div className={`banner ${c.waiting_reason === 'plan_limit_reached' ? 'warn' : 'info'}`}>
+                <AlertTriangle />
+                <span className="grow">
+                  <b>Waiting.</b> {waitingText(c.waiting_reason)}
+                  {c.next_window_at ? ` Next window: ${dateTime(c.next_window_at)}.` : ''}
+                </span>
+                {c.waiting_reason === 'plan_limit_reached' && (
+                  <Link to="/settings/plan" className="btn sm">
+                    Plan & credits
+                  </Link>
+                )}
+              </div>
+            )}
+            {c.end_reason && !['running', 'scheduled', 'draft', 'paused'].includes(c.status) && (
+              <p className="muted small">Ended: {titleCase(c.end_reason)}</p>
+            )}
             <SegmentTabs
               value={tab}
               onChange={setTab}
               items={[
                 { value: 'overview', label: 'Overview' },
-                { value: 'contacts', label: 'Contacts' },
+                { value: 'contacts', label: 'Numbers' },
                 { value: 'analytics', label: 'Analytics' },
                 { value: 'settings', label: 'Settings' },
               ]}
@@ -696,31 +771,32 @@ export function CampaignDetailPage() {
 }
 
 function Overview({ c }) {
-  const t = c.totals;
+  const t = c.stats ?? {};
   const rows = [
-    { label: 'Pending', value: t.pending },
+    { label: 'Waiting', value: t.pending },
     { label: 'Calling now', value: t.calling },
-    { label: 'Connected', value: t.connected },
     { label: 'Completed', value: t.completed },
-    { label: 'Failed / no answer', value: t.failed },
+    { label: 'Failed', value: t.failed },
     { label: 'Skipped', value: t.skipped },
   ];
   return (
     <div className="stack">
       <div className="grid-3">
-        <Stat label="Contacts" value={number(t.contacts)} />
-        <Stat label="Completed" value={number(t.completed)} hint={`${pct(t.completed, t.contacts)}% of contacts`} />
-        <Stat label="Successful" value={number(t.successful)} hint={`${pct(t.successful, t.completed)}% of completed calls`} />
+        <Stat label="Numbers" value={number(t.total)} hint={`${Math.round(t.progress_percent ?? 0)}% done`} />
+        <Stat label="Completed" value={number(t.completed)} hint={`${pct(t.completed, t.total)}% of numbers · ${number(t.attempts)} calls made`} />
+        <Stat label="Successful" value={number(t.successful)} hint={`${pct(t.successful, t.completed)}% of completed · ${number(t.minutes)} min used`} />
       </div>
       <div className="card card-pad">
         <div className="card-title" style={{ marginBottom: 14 }}>
           Live counts
         </div>
-        <HBars rows={rows} max={t.contacts || 1} />
+        <HBars rows={rows} max={t.total || 1} />
       </div>
     </div>
   );
 }
+
+const CONTACT_STATUSES = ['pending', 'calling', 'completed', 'failed', 'skipped', 'canceled'];
 
 function ContactsTab({ id }) {
   const toast = useToast();
@@ -738,7 +814,7 @@ function ContactsTab({ id }) {
         <div className="filters">
           <Select
             value={status}
-            options={['pending', 'calling', 'connected', 'completed', 'no_answer', 'busy', 'failed', 'skipped']}
+            options={CONTACT_STATUSES.map((s) => ({ value: s, label: titleCase(s) }))}
             placeholder="All statuses"
             onChange={(e) => {
               setStatus(e.target.value);
@@ -772,7 +848,7 @@ function ContactsTab({ id }) {
                         </td>
                         <td>
                           <StatusBadge
-                            status={ct.status === 'completed' ? 'active' : ct.status === 'skipped' ? 'cancelled' : ct.status}
+                            status={ct.status === 'completed' ? 'active' : ct.status === 'skipped' || ct.status === 'canceled' ? 'cancelled' : ct.status}
                             label={titleCase(ct.status)}
                           />
                           {ct.skip_reason && <div className="cell-sub">{titleCase(ct.skip_reason)}</div>}
@@ -784,7 +860,7 @@ function ContactsTab({ id }) {
                           <Button size="sm" variant="ghost" icon={<History />} onClick={() => setViewing(ct)}>
                             Attempts
                           </Button>
-                          {['no_answer', 'busy', 'failed'].includes(ct.status) && (
+                          {(ct.status === 'failed' || (ct.status === 'completed' && ct.is_success === false)) && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -792,13 +868,14 @@ function ContactsTab({ id }) {
                               onClick={() =>
                                 retryContact({ id, contactId: ct.id })
                                   .unwrap()
+                                  .then(() => toast('Queued to call again'))
                                   .catch((e) => toast(errMsg(e), 'error'))
                               }
                             >
                               Retry
                             </Button>
                           )}
-                          {ct.status === 'pending' && (
+                          {ct.status !== 'calling' && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -817,7 +894,7 @@ function ContactsTab({ id }) {
                 </table>
               </div>
             ) : (
-              <EmptyState title="No contacts" />
+              <EmptyState title="No numbers" />
             )}
             <Pager offset={offset} limit={50} count={p.items.length} total={p.total} onChange={setOffset} />
           </>
@@ -825,17 +902,21 @@ function ContactsTab({ id }) {
       </Async>
       <Drawer open={!!viewing} onClose={() => setViewing(null)} title={viewing?.name ?? viewing?.phone ?? ''} subtitle="Attempt history">
         <Async state={attempts}>
-          {(list) =>
-            list.length ? (
+          {(res) => {
+            const list = Array.isArray(res) ? res : (res?.items ?? []);
+            return list.length ? (
               <div className="stack">
-                {list.map((a) => (
-                  <div key={a.id} className="card" style={{ padding: 14 }}>
+                {list.map((a, i) => (
+                  <div key={a.id ?? i} className="card" style={{ padding: 14 }}>
                     <div className="row between">
-                      <b>Attempt {a.attempt_no}</b>
-                      <StatusBadge status={a.result === 'connected' ? 'active' : 'pending'} label={titleCase(a.result)} />
+                      <b>Attempt {a.attempt_no ?? a.attempt ?? i + 1}</b>
+                      <StatusBadge
+                        status={['connected', 'completed', 'answered'].includes(a.result ?? a.status) ? 'active' : 'pending'}
+                        label={titleCase(a.result ?? a.status ?? a.outcome ?? '')}
+                      />
                     </div>
                     <div className="muted small" style={{ marginTop: 4 }}>
-                      {dateTime(a.started_at)}
+                      {dateTime(a.started_at ?? a.created_at)}
                     </div>
                     {a.call_id && (
                       <Link to={`/calls/${a.call_id}`} className="small">
@@ -847,10 +928,10 @@ function ContactsTab({ id }) {
               </div>
             ) : (
               <EmptyState title="Not called yet" />
-            )
-          }
+            );
+          }}
         </Async>
-        {viewing && Object.keys(viewing.variables).length > 0 && (
+        {viewing && Object.keys(viewing.variables ?? {}).length > 0 && (
           <div className="card card-pad" style={{ marginTop: 16 }}>
             <div className="field-label" style={{ marginBottom: 8 }}>
               Variables
@@ -858,7 +939,7 @@ function ContactsTab({ id }) {
             {Object.entries(viewing.variables).map(([k, v]) => (
               <div key={k} className="row between small">
                 <span className="mono">{k}</span>
-                <span>{v}</span>
+                <span>{String(v)}</span>
               </div>
             ))}
           </div>
@@ -868,20 +949,29 @@ function ContactsTab({ id }) {
   );
 }
 
+/** Hourly points: label by local hour and chart whichever of these counts the API sends. */
+const HOURLY_SERIES = [
+  ['dialed', 'Dialed'],
+  ['calls', 'Calls'],
+  ['answered', 'Answered'],
+  ['answered_calls', 'Answered'],
+  ['successful', 'Successful'],
+  ['successful_calls', 'Successful'],
+];
+
 function AnalyticsTab({ id }) {
   const summary = useGetCampaignSummaryQuery(id);
   const funnel = useGetCampaignFunnelQuery(id);
   const outcomes = useGetCampaignOutcomesQuery(id);
   const ts = useGetCampaignTimeseriesQuery(id);
-  const variants = useGetCampaignVariantsQuery(id);
   return (
     <div className="stack">
       <Async state={summary} skeleton={<Skeleton h={100} />}>
         {(s) => (
           <div className="grid-3">
-            <Stat label="Connect rate" value={`${Math.round(s.connect_rate * 100)}%`} hint={`${number(s.connected)} of ${number(s.dialed)} dialed`} />
-            <Stat label="Success rate" value={`${Math.round(s.success_rate * 100)}%`} hint={`${number(s.successful)} successful`} />
-            <Stat label="Minutes used" value={number(s.minutes)} hint={`avg ${Math.round(s.avg_duration)}s per call`} />
+            <Stat label="Answer rate" value={percent(s.answer_rate)} hint={`${number(s.answered)} answered of ${number(s.dialed)} dialed`} />
+            <Stat label="Success rate" value={percent(s.success_rate)} hint={`${number(s.successful)} successful · ${percent(s.conversion_rate)} of all numbers`} />
+            <Stat label="Minutes used" value={number(s.total_minutes)} hint={`avg ${Math.round(s.avg_duration_seconds ?? 0)}s per call`} />
           </div>
         )}
       </Async>
@@ -890,7 +980,7 @@ function AnalyticsTab({ id }) {
           <div className="card-title" style={{ marginBottom: 14 }}>
             Funnel
           </div>
-          <Async state={funnel}>{(rows) => <HBars rows={rows.map((r) => ({ label: r.stage, value: r.count }))} />}</Async>
+          <Async state={funnel}>{(rows) => <HBars rows={rows.map((r) => ({ label: r.label ?? titleCase(r.key ?? r.stage ?? ''), value: r.count ?? r.calls ?? 0 }))} />}</Async>
         </div>
         <div className="card card-pad">
           <div className="card-title" style={{ marginBottom: 14 }}>
@@ -902,8 +992,8 @@ function AnalyticsTab({ id }) {
                 <HBars
                   color="var(--series-2)"
                   rows={rows.map((r) => ({
-                    label: titleCase(r.outcome),
-                    value: r.count,
+                    label: titleCase(r.outcome ?? r.key ?? ''),
+                    value: r.count ?? r.calls ?? 0,
                   }))}
                 />
               ) : (
@@ -915,119 +1005,36 @@ function AnalyticsTab({ id }) {
       </div>
       <div className="card card-pad">
         <div className="card-title" style={{ marginBottom: 14 }}>
-          Connect rate by hour
+          Calls by hour
         </div>
         <Async state={ts}>
-          {(rows) => (
-            <TimeChart
-              data={rows.map((r) => ({
-                ...r,
-                label: `${String(r.hour).padStart(2, '0')}:00`,
-              }))}
-              x="label"
-              series={[
-                { key: 'dialed', label: 'Dialed' },
-                { key: 'connected', label: 'Connected' },
-              ]}
-            />
-          )}
+          {(points) => {
+            const rows = points.map((r) => ({
+              ...r,
+              label: r.bucket ? new Date(r.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(r.hour ?? ''),
+            }));
+            const series = HOURLY_SERIES.filter(([k]) => rows.some((r) => r[k] != null)).filter(([, l], i, a) => a.findIndex(([, x]) => x === l) === i);
+            return rows.length && series.length ? (
+              <TimeChart data={rows} x="label" series={series.map(([key, label]) => ({ key, label }))} />
+            ) : (
+              <span className="muted small">No calls yet.</span>
+            );
+          }}
         </Async>
       </div>
-      {(variants.data ?? []).length > 0 && (
-        <div className="card">
-          <div className="card-head">
-            <h2>Agent comparison</h2>
-          </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th className="num">Calls</th>
-                  <th className="num">Success</th>
-                  <th className="num">Avg duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {variants.data.map((v) => (
-                  <tr key={v.agent_name}>
-                    <td className="cell-main">{v.agent_name}</td>
-                    <td className="num">{v.calls}</td>
-                    <td className="num">{Math.round(v.success_rate * 100)}%</td>
-                    <td className="num">{Math.round(v.avg_duration)}s</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 function SettingsTab({ id }) {
   const s = useSection(useGetCampaignSettingsQuery(id), usePutCampaignSettingsMutation(), (body) => ({ id, body }));
-  const [putVariants] = usePutCampaignVariantsMutation();
-  const { options } = useAgentOptions();
-  const toast = useToast();
-  const [variants, setVariants] = useState([]);
-  const total = useMemo(() => variants.reduce((a, v) => a + v.share, 0), [variants]);
   return (
     <div className="stack">
       <SectionCard title="Schedule, pacing & retries" section={s}>
         {(v, _p, set) => <ScheduleForm value={v} onChange={set} />}
       </SectionCard>
-      <div className="card card-pad stack">
-        <div>
-          <div className="card-title">Compare agents (A/B)</div>
-          <div className="card-sub">Split contacts between agents and compare success on the Analytics tab.</div>
-        </div>
-        {variants.map((v, i) => (
-          <div key={i} className="row" style={{ gap: 8 }}>
-            <Select
-              style={{ flex: 1 }}
-              value={v.agent_id}
-              options={options}
-              placeholder="Agent"
-              onChange={(e) => setVariants(variants.map((x, j) => (j === i ? { ...x, agent_id: e.target.value } : x)))}
-            />
-            <Input
-              style={{ width: 100 }}
-              type="number"
-              min={1}
-              max={100}
-              value={v.share}
-              onChange={(e) => setVariants(variants.map((x, j) => (j === i ? { ...x, share: Number(e.target.value) } : x)))}
-            />
-            <span className="muted">%</span>
-            <Button size="sm" variant="ghost" icon={<X />} onClick={() => setVariants(variants.filter((_, j) => j !== i))} />
-          </div>
-        ))}
-        <div className="row">
-          <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => setVariants([...variants, { agent_id: '', share: 50 }])}>
-            Add agent
-          </Button>
-          {variants.length > 0 && (
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={total !== 100 || variants.some((v) => !v.agent_id)}
-              title={total !== 100 ? 'Shares must add up to 100%' : undefined}
-              onClick={() =>
-                putVariants({ id, variants })
-                  .unwrap()
-                  .then(() => toast('Split saved'))
-                  .catch((e) => toast(errMsg(e), 'error'))
-              }
-            >
-              Save split ({total}%)
-            </Button>
-          )}
-        </div>
-      </div>
       <p className="muted small">
-        <Badge plain>Tip</Badge> Calling-hour limits from Settings → Calling rules always apply on top of these.
+        <Badge plain>Tip</Badge> Turn on “Follow my company's calling rules” to use the hours from Settings → Calling rules.
       </p>
     </div>
   );

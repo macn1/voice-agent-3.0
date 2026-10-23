@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Phone, Plus } from 'lucide-react';
 import { date, titleCase } from '../../lib/format';
+import { useAuth } from '../../lib/auth';
 import { asList } from '../../lib/normalize';
 import {
   useAllocateNumberMutation,
   useListAdminAuditQuery,
+  useListAdminStaffQuery,
   useListCustomersQuery,
   useListNumberPoolQuery,
   useRegisterNumberMutation,
@@ -229,10 +231,14 @@ export function NumberPoolPage() {
 
 /** CMP-04.4 Admin audit log. */
 export function AdminAuditPage() {
+  const { can } = useAuth();
+  const customers = asList(useListCustomersQuery({ limit: 200, offset: 0 }, { skip: !can('customer.read') }).data);
+  const staff = asList(useListAdminStaffQuery(undefined, { skip: !can('staff.manage') }).data);
+  const actors = new Map(staff.map((x) => [x.id, x.name]));
   return (
     <>
       <PageHeader eyebrow="Monitor" title="Audit log" description="Everything our staff changed, across all customers." />
-      <ActivityLogPage useLog={useListAdminAuditQuery} showTenant />
+      <ActivityLogPage useLog={useListAdminAuditQuery} showTenant tenantOptions={customers.map((c) => ({ value: c.id, label: c.name }))} tenants={new Map(customers.map((c) => [c.id, c.name]))} actors={actors} />
     </>
   );
 }

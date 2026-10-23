@@ -11,7 +11,6 @@ import { A } from './services';
 // the admin session's token. Shapes: list -> { items, total }; record -> agent.
 
 const C_ID = (_r, _e, arg) => [{ type: 'Customer', id: typeof arg === 'string' ? arg : arg.id }];
-const agent = (id) => `/customer/agents/${id}`;
 
 export const adminApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
@@ -47,7 +46,7 @@ export const adminApi = baseApi.injectEndpoints({
       query: ({ tenantId, body }) => A.auth(`/admin/customers/${tenantId}/settings`, { method: 'PUT', body }),
       invalidatesTags: ['TenantSettings'],
     }),
-    listLlmProviders: b.query({ query: () => A.auth('/admin/catalog/llm-providers') }),
+    listLlmProviders: b.query({ query: () => A.flow('/admin/catalog/llm-providers') }),
 
     // Tenant staff & credentials (admin) --------------------------------
     listTenantStaff: b.query({
@@ -107,27 +106,21 @@ export const adminApi = baseApi.injectEndpoints({
 
     // Agents (AGT-01) ----------------------------------------------------
     // ?status=draft|live|paused, limit, offset. No server-side search or sort.
-    listAdminAgents: b.query({ query: (params = {}) => A.flow('/customer/agents', { params }), providesTags: ['Agent'] }),
-    getAdminAgent: b.query({ query: (id) => A.flow(agent(id)), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
-    createAdminAgent: b.mutation({ query: (body) => A.flow('/customer/agents', { method: 'POST', body }), invalidatesTags: ['Agent'] }),
-    updateAdminAgent: b.mutation({ query: ({ id, ...body }) => A.flow(agent(id), { method: 'PATCH', body }), invalidatesTags: ['Agent'] }),
-    deleteAdminAgent: b.mutation({ query: (id) => A.flow(agent(id), { method: 'DELETE' }), invalidatesTags: ['Agent', 'Number'] }),
-    // Only a published agent can be paused (409 agent_not_published).
-    pauseAdminAgent: b.mutation({ query: (id) => A.flow(`${agent(id)}/pause`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
-    resumeAdminAgent: b.mutation({ query: (id) => A.flow(`${agent(id)}/resume`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
-    // Draft greeting / system prompt (AGT-03.2).
-    putAdminAgentFlowDraft: b.mutation({
-      query: ({ id, ...body }) => A.flow(`${agent(id)}/flow/draft`, { method: 'PUT', body }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Agent', id }],
-    }),
+    // Every customer's agents with the published version: ?tenant_id=&status=draft|live|paused&q=
+    listAdminAgents: b.query({ query: (params = {}) => A.flow('/admin/agents', { params }), providesTags: ['Agent'] }),
 
     // Agent templates (needs template.manage to create) --------------------
     listAdminTemplates: b.query({ query: () => A.flow('/admin/agent-templates'), providesTags: ['Template'] }),
     createAdminTemplate: b.mutation({ query: (body) => A.flow('/admin/agent-templates', { method: 'POST', body }), invalidatesTags: ['Template'] }),
 
     // Overview, audit ----------------------------------------------------
-    getPlatformSummary: b.query({ query: () => A.analytics('/admin/analytics/summary'), providesTags: ['Platform'] }),
-    getCustomerRanking: b.query({ query: () => A.analytics('/admin/analytics/customers'), providesTags: ['Platform'] }),
+    // { active_customers, summary, points[{bucket,calls,answered_calls,successful_calls,minutes}], top_customers[{tenant_id,calls,successful_calls,minutes}] }
+    getPlatformOverview: b.query({ query: (params) => A.analytics('/admin/analytics/overview', { params }), providesTags: ['Platform'] }),
+    // One customer: { summary, points, agents[{agent_id,...}], outcomes[{outcome,calls,successful,share}] }
+    getCustomerAnalytics: b.query({
+      query: ({ tenantId, ...params }) => A.analytics(`/admin/analytics/customers/${tenantId}`, { params }),
+      providesTags: ['Platform'],
+    }),
     listAdminAudit: b.query({ query: (params) => A.analytics('/admin/audit-log', { params }), providesTags: ['Audit'] }),
   }),
 });
@@ -169,16 +162,9 @@ export const {
   useAllocateNumberMutation,
   useReleaseNumberMutation,
   useListTenantNumbersQuery,
-  useGetPlatformSummaryQuery,
-  useGetCustomerRankingQuery,
+  useGetPlatformOverviewQuery,
+  useGetCustomerAnalyticsQuery,
   useListAdminAgentsQuery,
-  useGetAdminAgentQuery,
-  useCreateAdminAgentMutation,
-  useUpdateAdminAgentMutation,
-  useDeleteAdminAgentMutation,
-  usePauseAdminAgentMutation,
-  useResumeAdminAgentMutation,
-  usePutAdminAgentFlowDraftMutation,
   useListAdminAuditQuery,
   useListAdminTemplatesQuery,
   useCreateAdminTemplateMutation,

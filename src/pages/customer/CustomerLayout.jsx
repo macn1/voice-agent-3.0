@@ -27,7 +27,7 @@ import { NotificationsBell } from '../../components/NotificationsBell';
 import { Badge } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { number, titleCase } from '../../lib/format';
-import { useBilling } from './billingContext';
+import { REFUSAL_COPY, useBilling, useEntitlements } from './billingContext';
 import { SETTINGS_GROUPS } from './settings/settingsNav';
 
 const SECTIONS = [
@@ -107,7 +107,35 @@ function UsageMeter() {
 
 function AccountBanners() {
   const { subscription, minutesRatio } = useBilling();
+  const { e: ent } = useEntitlements();
   const { pathname } = useLocation();
+  if (ent && ent.allowed === false) {
+    const noPlan = ent.reason === 'no_plan' || ent.reason === 'plan_inactive';
+    return (
+      <div className="banner danger">
+        <AlertTriangle />
+        <span className="grow">
+          <b>Calls are paused.</b> {ent.message || REFUSAL_COPY[ent.reason] || 'Your company can’t place or take calls right now.'}
+        </span>
+        <Link to={noPlan ? '/settings/plan' : '/settings/credits'} className="btn sm danger">
+          {noPlan ? 'Choose a plan' : 'Add credits'}
+        </Link>
+      </div>
+    );
+  }
+  if (ent?.using_overage && pathname !== '/settings/credits') {
+    return (
+      <div className="banner warn">
+        <AlertTriangle />
+        <span className="grow">
+          Included minutes are used up — extra minutes are paid from your wallet at {number(ent.overage_rate_per_minute, 2)} per minute (balance {number(ent.wallet_balance, 2)}).
+        </span>
+        <Link to="/settings/credits" className="btn sm">
+          Add credits
+        </Link>
+      </div>
+    );
+  }
   if (subscription?.status === 'past_due') {
     return (
       <div className="banner danger">

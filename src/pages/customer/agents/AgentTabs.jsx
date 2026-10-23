@@ -1849,15 +1849,37 @@ export function ChannelsTab({ agent }) {
       >
         {(c, patch) => (
           <div className="form-grid">
-            <Field label="Reply style">
-              <Input value={c.reply_style} onChange={(e) => patch({ reply_style: e.target.value })} />
+            <div className="full">
+              <Toggle checked={c.enabled} onChange={(v) => patch({ enabled: v })} label="Answer chats" description="Reply on WhatsApp and web chat until a person takes over." />
+            </div>
+            <Field label="Greeting" hint="Sent when a new chat starts. Empty = no greeting." className="full">
+              <Input value={c.greeting ?? ''} onChange={(e) => patch({ greeting: e.target.value })} />
             </Field>
-            <Field label="Max reply length (characters)">
-              <Input type="number" value={c.max_reply_chars} onChange={(e) => patch({ max_reply_chars: Number(e.target.value) })} />
+            <Field label="Max reply length (characters)" hint="100–4096">
+              <Input type="number" min={100} max={4096} value={c.max_reply_chars} onChange={(e) => patch({ max_reply_chars: Number(e.target.value) })} />
+            </Field>
+            <Field label="Typing delay (ms)" hint="Pause before each reply so it feels natural">
+              <Input type="number" min={0} value={c.typing_delay_ms ?? 0} onChange={(e) => patch({ typing_delay_ms: Number(e.target.value) })} />
+            </Field>
+            <Field label="Hand over to a person when the customer says" className="full">
+              <ListEditor value={c.handoff_keywords ?? []} onChange={(v) => patch({ handoff_keywords: v })} placeholder="agent" />
             </Field>
             <div className="full">
-              <Toggle checked={c.understand_voice_notes} onChange={(v) => patch({ understand_voice_notes: v })} label="Understand voice notes" />
+              <Toggle checked={c.use_emojis} onChange={(v) => patch({ use_emojis: v })} label="Use emojis" />
             </div>
+            <div className="full">
+              <Toggle
+                checked={c.business_hours_only}
+                onChange={(v) => patch({ business_hours_only: v })}
+                label="Only reply during business hours"
+                description="Outside them the after-hours message is sent instead."
+              />
+            </div>
+            {c.business_hours_only && (
+              <Field label="After-hours message" className="full">
+                <Input value={c.after_hours_message ?? ''} onChange={(e) => patch({ after_hours_message: e.target.value })} />
+              </Field>
+            )}
           </div>
         )}
       </SectionCard>
@@ -2018,9 +2040,34 @@ export function SettingsTab({ agent }) {
               <Toggle checked={m.enabled} onChange={(v) => patch({ enabled: v })} label="Remember returning callers" />
             </div>
             {m.enabled && (
-              <Field label="Remember for (days)">
-                <Input type="number" min={1} value={m.retention_days} onChange={(e) => patch({ retention_days: Number(e.target.value) })} />
-              </Field>
+              <>
+                <Field label="Remember for (days)" hint="1–365">
+                  <Input type="number" min={1} max={365} value={m.retention_days} onChange={(e) => patch({ retention_days: Number(e.target.value) })} />
+                </Field>
+                <div className="full">
+                  <Toggle checked={m.greet_returning_callers} onChange={(v) => patch({ greet_returning_callers: v })} label="Greet returning callers by name" />
+                </div>
+                <div className="full field">
+                  <span className="field-label">What to remember</span>
+                  <div className="row wrap" style={{ gap: 14 }}>
+                    {[
+                      ['summary', 'Summary of the last call'],
+                      ['preferences', 'Preferences'],
+                      ['last_outcome', 'Last outcome'],
+                      ['open_requests', 'Open requests'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="check">
+                        <input
+                          type="checkbox"
+                          checked={(m.remember ?? []).includes(key)}
+                          onChange={(e) => patch({ remember: e.target.checked ? [...(m.remember ?? []), key] : (m.remember ?? []).filter((x) => x !== key) })}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}

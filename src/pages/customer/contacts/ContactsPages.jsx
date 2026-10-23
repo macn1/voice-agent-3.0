@@ -5,10 +5,13 @@ import {
   useCreateContactListMutation,
   useCreateContactMutation,
   useCreateScheduledCallMutation,
-  useDeleteContactMutation,
+  useImportContactsMutation,
   useGetContactQuery,
   useGetContactTimelineQuery,
+  useAddDndMutation,
+  useFindDndQuery,
   useListContactFieldsQuery,
+  useRemoveDndMutation,
   useListContactListsQuery,
   useListContactsQuery,
   usePutContactFieldsMutation,
@@ -19,7 +22,6 @@ import {
   Async,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   errMsg,
   Field,
@@ -165,7 +167,7 @@ function ContactsTab() {
                         </td>
                         <td className="mono">{c.phone}</td>
                         {(fields.data ?? []).slice(0, 2).map((f) => (
-                          <td key={f.key}>{c.custom_fields[f.key] ?? '—'}</td>
+                          <td key={f.key}>{c.custom_fields?.[f.key] ?? '—'}</td>
                         ))}
                         <td className="muted">{dateTime(c.last_contacted_at)}</td>
                         <td>{c.last_outcome ? titleCase(c.last_outcome) : '—'}</td>
@@ -323,12 +325,11 @@ function ContactModal({ value, fields, onClose, onSaved }) {
 
 function ImportModal({ open, onClose, fields, lists, onDone }) {
   const toast = useToast();
-  const [importContacts] = useCreateContactMutation();
+  const [importContacts] = useImportContactsMutation();
   const fileRef = useRef(null);
   const [csv, setCsv] = useState(null);
   const [mapping, setMapping] = useState({});
   const [listId, setListId] = useState('');
-  const [dup, setDup] = useState('skip');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const targets = [
@@ -370,7 +371,6 @@ function ImportModal({ open, onClose, fields, lists, onDone }) {
                     rows: csv.rows,
                     mapping,
                     list_id: listId || undefined,
-                    on_duplicate: dup,
                   }).unwrap();
                   setResult(r);
                   onDone();
@@ -398,12 +398,15 @@ function ImportModal({ open, onClose, fields, lists, onDone }) {
             <div className="value">{result.updated}</div>
           </div>
           <div className="card stat">
-            <div className="label">Skipped</div>
-            <div className="value">{result.skipped}</div>
+            <div className="label">Invalid numbers</div>
+            <div className="value">{result.invalid}</div>
           </div>
         </div>
       ) : (
         <div className="stack">
+          <p className="muted small" style={{ margin: 0 }}>
+            Numbers are saved in international format (a number without a country code is treated as Indian). Contacts that already exist are updated.
+          </p>
           <input
             ref={fileRef}
             type="file"
@@ -462,16 +465,6 @@ function ImportModal({ open, onClose, fields, lists, onDone }) {
                     onChange={(e) => setListId(e.target.value)}
                   />
                 </Field>
-                <Field label="If the phone already exists">
-                  <Select
-                    value={dup}
-                    options={[
-                      { value: 'skip', label: 'Skip the row' },
-                      { value: 'update', label: 'Update the contact' },
-                    ]}
-                    onChange={(e) => setDup(e.target.value)}
-                  />
-                </Field>
               </div>
             </>
           )}
@@ -517,7 +510,7 @@ function ListsTab() {
                   {ls.map((l) => (
                     <tr key={l.id}>
                       <td className="cell-main">{l.name}</td>
-                      <td className="num">{l.count} contacts</td>
+                      <td className="num">{l.member_count ?? l.count ?? 0} contacts</td>
                       <td className="actions">
                         <Button size="sm" variant="ghost" onClick={() => navigate(`/campaigns/new?list=${l.id}`)}>
                           Use in campaign
@@ -608,18 +601,17 @@ function FieldsTab() {
 export function ContactDetailPage() {
   const { id = '' } = useParams();
   const toast = useToast();
-  const navigate = useNavigate();
   const contact = useGetContactQuery(id);
+  const dndEntry = useFindDndQuery(contact.data?.phone, { skip: !contact.data?.do_not_call });
   const timeline = useGetContactTimelineQuery(id);
   const fields = useListContactFieldsQuery();
-  const [updateContact] = useUpdateContactMutation();
-  const [deleteContact] = useDeleteContactMutation();
+  const [addDnd] = useAddDndMutation();
+  const [removeDnd] = useRemoveDndMutation();
   const [scheduleCall] = useCreateScheduledCallMutation();
   const { options } = useAgentOptions();
   const [editing, setEditing] = useState(false);
   const [calling, setCalling] = useState(false);
   const [scheduling, setScheduling] = useState(false);
-  const [removing, setRemoving] = useState(false);
   const [sched, setSched] = useState({ agent_id: '', run_at: '', reason: '' });
 
   return (
@@ -649,7 +641,6 @@ export function ContactDetailPage() {
                   <MessageSquare size={16} /> Message
                 </Link>
                 <Button onClick={() => setEditing(true)}>Edit</Button>
-                <Button variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(true)} />
               </div>
             </header>
             <div
@@ -664,12 +655,12 @@ export function ContactDetailPage() {
                   <Toggle
                     checked={c.do_not_call}
                     onChange={(v) =>
-                      updateContact({ id, do_not_call: v })
-                        .unwrap()
+                      (v ? addDnd({ phone: c.phone, reason: 'Marked on the contact page' }).unwrap() : dndEntry.data ? removeDnd(dndEntry.data.id).unwrap() : Promise.resolve())
+                        .then(() => toast(v ? 'Added to the do-not-call list' : 'Removed from the do-not-call list'))
                         .catch((e) => toast(errMsg(e), 'error'))
                     }
                     label="Do not call"
-                    description="Campaigns and triggers will skip this number."
+                    description="On the company's do-not-call list: campaigns and triggers will skip this number."
                   />
 
                   <dl
@@ -690,7 +681,7 @@ export function ContactDetailPage() {
                     {(fields.data ?? []).map((f) => (
                       <div key={f.key} style={{ display: 'contents' }}>
                         <dt>{f.label}</dt>
-                        <dd>{c.custom_fields[f.key] ?? '—'}</dd>
+                        <dd>{c.custom_fields?.[f.key] ?? '—'}</dd>
                       </div>
                     ))}
                   </dl>
@@ -752,7 +743,7 @@ export function ContactDetailPage() {
                     onClick={async () => {
                       try {
                         await scheduleCall({
-                          to_number: c.phone,
+                          contact_id: c.id,
                           agent_id: sched.agent_id,
                           run_at: new Date(sched.run_at).toISOString(),
                           reason: sched.reason || undefined,
@@ -781,18 +772,6 @@ export function ContactDetailPage() {
                 </Field>
               </div>
             </Modal>
-            <ConfirmDialog
-              open={removing}
-              onClose={() => setRemoving(false)}
-              danger
-              title="Delete this contact?"
-              description="Call records are kept; the contact is removed from lists and campaigns that haven't called them."
-              confirmLabel="Delete"
-              onConfirm={async () => {
-                await deleteContact(id).unwrap();
-                navigate('/contacts');
-              }}
-            />
           </>
         )}
       </Async>

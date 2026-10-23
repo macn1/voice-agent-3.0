@@ -289,7 +289,7 @@ function TemplateEditor({ open, onClose, onSaved }) {
     channel: 'whatsapp',
     name: '',
     language: 'en',
-    category: 'UTILITY',
+    category: 'utility',
     body: 'Hi {{1}}, ',
     variables: [],
     buttons: [],
@@ -338,7 +338,7 @@ function TemplateEditor({ open, onClose, onSaved }) {
               }
             }}
           >
-            Submit for approval
+            Submit for review
           </Button>
         </>
       }
@@ -350,9 +350,6 @@ function TemplateEditor({ open, onClose, onSaved }) {
             <Field label="Name">
               <Input className="mono" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} placeholder="appointment_confirmation" />
             </Field>
-            <Field label="Channel">
-              <Select value={t.channel} options={['whatsapp', 'sms', 'email']} onChange={(e) => setT({ ...t, channel: e.target.value })} />
-            </Field>
             <Field label="Language">
               <Select
                 value={t.language}
@@ -361,7 +358,7 @@ function TemplateEditor({ open, onClose, onSaved }) {
               />
             </Field>
             <Field label="Category">
-              <Select value={t.category} options={['UTILITY', 'MARKETING', 'AUTHENTICATION']} onChange={(e) => setT({ ...t, category: e.target.value })} />
+              <Select value={t.category} options={['utility', 'marketing', 'authentication']} onChange={(e) => setT({ ...t, category: e.target.value })} />
             </Field>
           </div>
           <Field label="Message" hint="Use {{1}}, {{2}}… for values filled in at send time.">
@@ -481,8 +478,8 @@ function ChatAgentTab({ accounts }) {
                 key={a.id}
                 account={a}
                 options={options}
-                onSave={(agent_id, settings) =>
-                  setWhatsappAgent({ id: a.id, agent_id, chat_settings: settings })
+                onSave={(agent_id) =>
+                  setWhatsappAgent({ id: a.id, agent_id })
                     .unwrap()
                     .then(() => toast('Saved'))
                     .catch((e) => toast(errMsg(e), 'error'))
@@ -502,28 +499,23 @@ function ChatAgentTab({ accounts }) {
 
 function ChatAgentCard({ account, options, onSave }) {
   const [agent, setAgent] = useState(account.agent_id ?? '');
-  const [s, setS] = useState(account.chat_settings);
   return (
     <div className="card card-pad stack">
       <div className="card-title">{account.display_name}</div>
       <div className="form-grid">
-        <Field label="Agent that answers chats" hint="Uses the same persona, company profile, rules, knowledge and tools.">
+        <Field label="Agent that answers chats" hint="Uses the same persona, company profile, rules, knowledge and tools. It replies until a person takes the conversation over.">
           <Select value={agent} options={options} placeholder="Nobody — humans answer in the Inbox" onChange={(e) => setAgent(e.target.value)} />
-        </Field>
-        <Field label="Reply style">
-          <Input value={s.reply_style ?? ''} onChange={(e) => setS({ ...s, reply_style: e.target.value })} />
-        </Field>
-        <Field label="Working hours">
-          <Input value={s.working_hours ?? ''} placeholder="24x7, or Mon–Sat 9–20" onChange={(e) => setS({ ...s, working_hours: e.target.value })} />
-        </Field>
-        <Field label="Away message">
-          <Input value={s.away_message ?? ''} onChange={(e) => setS({ ...s, away_message: e.target.value })} />
         </Field>
       </div>
       <div>
-        <Button variant="primary" onClick={() => onSave(agent || null, s)}>
+        <Button variant="primary" onClick={() => onSave(agent || null)}>
           Save
         </Button>
+        {agent && (
+          <Link to={`/agents/${agent}/channels`} className="btn ghost" style={{ marginLeft: 8 }}>
+            Reply style, hours & hand-over keywords
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -607,6 +599,7 @@ export function InboxPage() {
   const [reply] = useReplyToConversationMutation();
   const [text, setText] = useState('');
   const [tpl, setTpl] = useState('');
+  const [tplVars, setTplVars] = useState([]);
   const end = useRef(null);
   useEffect(() => end.current?.scrollIntoView(), [msgs.data]);
 
@@ -649,9 +642,8 @@ export function InboxPage() {
               <Select
                 value={filter}
                 options={[
-                  { value: 'needs_human', label: 'Needs a human' },
+                  { value: 'open', label: 'With the agent' },
                   { value: 'human', label: 'With staff' },
-                  { value: 'agent', label: 'With agent' },
                   { value: 'closed', label: 'Closed' },
                 ]}
                 placeholder="All conversations"
@@ -679,8 +671,8 @@ export function InboxPage() {
                           {c.last_message}
                         </div>
                         <div className="row between" style={{ marginTop: 4 }}>
-                          <Badge tone={c.status === 'needs_human' ? 'red' : c.status === 'human' ? 'blue' : ''}>
-                            {c.status === 'needs_human' ? 'Needs human' : titleCase(c.status)}
+                          <Badge tone={c.status === 'human' ? 'blue' : ''}>
+                            {c.status === 'human' ? 'With staff' : c.status === 'open' ? 'With agent' : titleCase(c.status)}
                           </Badge>
                           <span className="muted text-overline">{dateTime(c.last_message_at)}</span>
                         </div>
@@ -765,19 +757,36 @@ export function InboxPage() {
                       <Select
                         style={{ width: 220 }}
                         value={tpl}
-                        options={(templates.data ?? [])
-                          .filter((t) => t.status === 'approved' && t.channel === 'whatsapp')
-                          .map((t) => ({ value: t.id, label: t.name }))}
+                        options={(templates.data ?? []).filter((t) => t.status === 'approved').map((t) => ({ value: t.id, label: t.name }))}
                         placeholder="Choose template"
-                        onChange={(e) => setTpl(e.target.value)}
+                        onChange={(e) => {
+                          setTpl(e.target.value);
+                          setTplVars([]);
+                        }}
                       />
+                      {[...new Set([...((templates.data ?? []).find((t) => t.id === tpl)?.body ?? '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1]))].map((n) => (
+                        <Input
+                          key={n}
+                          style={{ width: 140 }}
+                          placeholder={`{{${n}}}`}
+                          value={tplVars[Number(n) - 1] ?? ''}
+                          onChange={(e) => {
+                            const v = [...tplVars];
+                            v[Number(n) - 1] = e.target.value;
+                            setTplVars(v);
+                          }}
+                        />
+                      ))}
                       <Button
                         variant="primary"
                         disabled={!tpl}
                         onClick={() =>
-                          reply({ id: active.id, body: '', template_id: tpl })
+                          reply({ id: active.id, template_id: tpl, variables: tplVars.map((v) => v ?? '') })
                             .unwrap()
-                            .then(() => setTpl(''))
+                            .then(() => {
+                              setTpl('');
+                              setTplVars([]);
+                            })
                             .catch((e) => toast(errMsg(e), 'error'))
                         }
                       >
@@ -826,16 +835,17 @@ export function BroadcastsPage() {
   const list = useListBroadcastsQuery();
   const templates = useListMessageTemplatesQuery();
   const lists = useListContactListsQuery();
+  const accounts = useListWhatsappAccountsQuery();
   const [createBroadcast] = useCreateBroadcastMutation();
   const [creating, setCreating] = useState(false);
   const [f, setF] = useState({
     name: '',
     template_id: '',
     contact_list_id: '',
-    scheduled_at: '',
+    variables: [],
   });
   const [step, setStep] = useState(0);
-  const approved = (templates.data ?? []).filter((t) => t.status === 'approved' && t.channel === 'whatsapp');
+  const approved = (templates.data ?? []).filter((t) => t.status === 'approved');
   const tpl = approved.find((t) => t.id === f.template_id);
   const list_ = (lists.data ?? []).find((l) => l.id === f.contact_list_id);
 
@@ -854,7 +864,7 @@ export function BroadcastsPage() {
                 name: '',
                 template_id: '',
                 contact_list_id: '',
-                scheduled_at: '',
+                variables: [],
               });
               setStep(0);
               setCreating(true);
@@ -885,12 +895,12 @@ export function BroadcastsPage() {
                         <td>
                           <div className="cell-main">{b.name}</div>
                           <div className="cell-sub">
-                            {b.template_name ?? b.template_id} → {b.list_name ?? b.contact_list_id} · {dateTime(b.scheduled_at)}
+                            {(templates.data ?? []).find((t) => t.id === b.template_id)?.name ?? 'Template'} → {number(b.recipient_count)} recipients · {dateTime(b.completed_at ?? b.created_at)}
                           </div>
                         </td>
                         <td>
                           <StatusBadge
-                            status={b.status === 'done' ? 'active' : b.status === 'scheduled' || b.status === 'sending' ? 'pending' : b.status}
+                            status={['done', 'sent'].includes(b.status) ? 'active' : b.status === 'scheduled' || b.status === 'sending' ? 'pending' : b.status}
                             label={titleCase(b.status)}
                           />
                         </td>
@@ -905,12 +915,12 @@ export function BroadcastsPage() {
                                 },
                                 {
                                   label: 'Delivered',
-                                  value: b.stats.delivered - b.stats.read,
+                                  value: Math.max(0, b.stats.delivered - b.stats.read),
                                   color: SERIES[0],
                                 },
                                 {
                                   label: 'Sent',
-                                  value: b.stats.sent - b.stats.delivered - b.stats.failed,
+                                  value: Math.max(0, b.stats.sent - b.stats.delivered - b.stats.failed),
                                   color: '#b8b6b1',
                                 },
                                 {
@@ -957,20 +967,23 @@ export function BroadcastsPage() {
                 disabled={!f.name.trim()}
                 onClick={async () => {
                   try {
+                    const account = accounts.data?.[0];
+                    if (!account) throw new Error('Connect a WhatsApp number first');
                     await createBroadcast({
                       name: f.name.trim(),
+                      account_id: account.id,
                       template_id: f.template_id,
                       contact_list_id: f.contact_list_id,
-                      scheduled_at: f.scheduled_at ? new Date(f.scheduled_at).toISOString() : null,
+                      variables: f.variables.map((v) => v ?? ''),
                     }).unwrap();
-                    toast(f.scheduled_at ? 'Broadcast scheduled' : 'Broadcast sending');
+                    toast('Broadcast sent');
                     setCreating(false);
                   } catch (e) {
                     toast(errMsg(e), 'error');
                   }
                 }}
               >
-                {f.scheduled_at ? 'Schedule' : 'Send now'}
+                Send now
               </Button>
             )}
           </>
@@ -982,7 +995,7 @@ export function BroadcastsPage() {
               value={f.contact_list_id}
               options={(lists.data ?? []).map((l) => ({
                 value: l.id,
-                label: `${l.name} (${l.count})`,
+                label: `${l.name} (${l.member_count ?? l.count ?? 0})`,
               }))}
               placeholder="Choose"
               onChange={(e) => setF({ ...f, contact_list_id: e.target.value })}
@@ -1002,7 +1015,7 @@ export function BroadcastsPage() {
             {tpl && (
               <div className="phone-preview">
                 <div className="wa">{tpl.body}</div>
-                {tpl.buttons.map((b, i) => (
+                {(tpl.buttons ?? []).map((b, i) => (
                   <div key={i} className="wa-btn">
                     {b.text}
                   </div>
@@ -1016,12 +1029,21 @@ export function BroadcastsPage() {
             <Field label="Name">
               <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Diwali timings" />
             </Field>
-            <Field label="Send at" hint="Leave empty to send now.">
-              <input type="datetime-local" className="input" value={f.scheduled_at} onChange={(e) => setF({ ...f, scheduled_at: e.target.value })} />
-            </Field>
+            {[...new Set([...(tpl?.body ?? '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1]))].map((n) => (
+              <Field key={n} label={`Value for {{${n}}}`} hint={tpl?.examples?.[Number(n) - 1] ? `e.g. ${tpl.examples[Number(n) - 1]}` : undefined}>
+                <Input
+                  value={f.variables[Number(n) - 1] ?? ''}
+                  onChange={(e) => {
+                    const v = [...f.variables];
+                    v[Number(n) - 1] = e.target.value;
+                    setF({ ...f, variables: v });
+                  }}
+                />
+              </Field>
+            ))}
             <div className="banner neutral" style={{ margin: 0 }}>
               <span className="grow">
-                {tpl?.name} → {list_?.name} ({list_?.count} contacts)
+                {tpl?.name} → {list_?.name} ({list_?.member_count ?? list_?.count ?? 0} contacts). Contacts on the do-not-call list are left out.
               </span>
             </div>
           </div>

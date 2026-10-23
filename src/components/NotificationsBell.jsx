@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Settings } from 'lucide-react';
 import { dateTime } from '../lib/format';
-import { useListNotificationsQuery, useMarkNotificationReadMutation } from '../store/api/integrationApi';
+import { useListNotificationsQuery, useMarkAllNotificationsReadMutation, useMarkNotificationReadMutation } from '../store/api/integrationApi';
+
+const isRead = (n) => n.read ?? !!n.read_at;
 
 /** P-42 Notifications panel (QTY-04.2). Polls every minute. */
 export function NotificationsBell() {
@@ -12,7 +14,8 @@ export function NotificationsBell() {
   // Polls every minute; also refetches when the tab regains focus.
   const list = useListNotificationsQuery(undefined, { pollingInterval: 60_000, refetchOnFocus: true });
   const [markRead] = useMarkNotificationReadMutation();
-  const items = list.data ?? null;
+  const [markAllRead] = useMarkAllNotificationsReadMutation();
+  const items = list.data?.items ?? null;
   const unavailable = !!list.error?.notAvailable;
 
   useEffect(() => {
@@ -22,10 +25,10 @@ export function NotificationsBell() {
     return () => window.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const unread = (items ?? []).filter((n) => !n.read_at).length;
+  const unread = list.data?.unread_count ?? (items ?? []).filter((n) => !isRead(n)).length;
 
   const openItem = async (n) => {
-    if (!n.read_at) markRead(n.id); // optimistic update lives in the API slice
+    if (!isRead(n)) markRead(n.id); // optimistic update lives in the API slice
     setOpen(false);
     if (n.link) navigate(n.link);
   };
@@ -46,6 +49,11 @@ export function NotificationsBell() {
             }}
           >
             <b>Notifications</b>
+            {unread > 0 && (
+              <button className="btn sm ghost" onClick={() => markAllRead()}>
+                Mark all read
+              </button>
+            )}
             <button
               className="icon-btn"
               style={{ width: 30, height: 30 }}
@@ -68,8 +76,8 @@ export function NotificationsBell() {
             </p>
           ) : (
             items.map((n) => (
-              <button key={n.id} className={`notif-item ${n.read_at ? '' : 'unread'}`} onClick={() => openItem(n)}>
-                <div className={`text-body-sm ${n.read_at ? 'fw-regular' : 'fw-semibold'}`}>{n.title}</div>
+              <button key={n.id} className={`notif-item ${isRead(n) ? '' : 'unread'}`} onClick={() => openItem(n)}>
+                <div className={`text-body-sm ${isRead(n) ? 'fw-regular' : 'fw-semibold'}`}>{n.title}</div>
                 {n.body && <div className="muted small">{n.body}</div>}
                 <div className="muted text-overline" style={{ marginTop: 4 }}>
                   {dateTime(n.created_at)}

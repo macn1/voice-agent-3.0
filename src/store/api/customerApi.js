@@ -26,13 +26,20 @@ export const customerApi = baseApi.injectEndpoints({
     getSubscription: b.query({ query: () => C.billing('/customer/billing/subscription'), providesTags: ['Subscription'] }),
     selectPackage: b.mutation({
       query: (package_id) => C.billing('/customer/billing/subscription/select-package', { method: 'POST', body: { package_id } }),
-      invalidatesTags: ['Subscription', 'Usage'],
+      invalidatesTags: ['Subscription', 'Usage', 'Entitlements'],
     }),
     cancelSubscription: b.mutation({ query: () => C.billing('/customer/billing/subscription/cancel', { method: 'POST' }), invalidatesTags: ['Subscription'] }),
+    // Returns { checkout_url, checkout_session_id }; the page redirects to checkout_url.
     checkout: b.mutation({
-      query: (package_id) => C.billing('/customer/billing/checkout-session', { method: 'POST', body: { package_id } }),
-      invalidatesTags: ['Subscription'],
+      query: (body) => C.billing('/customer/billing/checkout-session', { method: 'POST', body }),
     }),
+    getCheckoutSession: b.query({ query: (id) => C.billing(`/customer/billing/checkout-sessions/${id}`) }),
+    completeCheckout: b.mutation({
+      query: (id) => C.billing(`/customer/billing/checkout-sessions/${id}/complete`, { method: 'POST', body: {} }),
+      invalidatesTags: ['Subscription', 'Usage', 'Invoice', 'Wallet', 'Entitlements'],
+    }),
+    // May the company place and take calls now? (402 reasons, banner data)
+    getEntitlements: b.query({ query: () => C.billing('/customer/billing/entitlements'), providesTags: ['Entitlements'] }),
 
     // Payment methods ----------------------------------------------------
     listPaymentMethods: b.query({ query: () => C.billing('/customer/billing/payment-methods'), providesTags: ['PaymentMethod'] }),
@@ -52,14 +59,13 @@ export const customerApi = baseApi.injectEndpoints({
     // Invoices & usage ---------------------------------------------------
     listInvoices: b.query({ query: () => C.billing('/customer/billing/invoices'), providesTags: ['Invoice'] }),
     getInvoice: b.query({ query: (id) => C.billing(`/customer/billing/invoices/${id}`), providesTags: (_r, _e, id) => [{ type: 'Invoice', id }] }),
-    getInvoicePdf: b.query({ query: (id) => C.billing(`/customer/billing/invoices/${id}/pdf`) }),
-    getUsage: b.query({ query: () => C.billing('/customer/billing/usage', { params: { period: 'current' } }), providesTags: ['Usage'] }),
+        getUsage: b.query({ query: () => C.billing('/customer/billing/usage', { params: { period: 'current' } }), providesTags: ['Usage'] }),
 
     // Wallet (EXT-05) ----------------------------------------------------
     getWallet: b.query({ query: () => C.billing('/customer/billing/wallet'), providesTags: ['Wallet'] }),
     topUpWallet: b.mutation({
       query: (amount) => C.billing('/customer/billing/wallet/top-up', { method: 'POST', body: { amount } }),
-      invalidatesTags: ['Wallet'],
+      invalidatesTags: ['Wallet', 'Invoice', 'Entitlements'],
     }),
     listWalletTransactions: b.query({ query: () => C.billing('/customer/billing/wallet/transactions'), providesTags: ['Wallet'] }),
     setAutoRecharge: b.mutation({ query: (body) => C.billing('/customer/billing/wallet/auto-recharge', { method: 'PUT', body }), invalidatesTags: ['Wallet'] }),
@@ -85,13 +91,15 @@ export const {
   useSelectPackageMutation,
   useCancelSubscriptionMutation,
   useCheckoutMutation,
+  useGetCheckoutSessionQuery,
+  useCompleteCheckoutMutation,
+  useGetEntitlementsQuery,
   useListPaymentMethodsQuery,
   useAddPaymentMethodMutation,
   useSetDefaultPaymentMethodMutation,
   useRemovePaymentMethodMutation,
   useListInvoicesQuery,
   useGetInvoiceQuery,
-  useLazyGetInvoicePdfQuery,
   useGetUsageQuery,
   useGetWalletQuery,
   useTopUpWalletMutation,

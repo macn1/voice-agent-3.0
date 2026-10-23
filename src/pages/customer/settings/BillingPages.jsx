@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, CreditCard, Download, FileText, Landmark, Plus, Star, Trash2 } from 'lucide-react';
 import { date, money, number, titleCase } from '../../../lib/format';
 import { asList, normalizeUsage } from '../../../lib/normalize';
+import { downloadAuthed } from '../../../store/api/baseQuery';
 import {
   useAddPaymentMethodMutation,
   useCancelSubscriptionMutation,
+  useCheckoutMutation,
+  useGetCheckoutSessionQuery,
   useGetInvoiceQuery,
   useGetUsageQuery,
   useListInvoicesQuery,
@@ -16,6 +19,8 @@ import {
 } from '../../../store/api/customerApi';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { useBilling } from '../billingContext';
+import { baseApi } from '../../../store/api/baseApi';
+import { useDispatch } from 'react-redux';
 
 /* Plan (CUS-05) ------------------------------------------------------ */
 
@@ -52,6 +57,39 @@ export function PlanPage() {
   // Both invalidate 'Subscription', so the plan card and top-bar meter refresh.
   const [selectPackage] = useSelectPackageMutation();
   const [cancelSubscription] = useCancelSubscriptionMutation();
+  const [checkout] = useCheckoutMutation();
+  const [params, setParams] = useSearchParams();
+  const returnedSession = params.get('checkout_session_id');
+  const session = useGetCheckoutSessionQuery(returnedSession, { skip: !returnedSession });
+  const dispatch = useDispatch();
+
+  // Back from the payment page: show what happened and refresh the plan.
+  useEffect(() => {
+    const status = session.data?.status;
+    if (!status || status === 'open') return;
+    if (status === 'completed') {
+      toast('Payment received — your plan is updated');
+      dispatch(baseApi.util.invalidateTags(['Subscription', 'Usage', 'Invoice', 'Entitlements']));
+    } else toast(status === 'canceled' ? 'Checkout was cancelled — your plan is unchanged' : 'That checkout expired — start again', 'error');
+    setParams({}, { replace: true });
+  }, [session.data?.status]);
+
+  // Paid plans go through the payment page; a free plan is switched directly.
+  const switchTo = async (p) => {
+    if (!Number(p.price_amount)) {
+      await selectPackage(p.id).unwrap();
+      toast(`You're now on ${p.name}`);
+      return;
+    }
+    const back = `${window.location.origin}/settings/plan`;
+    const r = await checkout({ package_id: p.id, success_url: back, cancel_url: back }).unwrap();
+    if (r?.checkout_url) {
+      window.location.assign(r.checkout_url);
+      return;
+    }
+    await selectPackage(p.id).unwrap();
+    toast(`You're now on ${p.name}`);
+  };
 
   if (!loaded)
     return (
@@ -148,7 +186,7 @@ export function PlanPage() {
         <div className="row between wrap" style={{ marginBottom: 16 }}>
           <div>
             <div className="card-title text-title">Compare plans</div>
-            <div className="card-sub">Switching takes effect immediately. Demo mode: no payment is taken.</div>
+            <div className="card-sub">Paid plans open a secure payment page; your new limits apply as soon as it completes.</div>
           </div>
         </div>
         {plans.length ? (
@@ -183,12 +221,13 @@ export function PlanPage() {
         open={!!choice}
         onClose={() => setChoice(null)}
         title={`Switch to ${choice?.name}?`}
-        description={choice ? `${money(choice.price_amount, choice.currency)} / ${choice.billing_cycle}. Your new limits apply right away.` : undefined}
-        confirmLabel={`Switch to ${choice?.name ?? ''}`}
-        onConfirm={async () => {
-          await selectPackage(choice.id).unwrap();
-          toast(`You're now on ${choice.name}`);
-        }}
+        description={
+          choice
+            ? `${money(choice.price_amount, choice.currency)} / ${choice.billing_cycle}. ${Number(choice.price_amount) ? "You'll be taken to the payment page." : 'Your new limits apply right away.'}`
+            : undefined
+        }
+        confirmLabel={Number(choice?.price_amount) ? 'Continue to payment' : `Switch to ${choice?.name ?? ''}`}
+        onConfirm={() => switchTo(choice)}
       />
 
       <ConfirmDialog
@@ -372,6 +411,8 @@ export function InvoiceTable({ invoices, onOpen }) {
 export function InvoiceDetailPage() {
   const { id = '' } = useParams();
   const invoice = useGetInvoiceQuery(id);
+  const toast = useToast();
+  const [pdf, setPdf] = useState(false);
   return (
     <>
       <Link to="/settings/invoices" className="back-link">
@@ -392,7 +433,20 @@ export function InvoiceDetailPage() {
                     {date(inv.period_start)} – {date(inv.period_end)} · Issued {date(inv.issued_at)} · Due {date(inv.due_date)}
                   </div>
                 </div>
-                <Button icon={<Download />} disabled title="PDF download is coming soon">
+                <Button
+                  icon={<Download />}
+                  loading={pdf}
+                  onClick={async () => {
+                    setPdf(true);
+                    try {
+                      await downloadAuthed({ service: 'billing', url: `/customer/billing/invoices/${inv.id}/pdf`, filename: `${inv.invoice_number ?? 'invoice'}.pdf` });
+                    } catch (e) {
+                      toast(errMsg(e), 'error');
+                    } finally {
+                      setPdf(false);
+                    }
+                  }}
+                >
                   Download PDF
                 </Button>
               </div>

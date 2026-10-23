@@ -17,6 +17,11 @@ export function number(n, digits = 0) {
   }).format(Number(n ?? 0));
 }
 
+/** 0.43 -> "43%" */
+export function percent(ratio) {
+  return `${Math.round(Number(ratio ?? 0) * 100)}%`;
+}
+
 export function date(value) {
   if (!value) return '—';
   const d = new Date(value);

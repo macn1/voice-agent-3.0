@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { useGetSubscriptionQuery, useGetUsageQuery, useListPublicPackagesQuery } from '../../store/api/customerApi';
+import { useGetEntitlementsQuery, useGetSubscriptionQuery, useGetUsageQuery, useListPublicPackagesQuery } from '../../store/api/customerApi';
 import { asList, normalizeUsage, packageOf } from '../../lib/normalize';
+export { REFUSAL_COPY } from '../../lib/refusals';
 
 /**
  * Plan + usage for the top-bar meter, near-limit banner (CUS-08.3) and billing
@@ -28,4 +29,10 @@ export function useBilling() {
       minutesRatio: includedMinutes && usage ? usage.callMinutes / includedMinutes : undefined,
     };
   }, [sub.data, sub.isLoading, pkgs.data, pkgs.isLoading, usageQ.data, usageQ.isLoading]);
+}
+
+/** Can the company place and take calls right now? (GET .../billing/entitlements) */
+export function useEntitlements() {
+  const q = useGetEntitlementsQuery(undefined, { pollingInterval: 60_000 });
+  return { ...q, e: q.data };
 }

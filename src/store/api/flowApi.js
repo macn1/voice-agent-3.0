@@ -9,6 +9,58 @@ import { C } from './services';
 
 const ag = (id) => `/customer/agents/${id}`;
 
+// Knowledge source bodies: the screens send {type, title, content}; the API wants
+// faqs[{q,a}] / text / url / file details.
+const sourceTo = ({ type, title, content, url, resync_schedule: _s, ...rest }, file) => {
+  if (type === 'faq') {
+    const list = Array.isArray(content) ? content : (rest.faqs ?? []);
+    return { type, title, faqs: list.map((f) => ({ q: f.q ?? f.question, a: f.a ?? f.answer })) };
+  }
+  if (type === 'text') return { type, title, text: typeof content === 'string' ? content : (rest.text ?? '') };
+  if (type === 'url') return { type, url, ...(title && title !== url ? { title } : {}) };
+  if (type === 'file' && file) return { type, filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size };
+  return { type, title, ...rest };
+};
+
+const asArray = (d) => (Array.isArray(d) ? d : (d?.items ?? []));
+
+// Tool parameters: list in the UI ({name, type, description, required}) <-> JSON schema on the wire.
+const toolFrom = (t) => {
+  if (!t || Array.isArray(t.parameters)) return t;
+  const props = t.parameters?.properties ?? {};
+  const required = t.parameters?.required ?? [];
+  return {
+    ...t,
+    parameters: Object.entries(props).map(([name, p]) => ({
+      name,
+      type: p.format === 'date' ? 'date' : (p.type ?? 'string'),
+      description: p.description ?? '',
+      required: required.includes(name),
+    })),
+  };
+};
+const toolTo = ({ parameters, ...t }) => {
+  // Fields the API computes are not sent back.
+  const { id: _id, has_secret: _h, created_at: _c, updated_at: _u, ...rest } = t;
+  if (!Array.isArray(parameters)) return rest;
+  const list = parameters.filter((p) => p.name?.trim());
+  const body = {
+    ...rest,
+    parameters: {
+      type: 'object',
+      required: list.filter((p) => p.required).map((p) => p.name),
+      properties: Object.fromEntries(
+        list.map((p) => [p.name, { type: p.type === 'date' ? 'string' : p.type, ...(p.type === 'date' ? { format: 'date' } : {}), ...(p.description ? { description: p.description } : {}) }]),
+      ),
+    },
+  };
+  // The secret goes where {{secret}} appears in a header; default to Authorization.
+  if (body.secret && !Object.values(body.headers ?? {}).some((v) => String(v).includes('{{secret}}'))) {
+    body.headers = { ...(body.headers ?? {}), Authorization: '{{secret}}' };
+  }
+  return body;
+};
+
 /**
  * Each tab of the agent editor is one GET/PUT pair on the draft
  * (DB-DESIGN §6: one jsonb column per section). `wrap` shapes the PUT body
@@ -269,7 +321,8 @@ export const flowApi = baseApi.injectEndpoints({
 
     // Testing (AGT-06, QTY-01, QTY-02) -----------------------------------
     createTestSession: b.mutation({ query: (id) => C.flow(`${ag(id)}/test-session`, { method: 'POST', body: {} }) }),
-    testCall: b.mutation({ query: ({ id, phone, variables }) => C.flow(`${ag(id)}/test-call`, { method: 'POST', body: { phone, variables } }) }),
+    // Rings to_number with the DRAFT agent; returns the call (poll outbound GET /calls/{id}).
+    testCall: b.mutation({ query: ({ id, to_number }) => C.flow(`${ag(id)}/test-call`, { method: 'POST', body: { to_number } }) }),
     chatTest: b.mutation({ query: ({ id, ...body }) => C.flow(`${ag(id)}/chat-test`, { method: 'POST', body }) }),
     listScenarios: b.query({ query: (id) => C.flow(`${ag(id)}/test-scenarios`), providesTags: ['Scenario'] }),
     createScenario: b.mutation({ query: ({ id, ...body }) => C.flow(`${ag(id)}/test-scenarios`, { method: 'POST', body }), invalidatesTags: ['Scenario'] }),
@@ -280,10 +333,10 @@ export const flowApi = baseApi.injectEndpoints({
     listAgentDocuments: b.query({ query: (id) => C.flow(`${ag(id)}/kb-documents`), providesTags: ['Source'] }),
     addAgentDocument: b.mutation({
       async queryFn({ id, file }, _api, _extra, baseQuery) {
-        const created = await baseQuery(C.flow(`${ag(id)}/kb-documents`, { method: 'POST', body: { title: file.name, size: file.size } }));
+        const created = await baseQuery(C.flow(`${ag(id)}/kb-documents`, { method: 'POST', body: { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size } }));
         if (created.error) return created;
         if (created.data?.upload_url) {
-          const up = await uploadToSignedUrl({ url: created.data.upload_url, file });
+          const up = await uploadToSignedUrl({ url: created.data.upload_url, file, authed: true });
           if (up.error) return up;
         }
         return created;
@@ -303,16 +356,18 @@ export const flowApi = baseApi.injectEndpoints({
     listSources: b.query({ query: (kbId) => C.flow(`/customer/knowledge-bases/${kbId}/sources`), providesTags: ['Source'] }),
     addSource: b.mutation({
       async queryFn({ kbId, file, ...body }, _api, _extra, baseQuery) {
-        const created = await baseQuery(C.flow(`/customer/knowledge-bases/${kbId}/sources`, { method: 'POST', body }));
+        const created = await baseQuery(C.flow(`/customer/knowledge-bases/${kbId}/sources`, { method: 'POST', body: sourceTo(body, file) }));
         if (created.error || !file) return created;
+        // File sources are created as awaiting_upload; the bytes go to upload_url, then the file is processed.
         if (created.data?.upload_url) {
-          const up = await uploadToSignedUrl({ url: created.data.upload_url, file });
+          const up = await uploadToSignedUrl({ url: created.data.upload_url, file, authed: true });
           if (up.error) return up;
         }
         return created;
       },
       invalidatesTags: ['Source', 'Knowledge'],
     }),
+    getSource: b.query({ query: ({ kbId, id }) => C.flow(`/customer/knowledge-bases/${kbId}/sources/${id}`) }),
     removeSource: b.mutation({
       query: ({ kbId, id }) => C.flow(`/customer/knowledge-bases/${kbId}/sources/${id}`, { method: 'DELETE' }),
       invalidatesTags: ['Source', 'Knowledge'],
@@ -321,14 +376,27 @@ export const flowApi = baseApi.injectEndpoints({
       query: ({ kbId, id }) => C.flow(`/customer/knowledge-bases/${kbId}/sources/${id}/resync`, { method: 'POST', body: {} }),
       invalidatesTags: ['Source'],
     }),
-    queryKnowledge: b.mutation({ query: ({ kbId, question }) => C.flow(`/customer/knowledge-bases/${kbId}/query`, { method: 'POST', body: { question } }) }),
+    // Real full-text search: { answer, matches: [{ title, type, passage, score 0-1 }], simulated: false }.
+    queryKnowledge: b.mutation({
+      query: ({ kbId, question }) => C.flow(`/customer/knowledge-bases/${kbId}/query`, { method: 'POST', body: { question } }),
+      transformResponse: (d) => ({
+        ...d,
+        passages: (d?.passages ?? d?.matches ?? []).map((m) => ({ source: m.title ?? m.source ?? m.type, text: m.passage ?? m.text ?? '', score: m.score ?? 0 })),
+      }),
+    }),
 
     // Tools (ACT-01) -----------------------------------------------------
-    listTools: b.query({ query: () => C.flow('/customer/tools'), providesTags: ['Tool'] }),
-    createTool: b.mutation({ query: (body) => C.flow('/customer/tools', { method: 'POST', body }), invalidatesTags: ['Tool'] }),
-    updateTool: b.mutation({ query: ({ id, ...body }) => C.flow(`/customer/tools/${id}`, { method: 'PATCH', body }), invalidatesTags: ['Tool'] }),
+    // The screens edit parameters as a list; the API stores a JSON schema.
+    listTools: b.query({ query: () => C.flow('/customer/tools'), transformResponse: (d) => asArray(d).map(toolFrom), providesTags: ['Tool'] }),
+    createTool: b.mutation({ query: (body) => C.flow('/customer/tools', { method: 'POST', body: toolTo(body) }), invalidatesTags: ['Tool'] }),
+    updateTool: b.mutation({
+      query: ({ id, ...body }) => C.flow(`/customer/tools/${id}`, { method: 'PATCH', body: toolTo(body) }),
+      invalidatesTags: ['Tool'],
+    }),
     deleteTool: b.mutation({ query: (id) => C.flow(`/customer/tools/${id}`, { method: 'DELETE' }), invalidatesTags: ['Tool'] }),
-    testTool: b.mutation({ query: ({ id, params }) => C.flow(`/customer/tools/${id}/test`, { method: 'POST', body: { params } }), invalidatesTags: ['Tool'] }),
+    // Sends the real request. Returns { request, response: { status, duration_ms, body, error }, missing_arguments? };
+    // status 0 means nothing came back (missing arguments, or the address couldn't be reached).
+    testTool: b.mutation({ query: ({ id, params }) => C.flow(`/customer/tools/${id}/test`, { method: 'POST', body: { arguments: params ?? {} } }) }),
 
     // Pronunciations, voices, teams -------------------------------------
     // Company-wide list: { entries: [{ word, say_as }] } on the wire, a plain array in the UI.
@@ -383,6 +451,7 @@ export const {
   useCreateFromTemplateMutation,
   useGenerateDraftMutation,
   useCreateTestSessionMutation,
+  useGetSourceQuery,
   useTestCallMutation,
   useChatTestMutation,
   useListScenariosQuery,

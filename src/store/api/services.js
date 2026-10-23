@@ -1,7 +1,6 @@
 // One path prefix per backend service at the ingress (DEMO-PATH D-05).
-// Only voice-auth-be and voice-billing-be are deployed today; the others'
-// endpoints are proposed in FEATURE-TICKETS.md and answer "not available"
-// until they ship.
+// Every service listed here is deployed on dev; a route a service doesn't serve
+// yet still answers "not available" and the screen says so.
 
 const env = import.meta.env;
 
@@ -16,6 +15,7 @@ export const SERVICE_LABEL = {
   outbound: 'voice-outbound-be',
   analytics: 'voice-analytics-be',
   integration: 'voice-integration-be',
+  orchestrator: 'voice-orchestrator-be',
 };
 
 export const PREFIX = {
@@ -27,6 +27,7 @@ export const PREFIX = {
   outbound: env.VITE_OUTBOUND_PREFIX ?? '/outbound',
   analytics: env.VITE_ANALYTICS_PREFIX ?? '/analytics',
   integration: env.VITE_INTEGRATION_PREFIX ?? '/integration',
+  orchestrator: env.VITE_ORCHESTRATOR_PREFIX ?? '/orchestrator',
 };
 
 /**
@@ -48,6 +49,7 @@ export const C = {
   outbound: req('outbound', 'customer'),
   analytics: req('analytics', 'customer'),
   integration: req('integration', 'customer'),
+  orchestrator: req('orchestrator', 'customer'),
 };
 
 // Admin-realm builders.

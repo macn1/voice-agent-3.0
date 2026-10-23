@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       // One prefix per service (DEMO-PATH D-05). Only /api paths are proxied so
       // SPA routes such as /inbound stay with the app.
       proxy: Object.fromEntries(
-        ['auth', 'billing', 'flow', 'telephony', 'inbound', 'outbound', 'analytics', 'integration'].flatMap((svc) => [
+        ['auth', 'billing', 'flow', 'telephony', 'inbound', 'outbound', 'analytics', 'integration', 'orchestrator'].flatMap((svc) => [
           [`/${svc}/api`, proxied],
           [`/${svc}/healthz`, proxied],
         ]),

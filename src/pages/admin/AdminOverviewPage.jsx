@@ -1,25 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowRight, Building2, Clock3, Globe2, Package as PackageIcon, PhoneOff, Sparkles, UserPlus, Users, Wallet } from 'lucide-react';
+import { ArrowRight, Building2, CheckCircle2, Clock3, Globe2, Package as PackageIcon, PhoneCall, Sparkles, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
-import { date, money, number, titleCase } from '../../lib/format';
+import { date, money, number, percent, titleCase } from '../../lib/format';
 import { asList, listTotal, roleLabel } from '../../lib/normalize';
 import {
-  useGetCustomerRankingQuery,
-  useGetPlatformSummaryQuery,
+  useGetPlatformOverviewQuery,
   useListAdminPackagesQuery,
   useListAdminStaffQuery,
   useListCustomersQuery,
   useListNumberPoolQuery,
 } from '../../store/api/adminApi';
-import { Async, Badge, Button, EmptyState, Skeleton, StatusBadge } from '../../components/ui';
+import { Async, Badge, Button, EmptyState, SegmentTabs, Skeleton, StatusBadge } from '../../components/ui';
 import { HBars, ShareBar, TimeChart } from '../../components/charts';
 import { COUNTRY_CENTER, countryName, WorldMap } from '../../components/WorldMap';
 
-// ADM-12 Platform overview. Built from the deployed services: customers and
-// staff from voice-auth-be, plans from voice-billing-be, numbers from
-// voice-telephony-be. Call, minute and revenue figures come from
-// voice-analytics-be and appear once it answers.
+// ADM-12 Platform overview. Customers and staff from voice-auth-be, plans from
+// voice-billing-be, numbers from voice-telephony-be, and call figures from
+// voice-analytics-be (/admin/analytics/overview).
 
 const CUSTOMER_SAMPLE = 200;
 const STATUS_COLOR = {
@@ -59,8 +57,6 @@ export function AdminOverviewPage() {
   const packages = useListAdminPackagesQuery();
   const staff = useListAdminStaffQuery(undefined, { skip: !can('staff.manage') });
   const numbers = useListNumberPoolQuery(undefined, { skip: !can('customer.read') });
-  const summary = useGetPlatformSummaryQuery();
-  const ranking = useGetCustomerRankingQuery();
   const firstName = profile?.name?.split(' ')[0];
 
   return (
@@ -91,7 +87,7 @@ export function AdminOverviewPage() {
       </section>
 
       <div className="stack">
-        <PlatformActivity summary={summary} ranking={ranking} />
+        <PlatformActivity customers={asList(customers.data)} />
         {can('customer.read') && (
           <Async state={customers} skeleton={<Skeleton h={420} />}>
             {(data) => <CustomerSection data={data} numbers={asList(numbers.data)} packages={asList(packages.data)} staff={staff.data} />}
@@ -493,97 +489,135 @@ function StaffCard({ state }) {
   );
 }
 
-function PlatformActivity({ summary, ranking }) {
+const RANGES = [
+  { value: '7', label: '7 days' },
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+];
+
+/** Change versus the previous period, e.g. "▲ 12% vs previous period". */
+function delta(now, before) {
+  if (!before) return now ? 'No calls in the previous period' : undefined;
+  const d = ((now - before) / before) * 100;
+  return `${d >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(d))}% vs previous period`;
+}
+
+function PlatformActivity({ customers }) {
   const navigate = useNavigate();
-  const s = summary.data;
-  if (!s) {
-    return summary.error ? (
+  const [days, setDays] = useState('7');
+  // Whole days so the request (and its cache entry) stays stable while you browse.
+  const from = useMemo(() => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - Number(days));
+    return d.toISOString();
+  }, [days]);
+  const overview = useGetPlatformOverviewQuery({ from });
+  const names = useMemo(() => new Map(customers.map((c) => [c.id, c.name])), [customers]);
+  const s = overview.data?.summary;
+  if (overview.error) {
+    return (
       <div className="banner info">
-        <Activity />
-        <span className="grow">Live calls, minutes and revenue across customers will appear here once voice-analytics-be is deployed.</span>
+        <span className="grow">Call figures aren't available right now: {overview.error.message}</span>
       </div>
-    ) : null;
+    );
   }
-  const rows = asList(ranking.data);
+  if (!s) return <Skeleton h={120} style={{ borderRadius: 18 }} />;
+  const prev = s.previous_period;
+  const points = (overview.data.points ?? []).map((p) => ({ ...p, day: (p.bucket ?? '').slice(0, 10) }));
+  const top = overview.data.top_customers ?? [];
+  const outcomes = s.top_outcomes ?? [];
+  const callsDelta = delta(s.total_calls, prev?.total_calls);
   return (
     <>
-      <div className="live-strip">
-        <div className="live-now">
-          <span className="live-dot" aria-hidden />
-          <div>
-            <div className="live-label">Live calls now</div>
-            <div className="live-value">{number(s.live_calls)}</div>
-          </div>
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <div>
+          <div className="card-title">Voice traffic</div>
+          <div className="card-sub">Every customer, every agent</div>
         </div>
-        <div className="live-cell">
-          <Clock3 />
-          <div>
-            <span>Minutes this month</span>
-            <b>{number(s.minutes_month)}</b>
-          </div>
-        </div>
-        <div className="live-cell">
-          <Wallet />
-          <div>
-            <span>Revenue this month</span>
-            <b>{money(s.revenue_month)}</b>
-          </div>
-        </div>
-        <div className={`live-cell ${s.failing_calls_24h ? 'bad' : ''}`}>
-          <PhoneOff />
-          <div>
-            <span>Failed calls (24h)</span>
-            <b>{number(s.failing_calls_24h)}</b>
-          </div>
-        </div>
+        <SegmentTabs value={days} onChange={setDays} items={RANGES} />
       </div>
-      {s.timeseries?.length > 0 && (
+      <div className="grid-3 kpi-row">
+        <Kpi
+          icon={PhoneCall}
+          label="Calls"
+          value={number(s.total_calls)}
+          hint={`${number(s.inbound_calls)} inbound · ${number(s.outbound_calls)} outbound${callsDelta ? ` · ${callsDelta}` : ''}`}
+        />
+        <Kpi icon={Clock3} tone="blue" label="Minutes" value={number(s.total_minutes)} hint={delta(s.total_minutes, prev?.total_minutes)} />
+        <Kpi
+          icon={CheckCircle2}
+          tone="green"
+          label="Success rate"
+          value={percent(s.success_rate)}
+          hint={`${number(s.successful_calls)} of ${number(s.answered_calls)} answered · ${number(s.transferred_calls)} transferred`}
+        />
+        <Kpi
+          icon={Building2}
+          label="Active customers"
+          value={number(overview.data.active_customers)}
+          hint={`Cost ${money(s.total_cost)} · avg call ${number(s.avg_duration_seconds)} s`}
+        />
+      </div>
+      {points.length > 0 && (
         <div className="card card-pad">
           <div className="card-title">Calls per day</div>
           <div className="card-sub" style={{ marginBottom: 14 }}>
-            Every customer, every agent
+            All calls and the successful ones
           </div>
-          <TimeChart data={s.timeseries} x="day" series={[{ key: 'calls', label: 'Calls' }]} />
+          <TimeChart
+            data={points}
+            x="day"
+            series={[
+              { key: 'calls', label: 'Calls' },
+              { key: 'successful_calls', label: 'Successful' },
+            ]}
+          />
         </div>
       )}
-      {rows.length > 0 && (
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <h2>Customers by usage</h2>
-              <div className="card-sub">Ranked by calls this period</div>
+      <div className="grid-2" style={{ alignItems: 'start' }}>
+        {top.length > 0 && (
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <h2>Top customers</h2>
+                <div className="card-sub">Ranked by calls in this period</div>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th className="num">Calls</th>
+                    <th className="num">Successful</th>
+                    <th className="num">Minutes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.map((r) => (
+                    <tr key={r.tenant_id} className="clickable" onClick={() => navigate(`/admin/customers/${r.tenant_id}`)}>
+                      <td className="cell-main">{names.get(r.tenant_id) ?? `${r.tenant_id.slice(0, 8)}…`}</td>
+                      <td className="num">{number(r.calls)}</td>
+                      <td className="num">{number(r.successful_calls)}</td>
+                      <td className="num">{number(r.minutes)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th>Plan</th>
-                  <th className="num">Calls</th>
-                  <th className="num">Minutes</th>
-                  <th className="num">Revenue</th>
-                  <th className="num">Failure rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.tenant_id} className="clickable" onClick={() => navigate(`/admin/customers/${r.tenant_id}`)}>
-                    <td className="cell-main">{r.tenant_name}</td>
-                    <td>{r.plan ?? '—'}</td>
-                    <td className="num">{number(r.calls)}</td>
-                    <td className="num">{number(r.minutes)}</td>
-                    <td className="num">{money(r.revenue)}</td>
-                    <td className="num" style={{ color: r.failure_rate > 0.1 ? 'var(--red)' : undefined }}>
-                      {Math.round(r.failure_rate * 100)}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        )}
+        {outcomes.length > 0 && (
+          <div className="card card-pad">
+            <div className="card-title">What calls ended in</div>
+            <div className="card-sub" style={{ marginBottom: 16 }}>
+              Top outcomes
+            </div>
+            <HBars color="var(--accent)" rows={outcomes.map((o) => ({ label: titleCase(o.outcome), value: o.calls }))} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }

@@ -5,12 +5,38 @@ import { C } from './services';
 // (ANA-F2), unanswered questions (KNW-02.4), exports & scheduled reports
 // (EXT-03), activity log (CMP-04.1).
 
+// There is no "list exports" route, so exports started from this browser are remembered
+// (id only) and each one is read back by id, until it expires.
+const EXPORTS_KEY = 'aurlynn.exports';
+const knownExports = () => {
+  try {
+    return JSON.parse(localStorage.getItem(EXPORTS_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+const rememberExport = (id) => {
+  try {
+    localStorage.setItem(EXPORTS_KEY, JSON.stringify([id, ...knownExports().filter((x) => x !== id)].slice(0, 20)));
+  } catch {
+    /* storage blocked: the export is still downloadable from the toast */
+  }
+};
+const forgetExport = (id) => {
+  try {
+    localStorage.setItem(EXPORTS_KEY, JSON.stringify(knownExports().filter((x) => x !== id)));
+  } catch {
+    /* ignore */
+  }
+};
+
 export const analyticsApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
     /**
-     * One endpoint for every analytics report:
-     * report = summary | timeseries | agents | outcomes | funnel | extracted-fields
-     *        | usage | cost | quality | sentiment | topics | heatmap | campaigns | phone-numbers
+     * One endpoint for every analytics report (all served by voice-analytics-be):
+     * report = summary | timeseries | agents | outcomes | funnel | usage | cost | quality
+     *        | sentiment | heatmap | campaigns | phone-numbers
+     * Not served yet: topics, extracted-fields, per-agent drop-off and latency.
      */
     getAnalytics: b.query({
       query: ({ report, range, ...params }) => {
@@ -27,36 +53,46 @@ export const analyticsApi = baseApi.injectEndpoints({
       },
       transformResponse: (res, _meta, arg) => {
         if (!res) return res;
-        if (arg?.report === 'summary' && res.summary) {
-          const s = res.summary;
-          const prev = s.previous_period;
-          return {
-            ...res,
-            calls: s.total_calls ?? 0,
-            minutes: s.total_minutes ?? 0,
-            success_rate: s.success_rate ?? 0,
-            avg_duration: s.avg_duration_seconds ?? 0,
-            top_outcomes: s.top_outcomes ?? [],
-            prev: prev
-              ? {
-                  calls: prev.total_calls ?? 0,
-                  minutes: prev.total_minutes ?? 0,
-                  success_rate: prev.success_rate ?? 0,
-                  avg_duration: prev.avg_duration_seconds ?? 0,
-                }
-              : undefined,
-          };
+        const day = (pt) => (pt.bucket ?? '').slice(0, 10);
+        switch (arg?.report) {
+          case 'summary': {
+            const s = res.summary ?? {};
+            const prev = s.previous_period;
+            return {
+              ...res,
+              calls: s.total_calls ?? 0,
+              minutes: s.total_minutes ?? 0,
+              success_rate: s.success_rate ?? 0,
+              avg_duration: s.avg_duration_seconds ?? 0,
+              top_outcomes: s.top_outcomes ?? [],
+              prev: prev
+                ? { calls: prev.total_calls ?? 0, minutes: prev.total_minutes ?? 0, success_rate: prev.success_rate ?? 0, avg_duration: prev.avg_duration_seconds ?? 0 }
+                : undefined,
+            };
+          }
+          case 'timeseries':
+            return (res.points ?? []).map((pt) => ({ ...pt, day: day(pt), successful: pt.successful_calls ?? 0, calls: pt.calls ?? 0, minutes: pt.minutes ?? 0 }));
+          case 'agents':
+            return (res.items ?? []).map((r) => ({ ...r, avg_duration: r.avg_duration_seconds ?? 0 }));
+          case 'outcomes':
+            return (res.items ?? []).map((r) => ({ ...r, count: r.calls, is_success: r.successful > 0 && r.successful === r.calls }));
+          case 'funnel':
+            return (res.stages ?? []).map((r) => ({ ...r, stage: r.label, count: r.calls }));
+          case 'usage':
+            return { ...res, by_day: (res.points ?? []).map((pt) => ({ ...pt, day: day(pt) })) };
+          case 'cost':
+            return { ...res, total: res.total_cost ?? 0, per_call: res.cost_per_call ?? 0, per_minute: res.cost_per_minute ?? 0 };
+          case 'sentiment':
+            return { ...res, rows: (res.points ?? []).map((pt) => ({ ...pt, day: day(pt) })) };
+          case 'heatmap':
+            // weekday: 0 = Sunday ... 6 = Saturday on the wire; the grid starts on Monday.
+            return (res.cells ?? []).map((c) => ({ ...c, weekday: (c.weekday + 6) % 7, connect_rate: c.calls ? c.answered / c.calls : 0 }));
+          case 'campaigns':
+          case 'phone-numbers':
+            return (res.items ?? []).map((r) => ({ ...r, name: r.name ?? r.campaign_name ?? r.e164 ?? r.phone_number ?? r.campaign_id ?? r.phone_number_id ?? '—', connect_rate: r.connect_rate ?? (r.calls ? (r.answered_calls ?? 0) / r.calls : 0) }));
+          default:
+            return res;
         }
-        if (arg?.report === 'timeseries' && Array.isArray(res.points)) {
-          return res.points.map((pt) => ({
-            ...pt,
-            day: (pt.bucket ?? '').slice(0, 10),
-            successful: pt.successful_calls ?? 0,
-            calls: pt.calls ?? 0,
-            minutes: pt.minutes ?? 0,
-          }));
-        }
-        return res;
       },
       providesTags: ['Analytics'],
     }),
@@ -79,22 +115,68 @@ export const analyticsApi = baseApi.injectEndpoints({
     }),
     getAgentDropoff: b.query({ query: (id) => C.analytics(`/customer/analytics/agents/${id}/dropoff`), providesTags: ['Analytics'] }),
     getAgentLatency: b.query({ query: (id) => C.analytics(`/customer/analytics/agents/${id}/latency`), providesTags: ['Analytics'] }),
-    listUnansweredQuestions: b.query({ query: () => C.analytics('/customer/analytics/unanswered-questions'), providesTags: ['Knowledge'] }),
+    // { items: [{ question, times_asked, last_asked_at, last_call_id }] }
+    listUnansweredQuestions: b.query({
+      query: () => C.analytics('/customer/analytics/unanswered-questions', { params: { from: new Date(Date.now() - 90 * 86400000).toISOString() } }),
+      transformResponse: (d) =>
+        (d?.items ?? d ?? []).map((q) => ({
+          ...q,
+          id: q.id ?? q.question,
+          occurrences: q.times_asked ?? q.occurrences ?? 1,
+          last_seen_at: q.last_asked_at ?? q.last_seen_at,
+          example_call_id: q.last_call_id ?? q.example_call_id,
+        })),
+      providesTags: ['Knowledge'],
+    }),
 
     listSavedViews: b.query({ query: () => C.analytics('/customer/analytics/saved-views'), providesTags: ['SavedView'] }),
     saveView: b.mutation({ query: (body) => C.analytics('/customer/analytics/saved-views', { method: 'POST', body }), invalidatesTags: ['SavedView'] }),
+    // The page's daily figures as CSV (type daily_summary). Ready at once; download within 24 hours.
     exportAnalytics: b.mutation({
-      query: (filters) => C.analytics('/customer/analytics/export', { method: 'POST', body: { filters } }),
+      query: () => C.analytics('/customer/analytics/export', { method: 'POST', body: {} }),
+      transformResponse: (d) => {
+        if (d?.id) rememberExport(d.id);
+        return d;
+      },
       invalidatesTags: ['Export'],
     }),
 
-    listExports: b.query({ query: () => C.analytics('/customer/exports'), providesTags: ['Export'] }),
+    // Exports started from this browser, newest first, with their current status.
+    listExports: b.query({
+      async queryFn(_arg, _api, _extra, baseQuery) {
+        const rows = await Promise.all(
+          knownExports().map(async (id) => {
+            const r = await baseQuery(C.analytics(`/customer/exports/${id}`));
+            if (r.error?.status === 404) forgetExport(id);
+            return r.data ? { ...r.data, kind: r.data.type } : null;
+          }),
+        );
+        return { data: rows.filter(Boolean) };
+      },
+      providesTags: ['Export'],
+    }),
+    // kind: calls | daily_summary. filters: from, to, timezone, agent_id, direction, outcome (default last 30 days).
     createExport: b.mutation({
-      query: ({ kind, filters = {} }) => C.analytics('/customer/exports', { method: 'POST', body: { kind, filters } }),
+      query: ({ kind, filters = {} }) => C.analytics('/customer/exports', { method: 'POST', body: { type: kind, format: 'csv', ...filters } }),
+      transformResponse: (d) => {
+        if (d?.id) rememberExport(d.id);
+        return d;
+      },
       invalidatesTags: ['Export'],
     }),
+    // [{ id, name, type, frequency daily|weekly|monthly, weekday, hour, timezone, recipients, enabled, next_run_at, delivery }].
+    // delivery is email_not_connected until an email provider is added.
     listScheduledReports: b.query({ query: () => C.analytics('/customer/scheduled-reports'), providesTags: ['Report'] }),
-    putScheduledReports: b.mutation({ query: (body) => C.analytics('/customer/scheduled-reports', { method: 'PUT', body }), invalidatesTags: ['Report'] }),
+    // Replaces the whole list.
+    putScheduledReports: b.mutation({
+      query: (reports) =>
+        C.analytics('/customer/scheduled-reports', {
+          method: 'PUT',
+          body: { reports: (Array.isArray(reports) ? reports : (reports?.reports ?? [])).map(({ id: _id, next_run_at: _n, delivery: _d, ...r }) => r) },
+        }),
+      invalidatesTags: ['Report'],
+    }),
+    deleteSavedView: b.mutation({ query: (id) => C.analytics(`/customer/analytics/saved-views/${id}`, { method: 'DELETE' }), invalidatesTags: ['SavedView'] }),
 
     listAuditLog: b.query({ query: (params) => C.analytics('/customer/audit-log', { params }), providesTags: ['Audit'] }),
   }),
@@ -106,6 +188,7 @@ export const {
   useSimulateDemoCallMutation,
   useGenerateDemoHistoryMutation,
   useResetDemoCallsMutation,
+  useDeleteSavedViewMutation,
   useGetAgentDropoffQuery,
   useGetAgentLatencyQuery,
   useListUnansweredQuestionsQuery,

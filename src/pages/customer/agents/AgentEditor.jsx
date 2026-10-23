@@ -39,6 +39,7 @@ import { Async, Badge, Button, errMsg, Field, Input, Modal, SegmentTabs, Skeleto
 import { Drawer } from '../../../components/forms';
 import { CallNumberDialog } from '../shared';
 import * as Tabs from './AgentTabs';
+import { PhoneTest, PublishedChat, VoiceTest } from './TestPanels';
 
 const TABS = [
   {
@@ -365,12 +366,14 @@ function PublishDialog({ open, onClose, agent, onPublished }) {
 
 function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
   const [mode, setMode] = useState(initialMode);
+  // Chat can talk to the draft (editor copy) or the published version (what callers get).
+  const [target, setTarget] = useState('draft');
   const [values, setValues] = useState({});
   const varsQ = useGetAgentSectionQuery({ id: agent.id, section: 'variables' }, { skip: !open });
   const vars = (varsQ.data ?? []).filter((x) => x.direction === 'input');
 
   return (
-    <Drawer open={open} onClose={onClose} width={560} title={`Test ${agent.name}`} subtitle={<Badge tone="orange">Testing draft</Badge>}>
+    <Drawer open={open} onClose={onClose} width={560} title={`Test ${agent.name}`} subtitle={<Badge tone={mode === 'chat' && target === 'published' ? 'green' : 'orange'}>{mode === 'chat' && target === 'published' ? 'Testing published version' : 'Testing draft'}</Badge>}>
       <SegmentTabs
         value={mode}
         onChange={setMode}
@@ -395,9 +398,21 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
           </div>
         </details>
       )}
-      {mode === 'chat' && <ChatTest agentId={agent.id} variables={values} />}
-      {mode === 'voice' && <TestUnavailable what="Voice test" />}
-      {mode === 'phone' && <TestUnavailable what="Calling your phone" />}
+      {mode === 'chat' && (
+        <>
+          <SegmentTabs
+            value={target}
+            onChange={setTarget}
+            items={[
+              { value: 'draft', label: 'Draft' },
+              { value: 'published', label: 'Published' },
+            ]}
+          />
+          {target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />}
+        </>
+      )}
+      {mode === 'voice' && <VoiceTest agent={agent} />}
+      {mode === 'phone' && <PhoneTest agent={agent} />}
     </Drawer>
   );
 }
@@ -513,16 +528,6 @@ function ChatTest({ agentId, variables }) {
           Start over
         </Button>
       )}
-    </div>
-  );
-}
-
-/** Voice and phone tests need real calling, which isn't connected yet (backend: not in the November plan). */
-function TestUnavailable({ what }) {
-  return (
-    <div className="banner info" style={{ margin: 0 }}>
-      <AlertTriangle />
-      <span className="grow">{what} needs live calling, which isn't connected yet. Use Chat mode to try the draft agent.</span>
     </div>
   );
 }
