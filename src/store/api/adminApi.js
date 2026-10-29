@@ -112,6 +112,7 @@ export const adminApi = baseApi.injectEndpoints({
     // Agent templates (needs template.manage to create) --------------------
     listAdminTemplates: b.query({ query: () => A.flow('/admin/agent-templates'), providesTags: ['Template'] }),
     createAdminTemplate: b.mutation({ query: (body) => A.flow('/admin/agent-templates', { method: 'POST', body }), invalidatesTags: ['Template'] }),
+    deleteAdminTemplate: b.mutation({ query: (id) => A.flow(`/admin/agent-templates/${id}`, { method: 'DELETE' }), invalidatesTags: ['Template'] }),
 
     // Overview, audit ----------------------------------------------------
     // { active_customers, summary, points[{bucket,calls,answered_calls,successful_calls,minutes}], top_customers[{tenant_id,calls,successful_calls,minutes}] }
@@ -168,4 +169,5 @@ export const {
   useListAdminAuditQuery,
   useListAdminTemplatesQuery,
   useCreateAdminTemplateMutation,
+  useDeleteAdminTemplateMutation,
 } = adminApi;

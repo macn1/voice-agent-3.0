@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { LayoutTemplate, Plus } from 'lucide-react';
+import { LayoutTemplate, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { date, titleCase } from '../../lib/format';
 import { asList } from '../../lib/normalize';
-import { useCreateAdminTemplateMutation, useListAdminTemplatesQuery } from '../../store/api/adminApi';
-import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, useToast } from '../../components/ui';
+import { useCreateAdminTemplateMutation, useDeleteAdminTemplateMutation, useListAdminTemplatesQuery } from '../../store/api/adminApi';
+import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, PageHeader, useToast } from '../../components/ui';
 import { Select, Textarea } from '../../components/forms';
 
 // Agent templates customers can start from (GET/POST /flow/api/v1/admin/agent-templates).
@@ -23,6 +23,9 @@ export function AdminTemplatesPage() {
   const { can } = useAuth();
   const list = useListAdminTemplatesQuery();
   const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const [deleteTemplate] = useDeleteAdminTemplateMutation();
+  const toast = useToast();
   return (
     <>
       <PageHeader
@@ -54,6 +57,7 @@ export function AdminTemplatesPage() {
                       <th>Use case</th>
                       <th>Status</th>
                       <th>Updated</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -66,6 +70,16 @@ export function AdminTemplatesPage() {
                         <td>{titleCase(t.use_case ?? '')}</td>
                         <td>{t.is_active === false ? <Badge plain>Hidden</Badge> : <Badge tone="green">Active</Badge>}</td>
                         <td className="muted">{date(t.updated_at ?? t.created_at)}</td>
+                        <td className="actions">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trash2 />}
+                            title={can('template.manage') ? 'Delete' : 'Needs the template.manage permission'}
+                            disabled={!can('template.manage')}
+                            onClick={() => setRemoving(t)}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -76,6 +90,18 @@ export function AdminTemplatesPage() {
         </Async>
       </div>
       <CreateTemplateModal open={creating} onClose={() => setCreating(false)} />
+      <ConfirmDialog
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        danger
+        title={`Delete ${removing?.name}?`}
+        description="Customers will no longer see this template. Agents already created from it are not affected."
+        confirmLabel="Delete template"
+        onConfirm={async () => {
+          await deleteTemplate(removing.id).unwrap();
+          toast('Template deleted');
+        }}
+      />
     </>
   );
 }

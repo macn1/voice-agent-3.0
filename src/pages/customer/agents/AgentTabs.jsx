@@ -45,7 +45,7 @@ function useVariableNames(agentId) {
   return (v.data ?? []).map((x) => x.name);
 }
 
-export function PromptField({ value, onChange, variables, rows = 4, placeholder }) {
+export function PromptField({ value = '', onChange, variables, rows = 4, placeholder }) {
   const ref = useRef(null);
   const [suggest, setSuggest] = useState(null);
   const used = [...value.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]);
@@ -283,7 +283,9 @@ export function ConversationTab({ agent }) {
         </Button>
       }
     >
-      {(f, patch) => (
+      {(flowDraft, patch) => {
+        const f = { ...flowDraft, steps: flowDraft.steps ?? [] };
+        return (
         <>
           {validation && (
             <div className="stack" style={{ gap: 6 }}>
@@ -477,7 +479,8 @@ export function ConversationTab({ agent }) {
             </Field>
           </div>
         </>
-      )}
+        );
+      }}
     </SectionCard>
   );
 }
@@ -1746,7 +1749,9 @@ function WidgetCard({ title, description, agentId, section, snippet }) {
   const s = useAgentSection(agentId, section);
   return (
     <SectionCard title={title} description={description} section={s}>
-      {(w, patch) => (
+      {(widget, patch) => {
+        const w = { enabled: false, button_text: '', color: '#000000', position: 'bottom-right', allowed_domains: [], widget_key: '', ...widget };
+        return (
         <>
           <Toggle checked={w.enabled} onChange={(v) => patch({ enabled: v })} label="Enabled" />
           <div className="form-grid">
@@ -1811,7 +1816,8 @@ function WidgetCard({ title, description, agentId, section, snippet }) {
             </div>
           </div>
         </>
-      )}
+        );
+      }}
     </SectionCard>
   );
 }
@@ -1847,7 +1853,9 @@ export function ChannelsTab({ agent }) {
           </Link>
         }
       >
-        {(c, patch) => (
+        {(chatDraft, patch) => {
+          const c = { enabled: false, use_emojis: false, business_hours_only: false, max_reply_chars: 1000, handoff_keywords: [], ...chatDraft };
+          return (
           <div className="form-grid">
             <div className="full">
               <Toggle checked={c.enabled} onChange={(v) => patch({ enabled: v })} label="Answer chats" description="Reply on WhatsApp and web chat until a person takes over." />
@@ -1881,7 +1889,8 @@ export function ChannelsTab({ agent }) {
               </Field>
             )}
           </div>
-        )}
+          );
+        }}
       </SectionCard>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -146,6 +146,26 @@ const TABS = [
   },
 ];
 
+/** A tab that throws while rendering shows its error here instead of blanking the whole page. */
+class TabBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="banner danger">
+        <span className="grow">
+          This tab couldn't be displayed: <b>{String(this.state.error.message ?? this.state.error)}</b>
+        </span>
+      </div>
+    );
+  }
+}
+
 /** P-09 Agent editor. Every tab saves to the draft; Publish makes it live. */
 export function AgentEditor() {
   const { id = '', tab = 'identity' } = useParams();
@@ -215,7 +235,9 @@ export function AgentEditor() {
             ))}
           </nav>
           <div style={{ minWidth: 0 }}>
-            <Tab agent={agent.data} />
+            <TabBoundary key={current.key}>
+              <Tab agent={agent.data} />
+            </TabBoundary>
           </div>
         </div>
       )}

@@ -45,7 +45,7 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, left, ri
 }
 
 /** Editable list of short strings shown as removable tags. */
-export function ListEditor({ value, onChange, placeholder = 'Add and press Enter', mono }) {
+export function ListEditor({ value = [], onChange, placeholder = 'Add and press Enter', mono }) {
   const [draft, setDraft] = useState('');
   const add = () => {
     const v = draft.trim();
@@ -79,7 +79,7 @@ export function ListEditor({ value, onChange, placeholder = 'Add and press Enter
 }
 
 /** Ordered list of sentences (rules, phrases) with one input per row. */
-export function LinesEditor({ value, onChange, placeholder, addLabel = 'Add' }) {
+export function LinesEditor({ value = [], onChange, placeholder, addLabel = 'Add' }) {
   return (
     <div className="stack" style={{ gap: 8 }}>
       {value.map((v, i) => (

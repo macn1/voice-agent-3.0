@@ -1,0 +1,13 @@
+phone,name,plan,amount_due
++919876510001,Asha Rao,Gold,4500
++919876510002,Ravi Kumar,Silver,2300
++919876510003,Meera Das,Gold,1200
+98765 10004,Kiran Shah,Silver,980
++919876510005,Neha Iyer,Gold,7600
++919876510006,Farah Khan,Silver,3150
++919876510007,Dev Patel,Gold,410
++919876510008,Priya Nair,Silver,5220
++919876510002,Ravi Kumar (duplicate),Silver,2300
+abc,Bad Number,Gold,100
+,Empty Phone,Gold,100
++919876500055,On Do-Not-Call List,Gold,900
