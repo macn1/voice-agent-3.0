@@ -105,7 +105,10 @@ export function DocsPage() {
           <div>
             <h2>API reference</h2>
             <div className="card-sub">
-              All requests use <span className="mono">Authorization: Bearer &lt;API key&gt;</span> and return{' '}
+              Exchange your API key for a short-lived access token with{' '}
+              <span className="mono">POST {PREFIX.auth}/api/v1/auth/api-key/token</span> (header{' '}
+              <span className="mono">Authorization: Bearer &lt;API key&gt;</span>), then send{' '}
+              <span className="mono">Authorization: Bearer &lt;access token&gt;</span> on every request. Responses are{' '}
               <span className="mono">{'{ success, data }'}</span> or <span className="mono">{'{ success: false, error: { code, message } }'}</span>.
             </div>
           </div>

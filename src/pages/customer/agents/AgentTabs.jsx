@@ -1590,7 +1590,7 @@ export function InsightsTab({ agent }) {
         <div className="card-head">
           <div>
             <h2>Where callers drop off</h2>
-            <div className="card-sub">Callers reaching each step of the flow.</div>
+            <div className="card-sub">Answered calls in the last 30 days, by how far the conversation got. Dropped: the caller left there without a good outcome.</div>
           </div>
         </div>
         <div className="card-pad">
@@ -1615,7 +1615,7 @@ export function InsightsTab({ agent }) {
         <div className="card-head">
           <div>
             <h2>Response time</h2>
-            <div className="card-sub">Time from the caller finishing to the agent starting to speak. Target under 500 ms.</div>
+            <div className="card-sub">How long the agent takes to answer each time the caller speaks, last 30 days.</div>
           </div>
         </div>
         <div className="card-pad">
@@ -1745,103 +1745,19 @@ export function VersionsTab({ agent }) {
 
 /* Web & chat (WID-01, WA-06.2, WA-03.2) -------------------------------- */
 
-function WidgetCard({ title, description, agentId, section, snippet }) {
-  const s = useAgentSection(agentId, section);
-  return (
-    <SectionCard title={title} description={description} section={s}>
-      {(widget, patch) => {
-        const w = { enabled: false, button_text: '', color: '#000000', position: 'bottom-right', allowed_domains: [], widget_key: '', ...widget };
-        return (
-        <>
-          <Toggle checked={w.enabled} onChange={(v) => patch({ enabled: v })} label="Enabled" />
-          <div className="form-grid">
-            <Field label="Button text">
-              <Input value={w.button_text} onChange={(e) => patch({ button_text: e.target.value })} />
-            </Field>
-            <Field label="Colour">
-              <div className="row" style={{ gap: 8 }}>
-                <input type="color" className="color-input" value={w.color} onChange={(e) => patch({ color: e.target.value })} />
-                <Input className="mono" value={w.color} onChange={(e) => patch({ color: e.target.value })} />
-              </div>
-            </Field>
-            <Field label="Position">
-              <Select
-                value={w.position}
-                options={[
-                  { value: 'bottom-right', label: 'Bottom right' },
-                  { value: 'bottom-left', label: 'Bottom left' },
-                ]}
-                onChange={(e) => patch({ position: e.target.value })}
-              />
-            </Field>
-            <Field label="Allowed websites" className="full" hint="Only these domains can load it.">
-              <ListEditor value={w.allowed_domains} onChange={(v) => patch({ allowed_domains: v })} placeholder="www.example.com" mono />
-            </Field>
-          </div>
-          <div className="row" style={{ gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 260 }}>
-              <div className="field-label" style={{ marginBottom: 6 }}>
-                Embed snippet
-              </div>
-              <pre className="code">{snippet(w)}</pre>
-            </div>
-            <div style={{ width: 220 }}>
-              <div className="field-label" style={{ marginBottom: 6 }}>
-                Preview
-              </div>
-              <div
-                style={{
-                  position: 'relative',
-                  height: 120,
-                  borderRadius: 12,
-                  border: '1px dashed var(--border-strong)',
-                  background: 'var(--surface-2)',
-                }}
-              >
-                <span
-                  className="text-caption fw-medium"
-                  style={{
-                    position: 'absolute',
-                    bottom: 12,
-                    [w.position === 'bottom-left' ? 'left' : 'right']: 12,
-                    padding: '8px 14px',
-                    borderRadius: 999,
-                    background: w.color,
-                    color: '#fff',
-                  }}
-                >
-                  {w.button_text}
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-        );
-      }}
-    </SectionCard>
-  );
-}
-
 export function ChannelsTab({ agent }) {
   const chat = useAgentSection(agent.id, 'chatSettings');
-  const origin = window.location.origin;
   return (
     <div className="stack">
-      <WidgetCard
-        title="Web call widget"
-        description="Website visitors click and talk to this agent in the browser."
-        agentId={agent.id}
-        section="widget"
-        snippet={(w) => `<script src="${origin}/widget.js"\n  data-widget-key="${w.widget_key}"\n  async></script>`}
-      />
-
-      <WidgetCard
-        title="Website chat bubble"
-        description="The same agent answers typed chat on your site."
-        agentId={agent.id}
-        section="webchat"
-        snippet={(w) => `<script src="${origin}/webchat.js"\n  data-key="${w.widget_key}"\n  async></script>`}
-      />
+      <div className="card card-pad">
+        <div className="row" style={{ gap: 8 }}>
+          <h2 style={{ margin: 0 }}>Website call button & chat bubble</h2>
+          <Badge>Coming soon</Badge>
+        </div>
+        <p className="muted" style={{ marginTop: 6 }}>
+          Put this agent on your website as a click-to-talk button or a chat bubble. Until then, talk to it with the Test button above.
+        </p>
+      </div>
 
       <SectionCard
         title="Chat settings"
@@ -1923,10 +1839,10 @@ export function SettingsTab({ agent }) {
     const pick = (id) => list.find((x) => x.id === id);
     const parts = [pick(m.llm), pick(m.asr_provider), pick(m.tts_provider)].filter(Boolean);
     if (!parts.length) return null;
-    return {
-      latency: parts.reduce((s, p) => s + (p.latency_ms ?? 0), 0),
-      cost: parts.reduce((s, p) => s + (p.cost_per_min ?? 0), 0),
-    };
+    const latency = parts.reduce((s, p) => s + (p.latency_ms ?? 0), 0);
+    const cost = parts.reduce((s, p) => s + (p.cost_per_min ?? 0), 0);
+    if (!latency && !cost) return null;
+    return { latency, cost };
   }, [model.draft, models.data]);
 
   return (
@@ -2002,7 +1918,7 @@ export function SettingsTab({ agent }) {
         actions={
           estimate && (
             <Badge plain>
-              ≈ {estimate.latency} ms · ${estimate.cost.toFixed(3)}/min
+              ≈ {[estimate.latency ? `${estimate.latency} ms` : null, estimate.cost ? `$${estimate.cost.toFixed(3)}/min` : null].filter(Boolean).join(' · ')}
             </Badge>
           )
         }

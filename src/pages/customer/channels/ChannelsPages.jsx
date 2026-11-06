@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Smartphone, Trash2, Undo2, Unplug } from 'lucide-react';
+import { BookOpen, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Trash2, Undo2, Unplug } from 'lucide-react';
 import {
-  useConnectSmsMutation,
   useConnectWhatsappMutation,
   useConversationHandoffMutation,
   useCreateBroadcastMutation,
@@ -13,7 +12,6 @@ import {
   useListConversationMessagesQuery,
   useListConversationsQuery,
   useListMessageTemplatesQuery,
-  useListSmsSendersQuery,
   useListWhatsappAccountsQuery,
   useReplyToConversationMutation,
   useSetWhatsappAgentMutation,
@@ -54,7 +52,7 @@ export function WhatsAppPage() {
         icon={MessageCircle}
         motion="ring"
         warm
-        title="Follow up with every caller on WhatsApp & SMS"
+        title="Follow up with every caller on WhatsApp"
         description="Connect a WhatsApp Business number to send follow-ups, run broadcasts and let your agents answer chats."
         actions={
           <>
@@ -74,7 +72,7 @@ export function WhatsAppPage() {
     <>
       <PageHeader
         eyebrow="Connect"
-        title="WhatsApp & SMS"
+        title="WhatsApp"
         description="Send follow-ups and broadcasts, and let your agents answer chats."
         actions={
           <>
@@ -95,14 +93,12 @@ export function WhatsAppPage() {
           { value: 'connection', label: 'Connection' },
           { value: 'templates', label: 'Templates' },
           { value: 'agent', label: 'Chat agent' },
-          { value: 'sms', label: 'SMS' },
         ]}
       />
 
       {tab === 'connection' && <ConnectionTab accounts={accounts} />}
       {tab === 'templates' && <TemplatesTab />}
       {tab === 'agent' && <ChatAgentTab accounts={accounts} />}
-      {tab === 'sms' && <SmsTab />}
     </>
   );
 }
@@ -521,70 +517,6 @@ function ChatAgentCard({ account, options, onSave }) {
   );
 }
 
-function SmsTab() {
-  const toast = useToast();
-  const list = useListSmsSendersQuery();
-  const [connectSms] = useConnectSmsMutation();
-  const [provider, setProvider] = useState('msg91');
-  const [sender, setSender] = useState('');
-  return (
-    <div className="stack">
-      <div className="card">
-        <div className="card-head">
-          <h2>SMS senders</h2>
-        </div>
-        <Async state={list}>
-          {(xs) =>
-            xs.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <tbody>
-                    {xs.map((x) => (
-                      <tr key={x.id}>
-                        <td className="cell-main">{x.display_name ?? x.phone}</td>
-                        <td>{x.provider}</td>
-                        <td>
-                          <StatusBadge status={x.status === 'connected' ? 'active' : x.status} label={titleCase(x.status)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState icon={<Smartphone />} title="No SMS sender" />
-            )
-          }
-        </Async>
-      </div>
-      <div className="card card-pad stack">
-        <div className="card-title">Connect an SMS sender</div>
-        <div className="form-grid">
-          <Field label="Provider">
-            <Select value={provider} options={['msg91', 'twilio', 'gupshup', 'kaleyra']} onChange={(e) => setProvider(e.target.value)} />
-          </Field>
-          <Field label="Sender ID (DLT approved)">
-            <Input value={sender} onChange={(e) => setSender(e.target.value)} placeholder="CAREFR" />
-          </Field>
-        </div>
-        <div>
-          <Button
-            variant="primary"
-            disabled={!sender.trim()}
-            onClick={() =>
-              connectSms({ provider, sender_id: sender.trim() })
-                .unwrap()
-                .then(() => toast('SMS sender connected'))
-                .catch((e) => toast(errMsg(e), 'error'))
-            }
-          >
-            Connect
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** P-27 Inbox with human takeover (WA-04). */
 export function InboxPage() {
@@ -601,7 +533,9 @@ export function InboxPage() {
   const [tpl, setTpl] = useState('');
   const [tplVars, setTplVars] = useState([]);
   const end = useRef(null);
-  useEffect(() => end.current?.scrollIntoView(), [msgs.data]);
+  useEffect(() => {
+    end.current?.scrollIntoView();
+  }, [msgs.data]);
 
   const windowClosed = active?.window_expires_at ? Date.parse(active.window_expires_at) < Date.now() : false;
   const update = (c) => setActive(c); // the list refetches via cache invalidation

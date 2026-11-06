@@ -55,6 +55,7 @@ import {
 } from '../../../components/ui';
 import { SectionCard, Select, Textarea, useSection } from '../../../components/forms';
 import { useAgentOptions } from '../shared';
+import { useGetAnalyticsQuery } from '../../../store/api/analyticsApi';
 
 // Telephony providers shown on "Bring your own telephony". Each logo is read from
 // public/providers/<key>.png; if that file is missing the fallback icon is shown,
@@ -85,6 +86,9 @@ export function NumbersPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const list = useListNumbersQuery();
+  const usage = useGetAnalyticsQuery({ report: 'phone-numbers', range: '7d' });
+  // The report is keyed by the number itself (E.164).
+  const calls7d = Object.fromEntries((Array.isArray(usage.data) ? usage.data : []).map((r) => [r.number, r.calls]));
   const [assignAgent] = useAssignNumberAgentMutation();
   const [unassignAgent] = useUnassignNumberAgentMutation();
   const { options: agentOptions, agents } = useAgentOptions();
@@ -239,7 +243,7 @@ export function NumbersPage() {
                                   <span className="muted">Not assigned</span>
                                 )}
                               </td>
-                              <td className="num">{n.calls_7d ?? 0}</td>
+                              <td className="num">{calls7d[n.e164] ?? 0}</td>
                               <td className="muted">{date(n.allocated_at || n.created_at)}</td>
                               <td className="actions">
                                 <Button size="sm" variant="ghost" icon={<Clock />} onClick={() => navigate(`/numbers/${n.id}`)}>

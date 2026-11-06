@@ -12,6 +12,8 @@ import {
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Input, StatusBadge, useToast } from '../../../components/ui';
 import { downloadText, readFileText, Select } from '../../../components/forms';
 import { useBilling } from '../billingContext';
+import { useGetAnalyticsQuery } from '../../../store/api/analyticsApi';
+import { useListNumbersQuery } from '../../../store/api/callsApi';
 import { AgentPromptBox, UseCaseGallery } from '../AgentStarter';
 
 export function AgentsPage() {
@@ -22,6 +24,11 @@ export function AgentsPage() {
   const [status, setStatus] = useState('');
   const [tag, setTag] = useState('');
   const list = useListAgentsQuery({ limit: 200 });
+  // The list has no call counts or numbers: those come from analytics and the numbers list.
+  const perAgent = useGetAnalyticsQuery({ report: 'agents', range: '7d' });
+  const calls7d = Object.fromEntries((perAgent.data ?? []).map((r) => [r.agent_id, r.calls]));
+  const numbers = useListNumbersQuery();
+  const numbersOf = (id) => (numbers.data ?? []).filter((n) => n.agent_id === id).map((n) => n.e164);
   const [importAgent] = useImportAgentMutation();
   const [duplicateAgent] = useDuplicateAgentMutation();
   const [deleteAgent] = useDeleteAgentMutation();
@@ -147,8 +154,8 @@ export function AgentsPage() {
                               {a.has_unpublished_changes && <Badge tone="orange">Unpublished changes</Badge>}
                             </div>
                           </td>
-                          <td className="mono small">{a.numbers?.length ? a.numbers.join(', ') : <span className="muted">—</span>}</td>
-                          <td className="num">{a.calls_7d ?? 0}</td>
+                          <td className="mono small">{numbersOf(a.id).length ? numbersOf(a.id).join(', ') : <span className="muted">—</span>}</td>
+                          <td className="num">{calls7d[a.id] ?? 0}</td>
                           <td className="muted">{a.last_published_at ? date(a.last_published_at) : 'Never'}</td>
                           <td className="actions" onClick={(e) => e.stopPropagation()}>
                             <Button

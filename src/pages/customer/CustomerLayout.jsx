@@ -60,7 +60,7 @@ const SECTIONS = [
       { to: '/integrations', label: 'Integrations', icon: Plug },
       {
         to: '/channels/whatsapp',
-        label: 'WhatsApp & SMS',
+        label: 'WhatsApp',
         icon: MessageCircle,
         match: ['/broadcasts'],
       },

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AppWindow,
   ArrowLeft,
   Ban,
   BarChart3,
@@ -55,25 +54,27 @@ import {
 } from '../../../components/ui';
 import { CopyField, Drawer, Select } from '../../../components/forms';
 import { ClayIcon } from '../../../components/PixelHero';
-import { PREFIX } from '../../../store/api/services';
+import { API_BASE, PREFIX } from '../../../store/api/services';
+
+// Where the APIs are: their own host when the dashboard is served elsewhere.
+const API_ORIGIN = API_BASE || window.location.origin;
 
 const DEPLOY_CARDS = [
   { icon: PhoneOutgoing, motion: 'fly', title: 'Instant outbound', description: 'Place a single outbound call with one API request', to: '?tab=quickstart' },
   { icon: Layers, motion: 'pulse', title: 'Batch outbound calling', description: 'Run outbound calling campaigns at scale', to: '/campaigns/new' },
   { icon: PhoneIncoming, motion: 'ring', title: 'Inbound deployments', description: 'Deploy an agent on a number to answer inbound calls', to: '/numbers' },
   { icon: BarChart3, motion: 'pulse', title: 'Data fetch', description: 'Fetch call outcomes, recordings, and transcripts', to: '?tab=webhooks' },
-  { icon: Braces, motion: 'nudge', title: 'Agents SDK', description: 'Build and deploy an agent on your own stack', to: '/docs' },
+  { icon: Braces, motion: 'nudge', title: 'API reference', description: 'Every endpoint your code can call', to: '/docs' },
   { icon: PhoneOff, motion: 'ring', title: 'DND lists', description: 'Manage do not disturb lists', to: '/settings/do-not-call' },
 ];
 
 const RECIPES = [
-  { text: 'Mo', title: 'MoEngage', description: 'Trigger voice calls straight from your MoEngage campaigns or Flows', to: '/integrations/moengage' },
+  { text: 'Mo', title: 'MoEngage', description: 'Trigger calls from MoEngage with a call trigger URL', to: '/workflows' },
   { icon: PhoneForwarded, motion: 'nudge', title: 'Outbound with inbound callback', description: 'Campaign with callback fallback', to: '/workflows' },
-  { icon: AppWindow, motion: 'pulse', title: 'Embed an agent on your website', description: 'Drop an agent on any page', to: '/docs' },
   { icon: Zap, motion: 'pulse', title: 'Zapier', description: 'Call from any Zap', to: '/integrations/zapier' },
   { text: 'M', italic: true, title: 'Make', description: 'Call from a scenario', to: '/integrations/make' },
   { icon: Share2, motion: 'pulse', title: 'HubSpot', description: 'Call from workflows', to: '/integrations/hubspot' },
-  { icon: Workflow, motion: 'nudge', title: 'n8n', description: 'Call from a workflow', to: '/integrations/n8n' },
+  { icon: Workflow, motion: 'nudge', title: 'n8n', description: 'Call from a workflow with a call trigger URL', to: '/workflows' },
   { icon: Gauge, motion: 'pulse', title: 'Balancing rate limits', description: 'Pace calls under provider limits', to: '/settings/calling-rules' },
 ];
 
@@ -126,13 +127,14 @@ function DeployLanding() {
 
   const copySetup = async (tool) => {
     setOpen(false);
-    const base = `${window.location.origin}${PREFIX.outbound}/api/v1`;
+    const base = `${API_ORIGIN}${PREFIX.outbound}/api/v1`;
     const prompt = [
       'Set up Aurlynn voice agents in this project.',
-      `- API base URL: ${base}`,
-      '- Auth: "Authorization: Bearer $AURLYNN_API_KEY" (read the key from the AURLYNN_API_KEY env var)',
-      `- Start a call: POST ${base}/calls with { "agent_id", "to", "variables" }`,
-      '- Receive results with a webhook for call.completed and verify the X-Aurlynn-Signature header (HMAC-SHA256 of the raw body).',
+      `- Auth: read the API key from the AURLYNN_API_KEY env var and exchange it for a short-lived access token: POST ${API_ORIGIN}${PREFIX.auth}/api/v1/auth/api-key/token with "Authorization: Bearer <API key>"; the token is data.access_token. Send "Authorization: Bearer <access token>" on every other request and get a new token when it expires.`,
+      `- Start a call: POST ${base}/calls with { "agent_id", "to_number" (E.164), "variables" }`,
+      `- Call status: GET ${base}/calls/{id}`,
+      '- Responses are { success, data } or { success: false, error: { code, message } }.',
+      '- Results: add a webhook for call.completed. The body is { id, type, created_at, tenant_id, data: { call_id, status, outcome, is_success, duration_seconds, summary, ... } }. Verify the X-Aurlynn-Signature header "t=<unix>,v1=<hex>": v1 is HMAC-SHA256 of "<t>.<raw body>" with the endpoint\'s signing secret.',
       `- Docs: ${window.location.origin}/docs`,
     ].join('\n');
     try {
@@ -645,13 +647,23 @@ function DeliveriesDrawer({ endpoint, onClose }) {
 }
 
 function Quickstart() {
-  const base = `${window.location.origin}${PREFIX.outbound}/api/v1`;
+  const base = `${API_ORIGIN}${PREFIX.outbound}/api/v1`;
+  const tokenUrl = `${API_ORIGIN}${PREFIX.auth}/api/v1/auth/api-key/token`;
   return (
     <div className="stack">
       <div className="card card-pad stack">
-        <div className="card-title">1. Start an outbound call</div>
+        <div className="card-title">1. Get an access token</div>
+        <p className="muted small" style={{ margin: 0 }}>
+          API keys aren't sent with each request: exchange yours for a short-lived access token, and get a new one when it expires.
+        </p>
+        <pre className="code">{`curl -X POST ${tokenUrl} \\
+  -H "Authorization: Bearer $AURLYNN_API_KEY"
+# { "success": true, "data": { "access_token": "…", ... } }`}</pre>
+      </div>
+      <div className="card card-pad stack">
+        <div className="card-title">2. Start an outbound call</div>
         <pre className="code">{`curl -X POST ${base}/calls \\
-  -H "Authorization: Bearer $AURLYNN_API_KEY" \\
+  -H "Authorization: Bearer $AURLYNN_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
     "agent_id": "AGENT_ID",
@@ -660,39 +672,56 @@ function Quickstart() {
   }'`}</pre>
       </div>
       <div className="card card-pad stack">
-        <div className="card-title">2. Check its status</div>
+        <div className="card-title">3. Check its status</div>
         <pre className="code">{`curl ${base}/calls/CALL_ID \\
-  -H "Authorization: Bearer $AURLYNN_API_KEY"`}</pre>
+  -H "Authorization: Bearer $AURLYNN_TOKEN"`}</pre>
       </div>
       <div className="card card-pad stack">
-        <div className="card-title">3. Receive the result</div>
+        <div className="card-title">4. Receive the result</div>
         <p className="muted small">
           Add a webhook for <span className="mono">call.completed</span>. You'll receive:
         </p>
         <pre className="code">{`{
-  "event": "call.completed",
-  "call_id": "…",
-  "agent_id": "…",
-  "status": "completed",
-  "duration_seconds": 142,
-  "outcome": "booked",
-  "summary": "Caller booked a dermatology slot for Friday 6:30 PM.",
-  "extracted": { "appointment_booked": true },
-  "recording_url": "https://…"
+  "id": "…",
+  "type": "call.completed",
+  "created_at": "2026-11-06T10:42:00Z",
+  "tenant_id": "…",
+  "data": {
+    "call_id": "…",
+    "agent_id": "…",
+    "direction": "outbound",
+    "to_number": "+919876543210",
+    "status": "completed",
+    "outcome": "callback_requested",
+    "is_success": true,
+    "duration_seconds": 142,
+    "summary": "…",
+    "started_at": "…",
+    "ended_at": "…"
+  }
 }`}</pre>
         <p className="muted small">
-          Verify the <span className="mono">X-Aurlynn-Signature</span> header: HMAC-SHA256 of the raw body with your endpoint's signing secret.
+          Verify the <span className="mono">X-Aurlynn-Signature</span> header, <span className="mono">t=&lt;unix&gt;,v1=&lt;hex&gt;</span>: v1 is HMAC-SHA256 of{' '}
+          <span className="mono">&lt;t&gt;.&lt;raw body&gt;</span> with your endpoint's signing secret.
         </p>
       </div>
       <div className="card card-pad stack">
         <div className="card-title">Node.js</div>
-        <pre className="code">{`const res = await fetch("${base}/calls", {
+        <pre className="code">{`const tokenRes = await fetch("${tokenUrl}", {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.AURLYNN_API_KEY}\`,
+  },
+});
+const { data: auth } = await tokenRes.json();
+
+const res = await fetch("${base}/calls", {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${auth.access_token}\`,
     "Content-Type": "application/json",
   },
-  body: JSON.stringify({ agent_id, to: "+919876543210", variables: {} }),
+  body: JSON.stringify({ agent_id, to_number: "+919876543210", variables: {} }),
 });
 const { data } = await res.json();`}</pre>
       </div>

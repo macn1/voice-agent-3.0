@@ -6,6 +6,7 @@ import { useChatTestMutation, useCreateTestSessionMutation, useTestCallMutation 
 import { useGetCallStatusQuery, useHangupCallMutation } from '../../../store/api/callsApi';
 import { useEndTextSessionMutation, useSendTextMessageMutation, useStartTextSessionMutation } from '../../../store/api/orchestratorApi';
 import { E164 } from '../shared';
+import { VoiceCall, voiceCallSupported } from '../../../lib/voiceCall';
 
 const LIVE = ['queued', 'ringing', 'in_progress'];
 
@@ -59,7 +60,9 @@ export function PublishedChat({ agent, variables }) {
   const endRef = useRef(null);
   const openId = useRef(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
 
   // Leaving the panel closes the conversation so it doesn't count against the 5-open limit.
   useEffect(
@@ -209,34 +212,172 @@ export function PublishedChat({ agent, variables }) {
   );
 }
 
-/* Voice test with the browser's speech (no realtime audio yet) -------------- */
+/* Voice test: real-time audio when the media server is on ---------------- */
 
 const Recognition = typeof window !== 'undefined' ? (window.SpeechRecognition ?? window.webkitSpeechRecognition) : undefined;
 const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
+const STATE_LABEL = { connecting: 'Connecting', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended' };
+const STATE_TONE = { listening: 'green', thinking: 'amber', speaking: 'blue' };
+const WHY_BROWSER = {
+  agent_not_published: "Real voice runs on the agent's published version, and this agent isn't published yet.",
+  agent_not_live: 'Real voice needs the agent to be live, and this agent is paused.',
+};
+
 export function VoiceTest({ agent }) {
   const [create] = useCreateTestSessionMutation();
-  const [chat] = useChatTestMutation();
   const [session, setSession] = useState(null);
-  const [turns, setTurns] = useState([]);
-  const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const callRef = useRef(null);
+
+  useEffect(() => () => callRef.current?.dispose(), []);
+
+  const begin = async () => {
+    setError(null);
+    setBusy(true);
+    // Created in the click itself so the browser lets its audio play.
+    const call = new VoiceCall();
+    call.unlock();
+    try {
+      const r = await create(agent.id).unwrap();
+      if (r.mode === 'realtime' && r.media_url) {
+        callRef.current = call;
+      } else {
+        call.dispose();
+      }
+      setSession(r);
+    } catch (e) {
+      call.dispose();
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reset = () => {
+    callRef.current?.dispose();
+    callRef.current = null;
+    setSession(null);
+  };
+
+  if (session?.mode === 'realtime' && callRef.current) {
+    return <LiveVoice call={callRef.current} session={session} onReset={reset} />;
+  }
+  if (session) return <BrowserSpeech agent={agent} session={session} onReset={reset} />;
+  return (
+    <div className="stack">
+      <p className="muted" style={{ margin: 0 }}>
+        Talk to the agent through your microphone and hear its own voice. Calls made here appear in the call log.
+      </p>
+      {!voiceCallSupported() && <div className="alert-inline">This browser can't do voice calls. Try a current Chrome, Edge or Firefox.</div>}
+      {error && (
+        <div className="banner danger" style={{ margin: 0 }}>
+          <AlertTriangle />
+          <span className="grow">{errMsg(error)}</span>
+        </div>
+      )}
+      <Button variant="primary" icon={<Mic />} loading={busy} onClick={begin}>
+        Start voice test
+      </Button>
+    </div>
+  );
+}
+
+/** A real call with the published agent: the microphone streams to the media server. */
+function LiveVoice({ call, session, onReset }) {
+  const [turns, setTurns] = useState([]);
+  const [state, setState] = useState('connecting');
+  const [level, setLevel] = useState(0);
+  const [ended, setEnded] = useState(null);
+  const endRef = useRef(null);
+  const agentOpen = useRef(false);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
+  useEffect(() => {
+    call.h = {
+      onState: setState,
+      onLevel: setLevel,
+      onAgentText: (delta) => {
+        setTurns((ts) => {
+          if (agentOpen.current && ts.length && ts[ts.length - 1].role === 'them') {
+            const last = ts[ts.length - 1];
+            return [...ts.slice(0, -1), { ...last, text: last.text + delta }];
+          }
+          agentOpen.current = true;
+          return [...ts, { role: 'them', text: delta }];
+        });
+      },
+      onCallerText: (text, final) => {
+        setTurns((ts) => {
+          const rest = ts.length && ts[ts.length - 1].interim ? ts.slice(0, -1) : ts;
+          return [...rest, final ? { role: 'me', text } : { role: 'me', text, meta: 'hearing…', interim: true }];
+        });
+        if (final) agentOpen.current = false;
+      },
+      onInterrupted: (cut) => {
+        if (cut) {
+          setTurns((ts) => {
+            const i = ts.findLastIndex((t) => t.role === 'them');
+            return i < 0 ? ts : ts.map((t, j) => (j === i ? { ...t, meta: 'You cut in: you may not have heard all of this' } : t));
+          });
+        }
+        agentOpen.current = false;
+      },
+      onNote: (message) => setTurns((ts) => [...ts, { role: 'sys', text: message }]),
+      onEnded: (message, bad) => setEnded({ message, bad }),
+    };
+    if (call.state === 'idle') void call.start(session.media_url);
+  }, [call, session.media_url]);
+
+  return (
+    <div className="stack">
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <Badge tone="blue">Live voice{session.language ? ` · ${session.language}` : ''}</Badge>
+        <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state] ?? 'Connecting'}</Badge>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }} title="Your microphone">
+        <div style={{ height: '100%', width: `${Math.round(level * 100)}%`, background: 'var(--green, #1a8a55)', transition: 'width 80ms linear' }} />
+      </div>
+      <Bubbles turns={turns} busy={false} endRef={endRef} />
+      {ended ? (
+        <>
+          <div className={ended.bad ? 'banner danger' : 'banner info'} style={{ margin: 0 }}>
+            {ended.bad && <AlertTriangle />}
+            <span className="grow">{ended.message}</span>
+          </div>
+          <Button variant="primary" icon={<Mic />} onClick={onReset}>
+            Start again
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button variant="danger solid" icon={<PhoneOff />} onClick={() => call.hangUp()}>
+            Hang up
+          </Button>
+          <p className="muted small" style={{ margin: 0 }}>
+            Runs on the published version. Using speakers? If the agent keeps cutting itself off, it may be hearing itself: try headphones.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The browser's own speech on the draft: when real voice isn't available. */
+function BrowserSpeech({ agent, session, onReset }) {
+  const [chat] = useChatTestMutation();
+  const [turns, setTurns] = useState([{ role: 'them', text: session.greeting, meta: 'greeting' }]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(false);
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
   const endRef = useRef(null);
   const mutedRef = useRef(false);
   mutedRef.current = muted;
-
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
-  useEffect(
-    () => () => {
-      recRef.current?.abort?.();
-      if (canSpeak) window.speechSynthesis.cancel();
-    },
-    [],
-  );
 
   const speak = (line, lang) => {
     if (!canSpeak || mutedRef.current || !line) return;
@@ -246,24 +387,20 @@ export function VoiceTest({ agent }) {
     window.speechSynthesis.speak(u);
   };
 
-  const begin = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const r = await create(agent.id).unwrap();
-      setSession(r);
-      setTurns([{ role: 'them', text: r.greeting, meta: 'greeting' }]);
-      speak(r.greeting, r.language);
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
+  useEffect(() => {
+    speak(session.greeting, session.language);
+    return () => {
+      recRef.current?.abort?.();
+      if (canSpeak) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   const say = async (line) => {
     const msg = line.trim();
-    if (!msg || busy || !session) return;
+    if (!msg || busy) return;
     setText('');
     const next = [...turns, { role: 'me', text: msg }];
     setTurns(next);
@@ -288,7 +425,7 @@ export function VoiceTest({ agent }) {
     }
     if (canSpeak) window.speechSynthesis.cancel();
     const rec = new Recognition();
-    rec.lang = session?.language ?? 'en-IN';
+    rec.lang = session.language ?? 'en-IN';
     rec.interimResults = false;
     rec.onresult = (ev) => void say(ev.results[0][0].transcript);
     rec.onend = () => setListening(false);
@@ -298,31 +435,15 @@ export function VoiceTest({ agent }) {
     rec.start();
   };
 
-  if (!session) {
-    return (
-      <div className="stack">
-        <div className="banner info" style={{ margin: 0 }}>
-          <AlertTriangle />
-          <span className="grow">
-            This uses your browser's speech — the agent's greeting is spoken aloud and your words are sent as text. Real-time audio with the agent's own voice isn't available yet.
-          </span>
-        </div>
-        {!canSpeak && <div className="alert-inline">This browser can't speak aloud. You can still read the replies below.</div>}
-        {error && (
-          <div className="banner danger" style={{ margin: 0 }}>
-            <AlertTriangle />
-            <span className="grow">{errMsg(error)}</span>
-          </div>
-        )}
-        <Button variant="primary" icon={<Volume2 />} loading={busy} onClick={begin}>
-          Start voice test
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="stack">
+      <div className="banner info" style={{ margin: 0 }}>
+        <AlertTriangle />
+        <span className="grow">
+          {WHY_BROWSER[session.realtime_unavailable] ?? "Real voice isn't switched on for this server."} This test uses your browser's speech on the draft instead:
+          your words are sent as text and the replies are read aloud by the browser.
+        </span>
+      </div>
       <div className="row between wrap" style={{ gap: 8 }}>
         <Badge tone="blue">Browser speech · {session.language}</Badge>
         <Button size="sm" variant="ghost" icon={muted ? <VolumeX /> : <Volume2 />} onClick={() => (setMuted(!muted), canSpeak && window.speechSynthesis.cancel())}>
@@ -350,17 +471,8 @@ export function VoiceTest({ agent }) {
           <Send />
         </button>
       </form>
-      {!Recognition && <p className="muted small">Speech input isn't supported in this browser (try Chrome or Edge) — type instead.</p>}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          recRef.current?.abort?.();
-          if (canSpeak) window.speechSynthesis.cancel();
-          setSession(null);
-          setTurns([]);
-        }}
-      >
+      {!Recognition && <p className="muted small">Speech input isn't supported in this browser (try Chrome or Edge): type instead.</p>}
+      <Button size="sm" variant="ghost" onClick={onReset}>
         Start over
       </Button>
     </div>

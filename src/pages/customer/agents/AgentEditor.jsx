@@ -394,8 +394,10 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
   const varsQ = useGetAgentSectionQuery({ id: agent.id, section: 'variables' }, { skip: !open });
   const vars = (varsQ.data ?? []).filter((x) => x.direction === 'input');
 
+  // Live voice runs on the published version; it falls back to the draft when the agent isn't live.
+  const onPublished = (mode === 'chat' && target === 'published') || (mode === 'voice' && agent.status === 'live' && !!agent.published_version_id);
   return (
-    <Drawer open={open} onClose={onClose} width={560} title={`Test ${agent.name}`} subtitle={<Badge tone={mode === 'chat' && target === 'published' ? 'green' : 'orange'}>{mode === 'chat' && target === 'published' ? 'Testing published version' : 'Testing draft'}</Badge>}>
+    <Drawer open={open} onClose={onClose} width={560} title={`Test ${agent.name}`} subtitle={<Badge tone={onPublished ? 'green' : 'orange'}>{onPublished ? 'Testing published version' : 'Testing draft'}</Badge>}>
       <SegmentTabs
         value={mode}
         onChange={setMode}
@@ -449,7 +451,9 @@ function ChatTest({ agentId, variables }) {
   const [chatTest] = useChatTestMutation();
   const end = useRef(null);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
 
   // An empty chat-test body returns the agent's greeting.
   useEffect(() => {

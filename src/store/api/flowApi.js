@@ -159,8 +159,6 @@ export const AGENT_SECTIONS = {
     }),
     wrap: ({ consent_line, ai_disclosure_line, ...c }) => ({ ...c, recording_notice: consent_line, ai_disclosure: ai_disclosure_line }),
   },
-  widget: { path: 'widget' },
-  webchat: { path: 'webchat' },
   chatSettings: { path: 'chat-settings' },
 };
 
@@ -416,9 +414,6 @@ export const flowApi = baseApi.injectEndpoints({
     listCustomVoices: b.query({ query: () => C.flow('/customer/voices'), providesTags: ['Voice'] }),
     createCustomVoice: b.mutation({ query: (body) => C.flow('/customer/voices', { method: 'POST', body }), invalidatesTags: ['Voice'] }),
     deleteCustomVoice: b.mutation({ query: (id) => C.flow(`/customer/voices/${id}`, { method: 'DELETE' }), invalidatesTags: ['Voice'] }),
-    listAgentTeams: b.query({ query: () => C.flow('/customer/agent-teams'), providesTags: ['Team'] }),
-    createAgentTeam: b.mutation({ query: (body) => C.flow('/customer/agent-teams', { method: 'POST', body }), invalidatesTags: ['Team'] }),
-    updateAgentTeam: b.mutation({ query: ({ id, ...body }) => C.flow(`/customer/agent-teams/${id}`, { method: 'PUT', body }), invalidatesTags: ['Team'] }),
   }),
 });
 
@@ -481,7 +476,4 @@ export const {
   useListCustomVoicesQuery,
   useCreateCustomVoiceMutation,
   useDeleteCustomVoiceMutation,
-  useListAgentTeamsQuery,
-  useCreateAgentTeamMutation,
-  useUpdateAgentTeamMutation,
 } = flowApi;
