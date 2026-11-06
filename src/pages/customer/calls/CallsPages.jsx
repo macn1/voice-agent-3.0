@@ -491,7 +491,8 @@ export function CallDetailPage() {
   const call = useGetCallQuery(id);
   const transcript = useGetTranscriptQuery(id);
   const analysis = useGetCallAnalysisQuery(id);
-  const recording = useGetRecordingQuery(id);
+  // Only ask for a recording when the call says it has one (else the API answers 404).
+  const recording = useGetRecordingQuery(id, { skip: !call.data?.has_recording });
   const reviews = useListReviewsQuery(id);
   const outcomes = useGetAgentSectionQuery({ id: call.data?.agent_id, section: 'outcomes' }, { skip: !call.data?.agent_id });
   const [updateCall] = useUpdateCallMutation();
