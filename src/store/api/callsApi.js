@@ -78,6 +78,36 @@ export function numbersBody({ rows = [], phone_column, name_column, contact_list
 }
 const CAMP = (_r, _e, arg) => [{ type: 'Campaign', id: typeof arg === 'string' ? arg : arg.id }];
 
+const scorecardFrom = (card) => {
+  const total = card.criteria.reduce((s, c) => s + Number(c.weight || 0), 0) || 1;
+  return {
+    ...card,
+    criteria: card.criteria.map((c) => ({ ...c, name: c.label, weight: Math.round((Number(c.weight || 0) / total) * 100), max_score: c.max_score || 5 })),
+  };
+};
+const criterionKey = (name, taken) => {
+  const base = (name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'criterion').replace(/^[^a-z]/, 'c_$&').slice(0, 40);
+  let key = base;
+  for (let i = 2; taken.has(key); i++) key = `${base}_${i}`;
+  taken.add(key);
+  return key;
+};
+const scorecardTo = ({ id, name, is_default, criteria }) => {
+  const taken = new Set(criteria.map((c) => c.key).filter(Boolean));
+  return {
+    ...(id ? { id } : {}),
+    name,
+    is_default: !!is_default,
+    criteria: criteria.map((c) => ({
+      key: c.key || criterionKey(c.name ?? '', taken),
+      label: c.name,
+      ...(c.description ? { description: c.description } : {}),
+      weight: Math.round(Number(c.weight || 0)) / 10,
+      max_score: c.max_score || 5,
+    })),
+  };
+};
+
 export const callsApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
     // Phone numbers & routing ------------------------------------------------
@@ -183,14 +213,37 @@ export const callsApi = baseApi.injectEndpoints({
     listLiveCalls: b.query({ query: () => C.outbound('/customer/calls/live'), providesTags: ['Call'] }),
     updateCall: b.mutation({ query: ({ id, ...body }) => C.analytics(`/customer/calls/${id}`, { method: 'PATCH', body }), invalidatesTags: ['Call'] }),
     rerunAnalysis: b.mutation({ query: (id) => C.analytics(`/customer/calls/${id}/analysis/rerun`, { method: 'POST', body: {} }), invalidatesTags: ['Call'] }),
-    listReviews: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/reviews`), providesTags: ['Review'] }),
-    addReview: b.mutation({ query: ({ id, ...body }) => C.analytics(`/customer/calls/${id}/reviews`, { method: 'POST', body }), invalidatesTags: ['Review'] }),
+    // Wire comments are { turn_seq, text }; the screens use { seq, text }.
+    listReviews: b.query({
+      query: (id) => C.analytics(`/customer/calls/${id}/reviews`),
+      transformResponse: (d) => (d?.items ?? d ?? []).map((r) => ({ ...r, comments: (r.comments ?? []).map((c) => ({ ...c, seq: c.turn_seq })) })),
+      providesTags: ['Review'],
+    }),
+    // { id, scorecard_id, scores: { [criterion key]: 0..max_score }, comments: [{ seq, text }] }
+    addReview: b.mutation({
+      query: ({ id, comments, ...body }) =>
+        C.analytics(`/customer/calls/${id}/reviews`, {
+          method: 'POST',
+          body: { ...body, comments: (comments ?? []).map((c) => ({ turn_seq: c.seq ?? c.turn_seq ?? null, text: c.text })) },
+        }),
+      invalidatesTags: ['Review'],
+    }),
     pushCallToCrm: b.mutation({ query: (id) => C.integration(`/customer/calls/${id}/push-to-crm`, { method: 'POST', body: {} }), invalidatesTags: ['Call'] }),
     // Listen-in and take-over answer 503 live_audio_unavailable until the media server is connected.
     listenToCall: b.mutation({ query: (id) => C.outbound(`/customer/calls/${id}/listen`, { method: 'POST', body: {} }) }),
     takeOverCall: b.mutation({ query: (id) => C.outbound(`/customer/calls/${id}/takeover`, { method: 'POST', body: {} }) }),
-    listScorecards: b.query({ query: () => C.analytics('/customer/qa-scorecards'), providesTags: ['Scorecard'] }),
-    putScorecards: b.mutation({ query: (body) => C.analytics('/customer/qa-scorecards', { method: 'PUT', body }), invalidatesTags: ['Scorecard'] }),
+    // The editor works in names and percentages; the API in keys, labels and
+    // relative weights 0-10 (scores are weighted by weight / sum of weights).
+    listScorecards: b.query({
+      query: () => C.analytics('/customer/qa-scorecards'),
+      transformResponse: (d) => (d?.items ?? d ?? []).map(scorecardFrom),
+      providesTags: ['Scorecard'],
+    }),
+    // Takes the whole list: the API replaces every scorecard at once.
+    putScorecards: b.mutation({
+      query: (list) => C.analytics('/customer/qa-scorecards', { method: 'PUT', body: { scorecards: list.map(scorecardTo) } }),
+      invalidatesTags: ['Scorecard'],
+    }),
 
     // Campaigns (CALL-03, 07, 08, 09, 11) ------------------------------------
     listCampaigns: b.query({ query: (params = {}) => C.outbound('/customer/campaigns', { params }), providesTags: ['Campaign'] }),

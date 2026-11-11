@@ -24,6 +24,9 @@ export function HomeDashboard() {
   const flaggedQ = useListCallsQuery({ range: '7d', flagged: true, limit: 1 });
   const waitingQ = useListConversationsQuery({ status: 'needs_human' });
   const agents = useListAgentsQuery({ limit: 6 });
+  // Calls per agent in the last 7 days (the agent list has no counts).
+  const perAgent = useGetAnalyticsQuery({ report: 'agents', range: '7d' });
+  const callsByAgent = Object.fromEntries((perAgent.data ?? []).map((r) => [r.agent_id, r.calls]));
   const failed = { data: failedQ.data?.total };
   const flagged = { data: flaggedQ.data?.total };
   const waiting = { data: waitingQ.data?.length };
@@ -148,7 +151,9 @@ export function HomeDashboard() {
                       <td>
                         <StatusBadge status={a.status} />
                       </td>
-                      <td className="num muted">{a.calls_7d ?? 0} calls</td>
+                      <td className="num muted" title="Last 7 days">
+                        {number(callsByAgent[a.id] ?? 0)} calls
+                      </td>
                     </tr>
                   ))}
                 </tbody>

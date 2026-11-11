@@ -1,3 +1,4 @@
+import { useListStaffQuery } from '../../../store/api/customerApi';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -45,7 +46,7 @@ import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHead
 import { PixelHero } from '../../../components/PixelHero';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
-import { CallNumberDialog, duration, OUTCOME_TONE, useAgentOptions } from '../shared';
+import { CallNumberDialog, duration, OUTCOME_TONE, useAgentName, useAgentOptions, useCampaignName } from '../shared';
 import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
 
 const PAGE = 25;
@@ -91,6 +92,8 @@ export function CallFilters({ params, set, agentOptions }) {
 }
 
 export function CallsTable({ calls, onOpen }) {
+  const agentName = useAgentName();
+  const campaignName = useCampaignName();
   return (
     <div className="table-wrap">
       <table className="table table-stack">
@@ -118,12 +121,12 @@ export function CallsTable({ calls, onOpen }) {
                     {c.direction === 'outbound' ? <PhoneOutgoing size={15} /> : <PhoneIncoming size={15} />}
                     <div>
                       <div className="cell-main">{c.contact_name ?? other}</div>
-                      <div className="cell-sub mono">{c.contact_name ? other : (c.campaign_name ?? titleCase(c.direction))}</div>
+                      <div className="cell-sub mono">{c.contact_name ? other : (campaignName(c) ?? titleCase(c.direction))}</div>
                     </div>
                     {c.flagged && <Flag size={14} color="var(--accent)" />}
                   </div>
                 </td>
-                <td data-label="Agent">{c.agent_name ?? '—'}</td>
+                <td data-label="Agent">{agentName(c)}</td>
                 <td className="num mono" data-label="Duration">
                   {duration(c.duration_seconds)}
                 </td>
@@ -479,12 +482,17 @@ function LiveSessionModal({ session, onClose }) {
 /** P-17 Call detail (CALL-05, PCA-01..03, INT-F5). */
 export function CallDetailPage() {
   const { id = '' } = useParams();
+  const agentName = useAgentName();
+  const campaignName = useCampaignName();
+  const staff = useListStaffQuery();
+  const staffName = (userId) => (staff.data?.items ?? staff.data ?? []).find?.((u) => u.id === userId)?.name ?? 'a teammate';
   const toast = useToast();
   const { can } = useAuth();
   const call = useGetCallQuery(id);
   const transcript = useGetTranscriptQuery(id);
   const analysis = useGetCallAnalysisQuery(id);
-  const recording = useGetRecordingQuery(id);
+  // Only ask for a recording when the call says it has one (else the API answers 404).
+  const recording = useGetRecordingQuery(id, { skip: !call.data?.has_recording });
   const reviews = useListReviewsQuery(id);
   const outcomes = useGetAgentSectionQuery({ id: call.data?.agent_id, section: 'outcomes' }, { skip: !call.data?.agent_id });
   const [updateCall] = useUpdateCallMutation();
@@ -531,7 +539,7 @@ export function CallDetailPage() {
                   {c.is_simulated && <Badge>Simulated</Badge>}
                 </div>
                 <p className="muted" style={{ marginTop: 6 }}>
-                  {titleCase(c.direction)} · {dateTime(c.started_at)} · {duration(c.duration_seconds)} · {c.agent_name}
+                  {titleCase(c.direction)} · {dateTime(c.started_at)} · {duration(c.duration_seconds)} · {agentName(c)}
                   {c.agent_version ? ` v${c.agent_version}` : ''} · {number(c.billable_minutes)} min
                   {c.cost_amount != null ? ` · ${money(c.cost_amount)}` : ''}
                 </p>
@@ -719,7 +727,7 @@ export function CallDetailPage() {
                       <>
                         <dt>Campaign</dt>
                         <dd>
-                          <Link to={`/campaigns/${c.campaign_id}`}>{c.campaign_name ?? 'Open'}</Link>
+                          <Link to={`/campaigns/${c.campaign_id}`}>{campaignName(c) ?? 'Open'}</Link>
                         </dd>
                       </>
                     )}
@@ -760,7 +768,7 @@ export function CallDetailPage() {
                   {(reviews.data ?? []).length ? (
                     reviews.data.map((r) => (
                       <div key={r.id} className="small">
-                        <b>{r.total_score}</b>/100 by {r.reviewer} · {dateTime(r.created_at)}
+                        <b>{Math.round(r.total_score ?? 0)}</b>/100 by {staffName(r.reviewer_user_id)} · {dateTime(r.created_at)}
                         {r.comments.map((cm, i) => (
                           <div key={i} className="muted">
                             Line {cm.seq}: {cm.text}
@@ -910,7 +918,7 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
       setComments([]);
     }
   }, [open]);
-  const total = card ? Math.round(card.criteria.reduce((s, c) => s + ((scores[c.name] ?? 0) / 5) * c.weight, 0)) : 0;
+  const total = card ? Math.round(card.criteria.reduce((s, c) => s + ((scores[c.key] ?? 0) / (c.max_score || 5)) * c.weight, 0)) : 0;
   return (
     <Modal
       open={open}
@@ -929,6 +937,7 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
               try {
                 await addReview({
                   id: call.id,
+                  scorecard_id: card?.id,
                   scores,
                   comments: comments.filter((c) => c.text.trim()),
                 }).unwrap();
@@ -949,7 +958,7 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
     >
       <div className="stack">
         {card?.criteria.map((c) => (
-          <div key={c.name} className="row between wrap">
+          <div key={c.key} className="row between wrap">
             <div>
               <div className="fw-medium">
                 {c.name} <span className="muted small">· {c.weight}%</span>
@@ -957,18 +966,18 @@ function ReviewModal({ open, onClose, call, turns, onSaved }) {
               <div className="muted small">{c.description}</div>
             </div>
             <div className="row" style={{ gap: 4 }}>
-              {[1, 2, 3, 4, 5].map((n) => (
+              {Array.from({ length: c.max_score || 5 }, (_, i) => i + 1).map((n) => (
                 <button
                   key={n}
                   type="button"
-                  className={`chip ${scores[c.name] === n ? 'active' : ''}`}
+                  className={`chip ${scores[c.key] === n ? 'active' : ''}`}
                   style={{
                     height: 32,
                     width: 36,
                     padding: 0,
                     justifyContent: 'center',
                   }}
-                  onClick={() => setScores((s) => ({ ...s, [c.name]: n }))}
+                  onClick={() => setScores((s) => ({ ...s, [c.key]: n }))}
                 >
                   {n}
                 </button>

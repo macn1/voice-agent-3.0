@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, CalendarClock, History, Home, Pencil, Plus, Send, Trash2, Users, Workflow, X, Zap } from 'lucide-react';
+import { ArrowRight, CalendarClock, History, Home, Pencil, Plus, Send, Workflow, X, Zap } from 'lucide-react';
 import {
   useCreateScheduledCallMutation,
   useCreateTriggerMutation,
@@ -11,7 +11,6 @@ import {
   useListTriggersQuery,
   useUpdateTriggerMutation,
 } from '../../../store/api/callsApi';
-import { useCreateAgentTeamMutation, useListAgentTeamsQuery, useUpdateAgentTeamMutation } from '../../../store/api/flowApi';
 import { useListIntegrationEventsQuery, useListIntegrationsQuery, useListMessagesQuery } from '../../../store/api/integrationApi';
 import { dateTime, titleCase } from '../../../lib/format';
 import {
@@ -29,12 +28,12 @@ import {
   Toggle,
   useToast,
 } from '../../../components/ui';
-import { CopyField, Drawer, MappingEditor, Select, Textarea } from '../../../components/forms';
+import { CopyField, Drawer, MappingEditor, Select } from '../../../components/forms';
 import { PixelHero } from '../../../components/PixelHero';
 import { useBilling } from '../billingContext';
 import { E164, useAgentOptions, useNumberOptions } from '../shared';
 
-/** Workflows: call triggers (CALL-10, INT-F7), callbacks (CON-03), follow-up log (ACT-03.4), agent teams (AGT-16). */
+/** Workflows: call triggers (CALL-10, INT-F7), callbacks (CON-03), follow-up log (ACT-03.4). */
 export function WorkflowsPage() {
   const [params, setParams] = useSearchParams();
   const { loaded, plan } = useBilling();
@@ -77,14 +76,12 @@ export function WorkflowsPage() {
           { value: 'triggers', label: 'Call triggers' },
           { value: 'scheduled', label: 'Scheduled calls' },
           { value: 'messages', label: 'Follow-up messages' },
-          { value: 'teams', label: 'Agent teams' },
         ]}
       />
 
       {tab === 'triggers' && <TriggersTab />}
       {tab === 'scheduled' && <ScheduledTab />}
       {tab === 'messages' && <MessagesTab />}
-      {tab === 'teams' && <TeamsTab />}
     </>
   );
 }
@@ -593,157 +590,3 @@ function MessagesTab() {
   );
 }
 
-function TeamsTab() {
-  const toast = useToast();
-  const list = useListAgentTeamsQuery();
-  const [createTeam] = useCreateAgentTeamMutation();
-  const [updateTeam] = useUpdateAgentTeamMutation();
-  const { options, agents } = useAgentOptions();
-  const [editing, setEditing] = useState(null);
-  const name = (id) => agents.find((a) => a.id === id)?.name ?? id;
-  return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Agent teams</h2>
-          <div className="card-sub">A receptionist agent hands callers to sales or support — context carries over.</div>
-        </div>
-        <Button variant="primary" icon={<Plus />} onClick={() => setEditing({ name: '', members: [], handoff_rules: [] })}>
-          New team
-        </Button>
-      </div>
-      <Async state={list}>
-        {(ts) =>
-          ts.length ? (
-            <div className="table-wrap">
-              <table className="table">
-                <tbody>
-                  {ts.map((t) => (
-                    <tr key={t.id} className="clickable" onClick={() => setEditing(structuredClone(t))}>
-                      <td className="cell-main">{t.name}</td>
-                      <td>{t.members.map(name).join(', ')}</td>
-                      <td className="muted">{t.handoff_rules.length} handoff rules</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState icon={<Users />} title="No teams" />
-          )
-        }
-      </Async>
-      <Modal
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        wide
-        title={editing?.id ? 'Edit team' : 'New team'}
-        footer={
-          <>
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
-            <Button
-              variant="primary"
-              onClick={async () => {
-                const e = editing;
-                if (!e.name?.trim() || (e.members ?? []).length < 2) return toast('Name the team and add at least two agents', 'error');
-                const body = {
-                  name: e.name.trim(),
-                  members: e.members ?? [],
-                  handoff_rules: e.handoff_rules ?? [],
-                };
-                try {
-                  if (e.id) await updateTeam({ id: e.id, ...body }).unwrap();
-                  else await createTeam(body).unwrap();
-                  setEditing(null);
-                } catch (err) {
-                  toast(errMsg(err), 'error');
-                }
-              }}
-            >
-              Save team
-            </Button>
-          </>
-        }
-      >
-        {editing && (
-          <div className="stack">
-            <Field label="Team name">
-              <Input placeholder="e.g. Sales team" value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            </Field>
-            <div className="field">
-              <span className="field-label">Agents</span>
-              <div className="perm-grid">
-                {options.map((o) => (
-                  <label key={o.value} className="check">
-                    <input
-                      type="checkbox"
-                      checked={(editing.members ?? []).includes(o.value)}
-                      onChange={(e) =>
-                        setEditing({
-                          ...editing,
-                          members: e.target.checked ? [...(editing.members ?? []), o.value] : (editing.members ?? []).filter((x) => x !== o.value),
-                        })
-                      }
-                    />
-                    {o.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="field">
-              <span className="field-label">Handoff rules</span>
-              {(editing.handoff_rules ?? []).map((r, i) => {
-                const upd = (p) =>
-                  setEditing({
-                    ...editing,
-                    handoff_rules: editing.handoff_rules.map((x, j) => (j === i ? { ...x, ...p } : x)),
-                  });
-                const members = options.filter((o) => (editing.members ?? []).includes(o.value));
-                return (
-                  <div key={i} className="row wrap" style={{ gap: 8 }}>
-                    <Select style={{ width: 180 }} value={r.from} options={members} placeholder="From" onChange={(e) => upd({ from: e.target.value })} />
-                    <span className="muted">→</span>
-                    <Select style={{ width: 180 }} value={r.to} options={members} placeholder="To" onChange={(e) => upd({ to: e.target.value })} />
-                    <Textarea
-                      rows={1}
-                      style={{ flex: 1, minWidth: 200 }}
-                      placeholder="When the caller…"
-                      value={r.when}
-                      onChange={(e) => upd({ when: e.target.value })}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={<Trash2 />}
-                      onClick={() =>
-                        setEditing({
-                          ...editing,
-                          handoff_rules: editing.handoff_rules.filter((_, j) => j !== i),
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-              <div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Plus />}
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      handoff_rules: [...(editing.handoff_rules ?? []), { from: '', to: '', when: '' }],
-                    })
-                  }
-                >
-                  Add rule
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
-}

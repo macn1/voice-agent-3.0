@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PhoneCall, PhoneOff } from 'lucide-react';
 import { useGetAgentSectionQuery, useListAgentsQuery } from '../../store/api/flowApi';
-import { useGetCallStatusQuery, useHangupCallMutation, useListNumbersQuery, useStartCallMutation } from '../../store/api/callsApi';
+import { useGetCallStatusQuery, useHangupCallMutation, useListCampaignsQuery, useListNumbersQuery, useStartCallMutation } from '../../store/api/callsApi';
 import { Button, errMsg, Field, Input, Modal, StatusBadge } from '../../components/ui';
 import { Select } from '../../components/forms';
 
@@ -15,6 +15,23 @@ export function useAgentOptions() {
     options: list.map((a) => ({ value: a.id, label: a.name })),
     loading: s.isLoading,
   };
+}
+
+/**
+ * Resolves an agent id to its name: calls carry only agent_id. A call whose
+ * agent was since deleted shows "Deleted agent".
+ */
+export function useAgentName() {
+  const s = useListAgentsQuery({ limit: 200 });
+  const names = Object.fromEntries((s.data?.items ?? []).map((a) => [a.id, a.name]));
+  return (call) => call?.agent_name ?? names[call?.agent_id] ?? (s.isSuccess && call?.agent_id ? 'Deleted agent' : '—');
+}
+
+/** Resolves a call's campaign_id to the campaign's name: calls carry only the id. */
+export function useCampaignName() {
+  const s = useListCampaignsQuery({ limit: 200 });
+  const names = Object.fromEntries((s.data?.items ?? []).map((c) => [c.id, c.name]));
+  return (call) => call?.campaign_name ?? names[call?.campaign_id];
 }
 
 export function useNumberOptions() {
@@ -33,6 +50,7 @@ const LIVE_STATES = ['queued', 'ringing', 'in_progress'];
 /** CALL-02: "Call a number" with live status (queued → ringing → in progress → done). */
 export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
   const { options } = useAgentOptions();
+  const agentName = useAgentName();
   const nums = useNumberOptions();
   const [agent, setAgent] = useState(agentId ?? '');
   const [from, setFrom] = useState('');
@@ -143,7 +161,7 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
           </div>
           <StatusBadge status={call.status} />
           <div className="muted small">
-            {call.to_number} · {call.agent_name}
+            {call.to_number} · {agentName(call)}
           </div>
         </div>
       ) : (

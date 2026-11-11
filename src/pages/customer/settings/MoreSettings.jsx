@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { downloadAuthed } from '../../../store/api/baseQuery';
 import { useNavigate } from 'react-router-dom';
-import { Download, KeyRound, Mic2, Plus, Search, Trash2, Upload, Volume2, Wallet as WalletIcon, Building, ArrowRightLeft } from 'lucide-react';
+import { Download, KeyRound, Plus, Search, Trash2, Upload, Volume2, Wallet as WalletIcon, Building, ArrowRightLeft } from 'lucide-react';
 import {
   useChangePasswordMutation,
   useCreateSubAccountMutation,
@@ -23,33 +23,32 @@ import {
 } from '../../../store/api/analyticsApi';
 import { useGetNotificationSettingsQuery, usePutNotificationSettingsMutation } from '../../../store/api/integrationApi';
 import {
-  useCreateCustomVoiceMutation,
-  useDeleteCustomVoiceMutation,
-  useListCustomVoicesQuery,
   useListPronunciationsQuery,
   usePutPronunciationsMutation,
 } from '../../../store/api/flowApi';
 import { dateTime, money, slugify, titleCase } from '../../../lib/format';
-import { Async, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, Pager, StatusBadge, Toggle, useToast } from '../../../components/ui';
+import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, Pager, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { ListEditor, parseCsv, readFileText, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
-import { LanguageSelect } from '../agents/pickers';
 
 /* Notifications (QTY-04.1) ---------------------------------------------- */
 
+// The alerts the API knows (GET /notification-settings returns each with its channels).
 const EVENT_LABEL = {
-  'call.failed': 'A call fails',
-  'call.needs_review': 'A call is flagged for review',
-  'usage.80': 'Usage reaches 80% of the plan',
-  'campaign.finished': 'A campaign finishes',
-  'conversation.needs_human': 'A chat needs a human',
-  'integration.error': 'An integration or crawl fails',
+  call_flagged: 'A call is flagged for review',
+  campaign_finished: 'A campaign finishes',
+  agent_paused: 'An agent is paused',
+  test_run_failed: 'An agent test run fails',
+  low_balance: 'The wallet balance runs low',
+  system: 'Service notices',
 };
 
 export function NotificationSettingsPage() {
+  // Wire: { alerts: { [event]: { in_app, email, whatsapp } } }; the PUT takes the same shape.
   const s = useSection(useGetNotificationSettingsQuery(), usePutNotificationSettingsMutation());
   return (
     <SectionCard title="Notifications" description="Which alerts you get, and where." section={s}>
-      {(v, _p, set) => {
+      {(raw, _p, set) => {
+        const v = { preferences: raw?.alerts ?? {} };
         const events = [...new Set([...Object.keys(EVENT_LABEL), ...Object.keys(v.preferences)])];
         return (
           <div className="table-wrap">
@@ -71,7 +70,7 @@ export function NotificationSettingsPage() {
                   };
                   const toggle = (k) =>
                     set({
-                      preferences: {
+                      alerts: {
                         ...v.preferences,
                         [e]: { ...p, [k]: !p[k] },
                       },
@@ -652,114 +651,18 @@ export function PronunciationsPage() {
 
 /* Custom voices (AGT-15) ------------------------------------------------ */
 
+// Cloned voices need a voice provider that clones; Sarvam (which calls speak
+// with) doesn't yet, so nothing uploaded here could be used.
 export function VoicesPage() {
-  const toast = useToast();
-  const list = useListCustomVoicesQuery();
-  const [createVoice] = useCreateCustomVoiceMutation();
-  const [deleteVoice] = useDeleteCustomVoiceMutation();
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
-  const [lang, setLang] = useState('en-IN');
-  const [files, setFiles] = useState([]);
-  const [consent, setConsent] = useState(false);
-  const [removing, setRemoving] = useState(null);
-  const fileRef = useRef(null);
   return (
-    <div className="card">
-      <div className="card-head">
-        <div>
-          <h2>Custom voices</h2>
-          <div className="card-sub">Create a voice from recordings, with the speaker's consent.</div>
-        </div>
-        <Button variant="primary" icon={<Mic2 />} onClick={() => setCreating(true)}>
-          New voice
-        </Button>
+    <div className="card card-pad">
+      <div className="row" style={{ gap: 8 }}>
+        <h2 style={{ margin: 0 }}>Custom voices</h2>
+        <Badge>Coming soon</Badge>
       </div>
-      <Async state={list}>
-        {(vs) =>
-          vs.length ? (
-            <div className="table-wrap">
-              <table className="table">
-                <tbody>
-                  {vs.map((v) => (
-                    <tr key={v.id}>
-                      <td className="cell-main">{v.name}</td>
-                      <td>{v.language}</td>
-                      <td>
-                        <StatusBadge status={v.status === 'ready' ? 'active' : v.status === 'failed' ? 'failed' : 'pending'} label={titleCase(v.status)} />
-                      </td>
-                      <td className="muted">{dateTime(v.created_at)}</td>
-                      <td className="actions">
-                        <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(v.id)} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState icon={<Mic2 />} title="No custom voices" />
-          )
-        }
-      </Async>
-      <Modal
-        open={creating}
-        onClose={() => setCreating(false)}
-        title="New custom voice"
-        footer={
-          <>
-            <Button onClick={() => setCreating(false)}>Cancel</Button>
-            <Button
-              variant="primary"
-              disabled={!name.trim() || !files.length || !consent}
-              onClick={async () => {
-                try {
-                  await createVoice({
-                    name: name.trim(),
-                    language: lang,
-                    sample_names: files.map((f) => f.name),
-                    consent,
-                  }).unwrap();
-                  toast('Voice is being created');
-                  setCreating(false);
-                } catch (e) {
-                  toast(errMsg(e), 'error');
-                }
-              }}
-            >
-              Create voice
-            </Button>
-          </>
-        }
-      >
-        <div className="stack">
-          <Field label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="Language">
-            <LanguageSelect value={lang} onChange={setLang} />
-          </Field>
-          <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={(e) => setFiles([...(e.target.files ?? [])])} />
-          <Button icon={<Upload />} onClick={() => fileRef.current?.click()}>
-            {files.length ? `${files.length} samples selected` : 'Choose audio samples (1–5 minutes total)'}
-          </Button>
-          <label className="check">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            <span>I confirm the speaker has given written consent for their voice to be cloned and used by our agents.</span>
-          </label>
-        </div>
-      </Modal>
-      <ConfirmDialog
-        open={!!removing}
-        onClose={() => setRemoving(null)}
-        danger
-        title="Delete this voice?"
-        description="Agents using it switch to their language's default voice."
-        confirmLabel="Delete"
-        onConfirm={async () => {
-          await deleteVoice(removing).unwrap();
-        }}
-      />
+      <p className="muted" style={{ marginTop: 6 }}>
+        Clone a voice from recordings of your own speaker. Until then, pick one of the 25 ready-made voices on each agent's Voice tab.
+      </p>
     </div>
   );
 }
@@ -887,14 +790,11 @@ export function CreditsPage() {
   const [amount, setAmount] = useState('5000');
   const [auto, setAuto] = useState(null);
   useEffect(() => {
-    if (wallet.data)
-      setAuto(
-        wallet.data.auto_recharge ?? {
-          enabled: false,
-          threshold: 1000,
-          amount: 5000,
-        },
-      );
+    // The API sends threshold / amount as null until auto-recharge is set up.
+    if (wallet.data) {
+      const a = wallet.data.auto_recharge ?? {};
+      setAuto({ enabled: !!a.enabled, threshold: a.threshold ?? 1000, amount: a.amount ?? 5000 });
+    }
   }, [wallet.data]);
   return (
     <div className="stack">

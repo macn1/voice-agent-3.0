@@ -1,5 +1,4 @@
 import { loggedOut, tokensReceived } from '../slices/authSlice';
-import { demoFallback } from '../../mocks';
 import { API_BASE, PREFIX, SERVICE_LABEL } from './services';
 
 // The single place that talks HTTP to the backend (FND-01.3 / FND-01.4).
@@ -122,12 +121,7 @@ async function sendWithReauth(args, api) {
 }
 
 export async function baseQueryWithReauth(args, api) {
-  const result = await sendWithReauth(args, api);
-  if (!result.error) return result;
-  // Routes the backend doesn't serve yet are answered with demo data (src/mocks).
-  const token = args.realm ? api.getState().auth[args.realm].tokens?.access_token : undefined;
-  const live = async (service, path, params) => (await send({ service, url: `/api/v1${path}`, params }, token)).data;
-  return (await demoFallback(args, result.error, live)) ?? result;
+  return sendWithReauth(args, api);
 }
 
 /**

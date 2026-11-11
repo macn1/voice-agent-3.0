@@ -87,8 +87,13 @@ export const analyticsApi = baseApi.injectEndpoints({
           case 'heatmap':
             // weekday: 0 = Sunday ... 6 = Saturday on the wire; the grid starts on Monday.
             return (res.cells ?? []).map((c) => ({ ...c, weekday: (c.weekday + 6) % 7, connect_rate: c.calls ? c.answered / c.calls : 0 }));
-          case 'campaigns':
           case 'phone-numbers':
+            // Rows: { number, inbound_calls, outbound_calls, answered_calls, minutes }.
+            return (res.items ?? []).map((r) => {
+              const calls = (r.inbound_calls ?? 0) + (r.outbound_calls ?? 0);
+              return { ...r, name: r.number ?? '—', calls, connect_rate: calls ? (r.answered_calls ?? 0) / calls : 0 };
+            });
+          case 'campaigns':
             return (res.items ?? []).map((r) => ({ ...r, name: r.name ?? r.campaign_name ?? r.e164 ?? r.phone_number ?? r.campaign_id ?? r.phone_number_id ?? '—', connect_rate: r.connect_rate ?? (r.calls ? (r.answered_calls ?? 0) / r.calls : 0) }));
           default:
             return res;
@@ -113,8 +118,18 @@ export const analyticsApi = baseApi.injectEndpoints({
       query: () => C.analytics('/customer/demo/calls', { method: 'DELETE' }),
       invalidatesTags: ['Call', 'Analytics', 'Usage'],
     }),
-    getAgentDropoff: b.query({ query: (id) => C.analytics(`/customer/analytics/agents/${id}/dropoff`), providesTags: ['Analytics'] }),
-    getAgentLatency: b.query({ query: (id) => C.analytics(`/customer/analytics/agents/${id}/latency`), providesTags: ['Analytics'] }),
+    // Last 30 days. Drop-off: [{ step, reached, dropped }] by how many times the caller spoke.
+    getAgentDropoff: b.query({
+      query: (id) => C.analytics(`/customer/analytics/agents/${id}/dropoff`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
+      transformResponse: (d) => d?.items ?? d ?? [],
+      providesTags: ['Analytics'],
+    }),
+    // Last 30 days, per day: [{ day, p50, p95, replies }] in ms.
+    getAgentLatency: b.query({
+      query: (id) => C.analytics(`/customer/analytics/agents/${id}/latency`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
+      transformResponse: (d) => d?.items ?? d ?? [],
+      providesTags: ['Analytics'],
+    }),
     // { items: [{ question, times_asked, last_asked_at, last_call_id }] }
     listUnansweredQuestions: b.query({
       query: () => C.analytics('/customer/analytics/unanswered-questions', { params: { from: new Date(Date.now() - 90 * 86400000).toISOString() } }),

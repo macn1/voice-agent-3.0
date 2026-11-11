@@ -146,8 +146,6 @@ export const integrationApi = baseApi.injectEndpoints({
       query: (id) => C.integration(`/customer/channels/whatsapp/templates/${id}`, { method: 'DELETE' }),
       invalidatesTags: ['MessageTemplate'],
     }),
-    listSmsSenders: b.query({ query: () => C.integration('/customer/channels/sms'), providesTags: ['Channel'] }),
-    connectSms: b.mutation({ query: (body) => C.integration('/customer/channels/sms/connect', { method: 'POST', body }), invalidatesTags: ['Channel'] }),
 
     // Inbox (WA-04) & broadcasts (WA-05) -------------------------------------
     // Wire: { items: [{ contact_address, status open|human|closed, unread_count, window_open, window_expires_at, last_message: {...} }], total }.
@@ -222,8 +220,6 @@ export const {
   useListMessageTemplatesQuery,
   useCreateMessageTemplateMutation,
   useDeleteMessageTemplateMutation,
-  useListSmsSendersQuery,
-  useConnectSmsMutation,
   useListConversationsQuery,
   useListConversationMessagesQuery,
   useReplyToConversationMutation,

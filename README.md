@@ -67,6 +67,11 @@ templates · Staff · Roles & permissions · Audit log.
 
 ## Notes
 
+- Every screen shows live data only: there is no demo-data fallback. Features without a backend
+  yet (agent teams, SMS, the website call button / chat bubble, custom voices) say "Coming soon".
+- Real voice: `src/lib/voiceCall.js` streams the microphone to the media server (voice-realtime-be)
+  and plays the agent back, with interruptions. The agent Test drawer uses it whenever
+  `test-session` answers `mode: realtime`; the dashboard's other voice entry points can reuse it.
 - Team, Roles and every Settings page are always visible; if a role lacks a permission the API
   answers 403 and the page says so. Permission codes are read from `/me` as strings or `{code}`.
 - Role editors use the permission catalog route when it exists (CUS-04.4 / ADM-07.4), else the
