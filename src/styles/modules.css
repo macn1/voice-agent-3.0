@@ -507,6 +507,11 @@
   font-size: var(--font-size-control-sm);
 }
 
+.filters .select {
+  padding-right: 38px;
+  background-position: right 14px center;
+}
+
 .agent-head {
   display: flex;
   align-items: flex-start;
@@ -1603,4 +1608,238 @@
   .agent-kv dd {
     margin-bottom: 10px;
   }
+}
+
+/* Test drawer: pinned header + toolbar, scrolling conversation, pinned input ------ */
+
+.drawer {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.drawer .modal-head {
+  flex-shrink: 0;
+  padding: 22px 28px 16px;
+}
+
+.drawer .modal-head h2 {
+  font-size: var(--font-size-subheading);
+  line-height: 1.25;
+}
+
+.drawer .modal-head p {
+  margin-top: 8px;
+}
+
+/* Stays put while the body scrolls: it is a sibling of .drawer-body, not inside it. */
+.drawer-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
+  box-shadow: 0 8px 16px -14px rgba(0, 0, 0, 0.25);
+  position: relative;
+  z-index: 1;
+}
+
+.drawer-toolbar .tabs {
+  margin: 0;
+  padding: 4px;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--gray-bg);
+  border-radius: 999px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.drawer-toolbar .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.drawer-toolbar .tabs .chip {
+  height: 34px;
+  padding: 0 16px;
+  border-color: transparent;
+  background: transparent;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--muted);
+}
+
+.drawer-toolbar .tabs .chip:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.drawer-toolbar .tabs .chip.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+  box-shadow: none;
+}
+
+/* The second row (Draft / Published) is a quieter, smaller control. */
+.drawer-toolbar .tabs + .tabs .chip {
+  height: 28px;
+  padding: 0 12px;
+  font-size: var(--font-size-caption);
+}
+
+.test-vars {
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  padding: 0 14px;
+}
+
+.test-vars summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  cursor: pointer;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.test-vars[open] {
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+.test-vars .form-grid {
+  padding: 4px 0 14px;
+}
+
+/* Body: the only part that scrolls. Chat panes fill it; their input stays pinned. */
+.drawer-body.test-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  padding: 20px 28px 24px;
+}
+
+.test-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.test-pane > * {
+  flex-shrink: 0;
+}
+
+.test-pane .chat {
+  flex: 1 1 auto;
+  min-height: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  background: var(--surface);
+  scrollbar-width: thin;
+}
+
+.test-pane .prompt-box {
+  position: sticky;
+  bottom: 0;
+}
+
+.test-pane .bubble {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
+
+@media (max-width: 640px) {
+  .drawer {
+    width: 100vw !important;
+  }
+  .drawer .modal-head {
+    padding: 16px 20px 12px;
+  }
+  .drawer-toolbar {
+    padding: 12px 20px;
+  }
+  .drawer-body.test-body {
+    padding: 16px 20px 20px;
+  }
+  .test-pane .bubble {
+    max-width: 90%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-body.test-body {
+    scroll-behavior: auto;
+  }
+}
+
+/* Voice picker: equalizer while a voice plays ---------------------------------- */
+
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: 16px;
+  height: 14px;
+}
+
+.eq i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+
+.eq i:nth-child(1) { animation-delay: -0.2s; }
+.eq i:nth-child(2) { animation-delay: -0.55s; }
+.eq i:nth-child(3) { animation-delay: -0.1s; }
+.eq i:nth-child(4) { animation-delay: -0.7s; }
+
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+
+.voice-card {
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.voice-card.playing {
+  background: var(--gray-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq i { animation: none; transform: scaleY(0.7); }
+}
+
+.spin {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: voice-spin 0.7s linear infinite;
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation-duration: 1.6s; }
 }

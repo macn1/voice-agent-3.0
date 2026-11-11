@@ -254,7 +254,7 @@ function Describe({ initial }) {
     <div className="stack">
       <div className="card card-pad stack">
         <Field label="What should your agent do?" hint="e.g. “Call customers whose EMI is due in 3 days, remind them in Hindi, and record when they'll pay.”">
-          <Textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+          <Textarea rows={3} placeholder="Describe what the agent should do, who it talks to and in which language…" value={text} onChange={(e) => setText(e.target.value)} />
         </Field>
         {error && <div className="alert-inline">{error}</div>}
         <div>
@@ -273,10 +273,11 @@ function Describe({ initial }) {
           )}
           <div className="form-grid">
             <Field label="Agent name">
-              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              <Input placeholder="e.g. Riya — Appointments" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </Field>
             <Field label="Role">
               <Input
+                placeholder="e.g. Front-desk receptionist"
                 value={draft.persona.role}
                 onChange={(e) =>
                   setDraft({
@@ -288,6 +289,7 @@ function Describe({ initial }) {
             </Field>
             <Field label="Greeting" className="full">
               <Input
+                placeholder="Hi, this is Riya from CareFirst. How can I help?"
                 value={draft.flow.greeting}
                 onChange={(e) =>
                   setDraft({
@@ -300,6 +302,7 @@ function Describe({ initial }) {
             <Field label="Instructions" className="full">
               <Textarea
                 rows={6}
+                placeholder="What the agent is for and how it should behave…"
                 value={draft.flow.system_prompt}
                 onChange={(e) =>
                   setDraft({
@@ -379,7 +382,7 @@ function Blank() {
           <Input placeholder="Hi, this is Riya from CareFirst…" value={f.greeting} onChange={(e) => set('greeting', e.target.value)} />
         </Field>
         <Field label="Instructions" className="full" hint="What the agent is for and how it should behave. You can refine this in the editor.">
-          <Textarea rows={4} value={f.system_prompt} onChange={(e) => set('system_prompt', e.target.value)} />
+          <Textarea rows={4} placeholder="e.g. Book appointments, answer questions about opening hours, and hand off to a human for complaints." value={f.system_prompt} onChange={(e) => set('system_prompt', e.target.value)} />
         </Field>
       </div>
       <div className="field">

@@ -17,7 +17,7 @@ function passageText(k) {
 
 function Bubbles({ turns, busy, endRef }) {
   return (
-    <div className="chat" style={{ minHeight: 240 }}>
+    <div className="chat">
       {turns.map((t, i) => (
         <div key={i} className={`bubble ${t.role}`}>
           {t.text}
@@ -59,7 +59,9 @@ export function PublishedChat({ agent, variables }) {
   const endRef = useRef(null);
   const openId = useRef(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
 
   // Leaving the panel closes the conversation so it doesn't count against the 5-open limit.
   useEffect(
@@ -145,7 +147,7 @@ export function PublishedChat({ agent, variables }) {
   }
 
   return (
-    <div className="stack">
+    <div className="test-pane">
       <div className="row between wrap" style={{ gap: 8 }}>
         <Badge tone="blue">Scripted replies</Badge>
         <span className="muted small">
@@ -229,7 +231,9 @@ export function VoiceTest({ agent }) {
   const mutedRef = useRef(false);
   mutedRef.current = muted;
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
   useEffect(
     () => () => {
       recRef.current?.abort?.();
@@ -322,7 +326,7 @@ export function VoiceTest({ agent }) {
   }
 
   return (
-    <div className="stack">
+    <div className="test-pane">
       <div className="row between wrap" style={{ gap: 8 }}>
         <Badge tone="blue">Browser speech · {session.language}</Badge>
         <Button size="sm" variant="ghost" icon={muted ? <VolumeX /> : <Volume2 />} onClick={() => (setMuted(!muted), canSpeak && window.speechSynthesis.cancel())}>

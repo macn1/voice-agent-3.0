@@ -229,7 +229,7 @@ export function DoNotCallPage() {
             <ListEditor value={phones} onChange={setPhones} placeholder="+919876543210" mono />
           </Field>
           <Field label="Reason">
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Customer request" />
+            <Input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Customer request" />
           </Field>
         </div>
       </Modal>

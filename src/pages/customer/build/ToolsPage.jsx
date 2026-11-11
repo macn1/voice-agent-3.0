@@ -173,10 +173,10 @@ function ToolEditor({ value, onClose, onSaved }) {
             <Input className="mono" placeholder="lookup_order" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} />
           </Field>
           <Field label="Timeout (ms)">
-            <Input type="number" min={500} max={20000} value={t.timeout_ms} onChange={(e) => setT({ ...t, timeout_ms: Number(e.target.value) })} />
+            <Input type="number" min={500} max={20000} placeholder="e.g. 5000" value={t.timeout_ms} onChange={(e) => setT({ ...t, timeout_ms: Number(e.target.value) })} />
           </Field>
           <Field label="When should the agent use this?" className="full">
-            <Textarea rows={2} value={t.description} onChange={(e) => setT({ ...t, description: e.target.value })} />
+            <Textarea rows={2} placeholder="e.g. When the caller asks about the status of an order" value={t.description} onChange={(e) => setT({ ...t, description: e.target.value })} />
           </Field>
           <Field label="Method">
             <Select value={t.method} options={['GET', 'POST', 'PUT', 'PATCH']} onChange={(e) => setT({ ...t, method: e.target.value })} />
@@ -185,7 +185,7 @@ function ToolEditor({ value, onClose, onSaved }) {
             <Input className="mono" placeholder="https://api.example.com/orders" value={t.url} onChange={(e) => setT({ ...t, url: e.target.value })} />
           </Field>
           <Field label="Line to say while waiting" className="full">
-            <Input value={t.wait_message} onChange={(e) => setT({ ...t, wait_message: e.target.value })} />
+            <Input placeholder="e.g. One moment while I check that for you…" value={t.wait_message} onChange={(e) => setT({ ...t, wait_message: e.target.value })} />
           </Field>
         </div>
         <Field label="Headers (not secret)">

@@ -307,7 +307,7 @@ function TriggerEditor({ value, onClose, onSaved }) {
         {error && <div className="alert-inline">{error}</div>}
         <div className="form-grid">
           <Field label="Name" className="full">
-            <Input value={t.name ?? ''} onChange={(e) => setT({ ...t, name: e.target.value })} placeholder="New website lead → call in 30s" />
+            <Input placeholder="e.g. Missed-call follow-up" value={t.name ?? ''} onChange={(e) => setT({ ...t, name: e.target.value })} placeholder="New website lead → call in 30s" />
           </Field>
           <Field label="When">
             <Select
@@ -506,7 +506,7 @@ function ScheduledTab() {
             <input type="datetime-local" className="input" value={f.run_at} onChange={(e) => setF({ ...f, run_at: e.target.value })} />
           </Field>
           <Field label="Reason">
-            <Input value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+            <Input placeholder="e.g. Follow up on the demo request" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} />
           </Field>
         </div>
       </Modal>
@@ -668,7 +668,7 @@ function TeamsTab() {
         {editing && (
           <div className="stack">
             <Field label="Team name">
-              <Input value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              <Input placeholder="e.g. Sales team" value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </Field>
             <div className="field">
               <span className="field-label">Agents</span>

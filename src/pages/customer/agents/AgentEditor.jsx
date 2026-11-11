@@ -395,44 +395,50 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
   const vars = (varsQ.data ?? []).filter((x) => x.direction === 'input');
 
   return (
-    <Drawer open={open} onClose={onClose} width={560} title={`Test ${agent.name}`} subtitle={<Badge tone={mode === 'chat' && target === 'published' ? 'green' : 'orange'}>{mode === 'chat' && target === 'published' ? 'Testing published version' : 'Testing draft'}</Badge>}>
-      <SegmentTabs
-        value={mode}
-        onChange={setMode}
-        items={[
-          { value: 'chat', label: 'Chat' },
-          { value: 'voice', label: 'Voice' },
-          { value: 'phone', label: 'Call my phone' },
-        ]}
-      />
-
-      {vars.length > 0 && (
-        <details style={{ marginBottom: 16 }}>
-          <summary className="small fw-medium" style={{ cursor: 'pointer' }}>
-            Test values for call variables ({vars.length})
-          </summary>
-          <div className="form-grid" style={{ marginTop: 12 }}>
-            {vars.map((v) => (
-              <Field key={v.name} label={v.name}>
-                <Input value={values[v.name] ?? ''} placeholder={v.default} onChange={(e) => setValues((x) => ({ ...x, [v.name]: e.target.value }))} />
-              </Field>
-            ))}
-          </div>
-        </details>
-      )}
-      {mode === 'chat' && (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width={560}
+      title={`Test ${agent.name}`}
+      subtitle={<Badge tone={mode === 'chat' && target === 'published' ? 'green' : 'orange'}>{mode === 'chat' && target === 'published' ? 'Testing published version' : 'Testing draft'}</Badge>}
+      bodyClassName="test-body"
+      toolbar={
         <>
           <SegmentTabs
-            value={target}
-            onChange={setTarget}
+            value={mode}
+            onChange={setMode}
             items={[
-              { value: 'draft', label: 'Draft' },
-              { value: 'published', label: 'Published' },
+              { value: 'chat', label: 'Chat' },
+              { value: 'voice', label: 'Voice' },
+              { value: 'phone', label: 'Call my phone' },
             ]}
           />
-          {target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />}
+          {mode === 'chat' && (
+            <SegmentTabs
+              value={target}
+              onChange={setTarget}
+              items={[
+                { value: 'draft', label: 'Draft' },
+                { value: 'published', label: 'Published' },
+              ]}
+            />
+          )}
+          {vars.length > 0 && (
+            <details className="test-vars">
+              <summary>Test values for call variables ({vars.length})</summary>
+              <div className="form-grid">
+                {vars.map((v) => (
+                  <Field key={v.name} label={v.name}>
+                    <Input value={values[v.name] ?? ''} placeholder={v.default} onChange={(e) => setValues((x) => ({ ...x, [v.name]: e.target.value }))} />
+                  </Field>
+                ))}
+              </div>
+            </details>
+          )}
         </>
-      )}
+      }
+    >
+      {mode === 'chat' && (target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />)}
       {mode === 'voice' && <VoiceTest agent={agent} />}
       {mode === 'phone' && <PhoneTest agent={agent} />}
     </Drawer>
@@ -449,7 +455,9 @@ function ChatTest({ agentId, variables }) {
   const [chatTest] = useChatTestMutation();
   const end = useRef(null);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [turns]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns]);
 
   // An empty chat-test body returns the agent's greeting.
   useEffect(() => {
@@ -496,8 +504,8 @@ function ChatTest({ agentId, variables }) {
   };
 
   return (
-    <div className="stack">
-      <div className="chat" style={{ minHeight: 240 }}>
+    <div className="test-pane">
+      <div className="chat">
         {!turns.length && <p className="muted small">Type as the caller would. You'll see the reply, any tool calls, the knowledge used and response time.</p>}
         {turns.map((t, i) => (
           <div key={i} className={`bubble ${t.role}`}>

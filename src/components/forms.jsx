@@ -182,7 +182,7 @@ export function WeekdayPicker({ value, onChange }) {
 
 /* Drawer -------------------------------------------------------------- */
 
-export function Drawer({ open, onClose, title, subtitle, children, footer, width = 520 }) {
+export function Drawer({ open, onClose, title, subtitle, children, footer, width = 520, toolbar, bodyClassName = '' }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -208,7 +208,8 @@ export function Drawer({ open, onClose, title, subtitle, children, footer, width
             <X />
           </button>
         </div>
-        <div className="drawer-body">{children}</div>
+        {toolbar && <div className="drawer-toolbar">{toolbar}</div>}
+        <div className={`drawer-body ${bodyClassName}`.trim()}>{children}</div>
         {footer && (
           <div className="modal-foot" style={{ borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
             {footer}

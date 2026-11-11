@@ -49,10 +49,10 @@ export function CompanyProfilePage() {
             </h4>
             <div className="form-grid">
               <Field label="Business name">
-                <Input value={p.about.name} onChange={(e) => patch({ about: { ...p.about, name: e.target.value } })} />
+                <Input placeholder="e.g. CareFirst Clinic" value={p.about.name} onChange={(e) => patch({ about: { ...p.about, name: e.target.value } })} />
               </Field>
               <Field label="Industry">
-                <Input value={p.about.industry} onChange={(e) => patch({ about: { ...p.about, industry: e.target.value } })} />
+                <Input placeholder="e.g. Healthcare" value={p.about.industry} onChange={(e) => patch({ about: { ...p.about, industry: e.target.value } })} />
               </Field>
               <Field label="Website" className="full">
                 <Input value={p.about.website} placeholder="https://" onChange={(e) => patch({ about: { ...p.about, website: e.target.value } })} />
@@ -60,6 +60,7 @@ export function CompanyProfilePage() {
               <Field label="What you do" className="full">
                 <Textarea
                   rows={3}
+                  placeholder="A short summary of your business, who you serve and what you offer"
                   value={p.about.description}
                   onChange={(e) =>
                     patch({
@@ -141,6 +142,8 @@ export function CompanyProfilePage() {
                 {['phone', 'email', 'whatsapp'].map((k) => (
                   <Field key={k} label={k === 'whatsapp' ? 'WhatsApp' : k[0].toUpperCase() + k.slice(1)}>
                     <Input
+                      type={k === 'email' ? 'email' : 'text'}
+                      placeholder={{ phone: '+91 98765 43210', email: 'hello@company.com', whatsapp: '+91 98765 43210' }[k]}
                       value={p.contact[k]}
                       onChange={(e) =>
                         patch({
@@ -160,6 +163,7 @@ export function CompanyProfilePage() {
                   <Field key={k} label={`${k[0].toUpperCase() + k.slice(1)} policy`}>
                     <Textarea
                       rows={2}
+                      placeholder={`Describe your ${k} policy in a sentence or two`}
                       value={p.policies[k]}
                       onChange={(e) =>
                         patch({

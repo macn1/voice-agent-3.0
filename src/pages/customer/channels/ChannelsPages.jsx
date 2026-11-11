@@ -601,7 +601,9 @@ export function InboxPage() {
   const [tpl, setTpl] = useState('');
   const [tplVars, setTplVars] = useState([]);
   const end = useRef(null);
-  useEffect(() => end.current?.scrollIntoView(), [msgs.data]);
+  useEffect(() => {
+    end.current?.scrollIntoView();
+  }, [msgs.data]);
 
   const windowClosed = active?.window_expires_at ? Date.parse(active.window_expires_at) < Date.now() : false;
   const update = (c) => setActive(c); // the list refetches via cache invalidation

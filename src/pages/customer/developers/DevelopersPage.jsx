@@ -567,7 +567,7 @@ function WebhookEditor({ value, onClose, onSaved }) {
           </div>
         </div>
         <Field label="Description" hint="Optional">
-          <Input value={w.description ?? ''} onChange={(e) => setW({ ...w, description: e.target.value })} placeholder="Our CRM bridge" />
+          <Input placeholder="e.g. Sends call summaries to our CRM" value={w.description ?? ''} onChange={(e) => setW({ ...w, description: e.target.value })} placeholder="Our CRM bridge" />
         </Field>
       </div>
     </Modal>

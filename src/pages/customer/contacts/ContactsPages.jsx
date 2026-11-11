@@ -213,7 +213,7 @@ function ContactsTab() {
         }
       >
         <Field label="List name">
-          <Input autoFocus value={newList ?? ''} onChange={(e) => setNewList(e.target.value)} />
+          <Input autoFocus placeholder="e.g. April leads" value={newList ?? ''} onChange={(e) => setNewList(e.target.value)} />
         </Field>
       </Modal>
     </div>
@@ -267,13 +267,13 @@ function ContactModal({ value, fields, onClose, onSaved }) {
         {error && <div className="alert-inline">{error}</div>}
         <div className="form-grid">
           <Field label="Name">
-            <Input value={c.name ?? ''} onChange={(e) => setC({ ...c, name: e.target.value })} />
+            <Input placeholder="Full name" value={c.name ?? ''} onChange={(e) => setC({ ...c, name: e.target.value })} />
           </Field>
           <Field label="Phone">
             <Input className="mono" placeholder="+919876543210" value={c.phone ?? ''} onChange={(e) => setC({ ...c, phone: e.target.value })} />
           </Field>
           <Field label="Email">
-            <Input value={c.email ?? ''} onChange={(e) => setC({ ...c, email: e.target.value })} />
+            <Input placeholder="name@example.com" value={c.email ?? ''} onChange={(e) => setC({ ...c, email: e.target.value })} />
           </Field>
           <Field label="Time zone">
             <Select
@@ -768,7 +768,7 @@ export function ContactDetailPage() {
                   <input type="datetime-local" className="input" value={sched.run_at} onChange={(e) => setSched({ ...sched, run_at: e.target.value })} />
                 </Field>
                 <Field label="Reason">
-                  <Input value={sched.reason} onChange={(e) => setSched({ ...sched, reason: e.target.value })} />
+                  <Input placeholder="e.g. Customer asked for a call back" value={sched.reason} onChange={(e) => setSched({ ...sched, reason: e.target.value })} />
                 </Field>
               </div>
             </Modal>

@@ -1487,6 +1487,73 @@ p {
   resize: vertical;
 }
 
+/* Dropdowns: native arrow replaced by one inset 14px from the edge, with room so text never runs under it. */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 40px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237d7c79' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+}
+
+.select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+[data-theme='dark'] .select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8d89' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* A "Choose…" placeholder option (value="") reads as a hint, not as a chosen value. */
+.select:has(option[value='']:checked) {
+  color: var(--muted);
+}
+
+/* Placeholders: one muted tone everywhere so they're never mistaken for entered values. */
+.input::placeholder,
+.textarea::placeholder,
+.list-editor input::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+.input:focus::placeholder,
+.textarea:focus::placeholder {
+  opacity: 0.45;
+}
+
+/* Date/time pickers: keep the native icon tidy and themed. */
+.input[type='date'],
+.input[type='time'],
+.input[type='datetime-local'] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 44px;
+}
+
+.input[type='date']::-webkit-calendar-picker-indicator,
+.input[type='time']::-webkit-calendar-picker-indicator,
+.input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+[data-theme='dark'] .input[type='date']::-webkit-calendar-picker-indicator,
+[data-theme='dark'] .input[type='time']::-webkit-calendar-picker-indicator,
+[data-theme='dark'] .input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 .input:focus,
 .select:focus,
 .textarea:focus {
