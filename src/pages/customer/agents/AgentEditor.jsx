@@ -438,14 +438,15 @@ function PublishDialog({ open, onClose, agent, onPublished }) {
 
 function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
   const [mode, setMode] = useState(initialMode);
-  // Chat can talk to the draft (editor copy) or the published version (what callers get).
+  // Chat and voice can talk to the draft (the editor's saved copy) or the
+  // published version (what callers get).
   const [target, setTarget] = useState('draft');
   const [values, setValues] = useState({});
   const varsQ = useGetAgentSectionQuery({ id: agent.id, section: 'variables' }, { skip: !open });
   const vars = (varsQ.data ?? []).filter((x) => x.direction === 'input');
 
-  // Live voice runs on the published version; it falls back to the draft when the agent isn't live.
-  const onPublished = (mode === 'chat' && target === 'published') || (mode === 'voice' && agent.status === 'live' && !!agent.published_version_id);
+  // "Call my phone" always rings the draft.
+  const onPublished = mode !== 'phone' && target === 'published';
   return (
     <Drawer
       open={open}
@@ -465,7 +466,7 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
               { value: 'phone', label: 'Call my phone' },
             ]}
           />
-          {mode === 'chat' && (
+          {mode !== 'phone' && (
             <SegmentTabs
               value={target}
               onChange={setTarget}
@@ -491,7 +492,7 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
       }
     >
       {mode === 'chat' && (target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />)}
-      {mode === 'voice' && <VoiceTest agent={agent} />}
+      {mode === 'voice' && <VoiceTest key={target} agent={agent} draft={target === 'draft'} />}
       {mode === 'phone' && <PhoneTest agent={agent} />}
     </Drawer>
   );

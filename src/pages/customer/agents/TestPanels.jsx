@@ -220,11 +220,11 @@ const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 const STATE_LABEL = { connecting: 'Connecting', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended' };
 const STATE_TONE = { listening: 'green', thinking: 'amber', speaking: 'blue' };
 const WHY_BROWSER = {
-  agent_not_published: "Real voice runs on the agent's published version, and this agent isn't published yet.",
+  agent_not_published: "This agent isn't published yet: switch to Draft to hear it with its real voice.",
   agent_not_live: 'Real voice needs the agent to be live, and this agent is paused.',
 };
 
-export function VoiceTest({ agent }) {
+export function VoiceTest({ agent, draft = false }) {
   const [create] = useCreateTestSessionMutation();
   const [session, setSession] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -240,7 +240,7 @@ export function VoiceTest({ agent }) {
     const call = new VoiceCall();
     call.unlock();
     try {
-      const r = await create(agent.id).unwrap();
+      const r = await create({ id: agent.id, draft }).unwrap();
       if (r.mode === 'realtime' && r.media_url) {
         callRef.current = call;
       } else {
@@ -262,13 +262,24 @@ export function VoiceTest({ agent }) {
   };
 
   if (session?.mode === 'realtime' && callRef.current) {
-    return <LiveVoice call={callRef.current} session={session} onReset={reset} />;
+    return <LiveVoice call={callRef.current} session={session} draft={draft} onReset={reset} />;
   }
   if (session) return <BrowserSpeech agent={agent} session={session} onReset={reset} />;
   return (
     <div className="stack">
       <p className="muted" style={{ margin: 0 }}>
         Talk to the agent through your microphone and hear its own voice. Calls made here appear in the call log.
+      </p>
+      <p className="small" style={{ margin: 0 }}>
+        {draft ? (
+          <>
+            Runs on your <b>saved draft</b>: the voice, instructions and rules as they are now, before you publish. Save your changes first.
+          </>
+        ) : (
+          <>
+            Runs on the <b>published version</b>, exactly what callers get.
+          </>
+        )}
       </p>
       {!voiceCallSupported() && <div className="alert-inline">This browser can't do voice calls. Try a current Chrome, Edge or Firefox.</div>}
       {error && (
@@ -284,8 +295,8 @@ export function VoiceTest({ agent }) {
   );
 }
 
-/** A real call with the published agent: the microphone streams to the media server. */
-function LiveVoice({ call, session, onReset }) {
+/** A real call with the agent (its draft or published version): the microphone streams to the media server. */
+function LiveVoice({ call, session, draft, onReset }) {
   const [turns, setTurns] = useState([]);
   const [state, setState] = useState('connecting');
   const [level, setLevel] = useState(0);
@@ -358,7 +369,8 @@ function LiveVoice({ call, session, onReset }) {
             Hang up
           </Button>
           <p className="muted small" style={{ margin: 0 }}>
-            Runs on the published version. Using speakers? If the agent keeps cutting itself off, it may be hearing itself: try headphones.
+            Runs on the {draft ? 'saved draft' : 'published version'}. Using speakers? If the agent keeps cutting itself off, it may be hearing itself: try
+            headphones.
           </p>
         </>
       )}

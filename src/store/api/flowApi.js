@@ -318,7 +318,14 @@ export const flowApi = baseApi.injectEndpoints({
     }),
 
     // Testing (AGT-06, QTY-01, QTY-02) -----------------------------------
-    createTestSession: b.mutation({ query: (id) => C.flow(`${ag(id)}/test-session`, { method: 'POST', body: {} }) }),
+    // { id, draft }: draft runs the voice test on the saved draft (voice,
+    // instructions, rules as they are now) instead of the published version.
+    createTestSession: b.mutation({
+      query: (arg) => {
+        const { id, draft } = typeof arg === 'object' ? arg : { id: arg };
+        return C.flow(`${ag(id)}/test-session`, { method: 'POST', body: { draft: !!draft } });
+      },
+    }),
     // Rings to_number with the DRAFT agent; returns the call (poll outbound GET /calls/{id}).
     testCall: b.mutation({ query: ({ id, to_number }) => C.flow(`${ag(id)}/test-call`, { method: 'POST', body: { to_number } }) }),
     chatTest: b.mutation({ query: ({ id, ...body }) => C.flow(`${ag(id)}/chat-test`, { method: 'POST', body }) }),
