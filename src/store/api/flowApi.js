@@ -453,6 +453,7 @@ export const {
   useGetAgentDiffQuery,
   usePublishAgentMutation,
   useListVersionsQuery,
+  useGetVersionQuery,
   useLazyGetVersionQuery,
   useRollbackVersionMutation,
   useListTemplatesQuery,

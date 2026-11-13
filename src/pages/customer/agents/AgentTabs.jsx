@@ -17,6 +17,8 @@ import {
   useListTestRunsQuery,
   useListToolsQuery,
   useListVersionsQuery,
+  useGetVersionQuery,
+  useListVoicesQuery,
   usePauseAgentMutation,
   usePutAgentSectionMutation,
   useRemoveAgentDocumentMutation,
@@ -31,7 +33,7 @@ import { date, dateTime, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Slider, Textarea, useSection } from '../../../components/forms';
 import { HBars, TimeChart } from '../../../components/charts';
-import { LanguageSelect, ModelSelect, useModels, VoicePicker } from './pickers';
+import { DEFAULT_VOICE, findVoice, LanguageSelect, ModelSelect, useModels, VoicePicker } from './pickers';
 import { copyText } from '../../../lib/clipboard';
 
 /* {{variable}} aware prompt field (AGT-10.4) --------------------------- */
@@ -770,14 +772,34 @@ export function BehaviourTab({ agent }) {
 
 /* Voice (AGT-02, AGT-13) ---------------------------------------------- */
 
+/** Which voice calls use now, when the live version's differs from the one saved here. */
+function LiveVoiceNote({ agent, saved }) {
+  const versions = useListVersionsQuery(agent.id);
+  const cur = (versions.data ?? []).find((v) => v.is_current);
+  const live = useGetVersionQuery({ id: agent.id, version: cur?.version }, { skip: !cur });
+  const voices = useListVoicesQuery(agent.language);
+  if (!cur || !live.data || !voices.data) return null;
+  const liveId = live.data.config?.speech?.voice_id || '';
+  if (liveId === (saved || '')) return null;
+  const hears = findVoice(voices.data, liveId)?.name ?? DEFAULT_VOICE;
+  return (
+    <div className="banner info" style={{ margin: 0 }}>
+      <span className="grow">
+        Calls use <b>{hears}</b> now (live version {cur.version}). Publish to switch them to the voice saved here.
+      </span>
+    </div>
+  );
+}
+
 export function VoiceTab({ agent }) {
   const speech = useAgentSection(agent.id, 'speech');
   const keywords = useAgentSection(agent.id, 'keywords');
   return (
     <div className="stack">
-      <SectionCard title="Voice" description="How the agent sounds and how easily callers can interrupt it." section={speech}>
+      <SectionCard title="Voice" description="How the agent sounds and how easily callers can interrupt it. Every voice speaks all the agent's languages." section={speech}>
         {(s, patch) => (
           <>
+            <LiveVoiceNote agent={agent} saved={speech.data?.voice_id} />
             <div className="field">
               <span className="field-label">Voice</span>
               <VoicePicker language={agent.language} value={s.voice_id} onChange={(v) => patch({ voice_id: v })} />
@@ -849,10 +871,21 @@ export function VoiceTab({ agent }) {
 
 export function LanguagesTab({ agent }) {
   const s = useAgentSection(agent.id, 'languages');
+  const speech = useAgentSection(agent.id, 'speech');
+  const voices = useListVoicesQuery(agent.language);
+  const voice = findVoice(voices.data ?? [], speech.data?.voice_id)?.name ?? DEFAULT_VOICE;
   return (
-    <SectionCard title="Languages" description="Primary language plus extras. Each language can have its own voice and greeting." section={s}>
+    <SectionCard title="Languages" description="Primary language plus extras, each with its own greeting." section={s}>
       {(l, patch) => (
         <>
+          <div className="row small" style={{ gap: 6 }}>
+            <span>
+              Voice: <b>{voice}</b>, which speaks all of these languages.
+            </span>
+            <Link to={`/agents/${agent.id}/voice`} className="btn sm ghost">
+              Change on the Voice tab
+            </Link>
+          </div>
           <div className="form-grid">
             <Field label="Language switching" hint="The first language below is the primary one.">
               <Select
@@ -898,10 +931,6 @@ export function LanguagesTab({ agent }) {
                 <Field label="Greeting in this language">
                   <Input value={lang.greeting} onChange={(e) => upd({ greeting: e.target.value })} />
                 </Field>
-                <div className="field" style={{ marginTop: 12 }}>
-                  <span className="field-label">Voice</span>
-                  <VoicePicker language={lang.language} value={lang.voice_id} onChange={(v) => upd({ voice_id: v })} />
-                </div>
               </div>
             );
           })}
