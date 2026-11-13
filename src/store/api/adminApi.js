@@ -103,6 +103,31 @@ export const adminApi = baseApi.injectEndpoints({
       transformResponse: (d) => d?.items ?? d ?? [],
       providesTags: ['NumberPool'],
     }),
+    // Our phone carrier accounts (Plivo): [{name}], empty until one is connected.
+    listCarrierAccounts: b.query({
+      query: () => A.telephony('/admin/carrier/accounts'),
+      transformResponse: (d) => d?.items ?? [],
+    }),
+    // Numbers for rent: { account, country, type, pattern } -> [{e164, type, locality, region, monthly_price, sms}]
+    searchCarrierNumbers: b.query({
+      query: (params) => A.telephony('/admin/carrier/numbers/available', { params }),
+      transformResponse: (d) => d?.items ?? [],
+    }),
+    // Rents a number into the pool: { account, number, country }.
+    rentCarrierNumber: b.mutation({
+      query: (body) => A.telephony('/admin/carrier/numbers', { method: 'POST', body }),
+      invalidatesTags: ['NumberPool'],
+    }),
+    // Brings the account's numbers into the pool: -> {total, added, attached}.
+    syncCarrierAccount: b.mutation({
+      query: (name) => A.telephony(`/admin/carrier/accounts/${encodeURIComponent(name)}/sync`, { method: 'POST' }),
+      invalidatesTags: ['NumberPool'],
+    }),
+    // Gives a pool number back to the carrier for good.
+    retireNumber: b.mutation({
+      query: (numberId) => A.telephony(`/admin/phone-numbers/${numberId}/retire`, { method: 'POST' }),
+      invalidatesTags: ['NumberPool'],
+    }),
 
     // Agents (AGT-01) ----------------------------------------------------
     // ?status=draft|live|paused, limit, offset. No server-side search or sort.
@@ -163,6 +188,11 @@ export const {
   useAllocateNumberMutation,
   useReleaseNumberMutation,
   useListTenantNumbersQuery,
+  useListCarrierAccountsQuery,
+  useLazySearchCarrierNumbersQuery,
+  useRentCarrierNumberMutation,
+  useSyncCarrierAccountMutation,
+  useRetireNumberMutation,
   useGetPlatformOverviewQuery,
   useGetCustomerAnalyticsQuery,
   useListAdminAgentsQuery,
