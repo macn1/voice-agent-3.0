@@ -48,6 +48,7 @@ import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
 import { CallNumberDialog, duration, OUTCOME_TONE, useAgentName, useAgentOptions, useCampaignName } from '../shared';
 import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
+import { copyText } from '../../../lib/clipboard';
 
 const PAGE = 25;
 
@@ -267,8 +268,8 @@ export function LiveCallsPage({ embedded = false }) {
     <div className="card">
       <div className="card-head">
         <div>
-          <h2>Calls in progress</h2>
-          <div className="card-sub">Refreshes every 5 seconds.</div>
+          <h2>Campaign and dialled calls</h2>
+          <div className="card-sub">Outbound calls being placed by campaigns and "Call a number", plus simulated calls. Refreshes every 5 seconds.</div>
         </div>
         {!embedded && (
           <Button size="sm" icon={<Zap />} onClick={() => setSimulating(true)}>
@@ -341,8 +342,8 @@ export function LiveCallsPage({ embedded = false }) {
           ) : (
             <EmptyState
               icon={<AudioLines />}
-              title="No calls right now"
-              description="Phone calls in progress appear here as they happen."
+              title="No outbound calls right now"
+              description="Calls taken by your agents (phone numbers, the web widget, the Test panel) show under Live sessions below."
               action={
                 embedded ? undefined : (
                   <Button icon={<Zap />} onClick={() => setSimulating(true)}>
@@ -366,7 +367,7 @@ export function LiveCallsPage({ embedded = false }) {
       <PageHeader
         eyebrow="Monitor"
         title="Live calls"
-        description="Phone calls in progress, and test conversations running through the call runtime."
+        description="Everything your agents are handling right now: outbound calls at the top, and every live conversation (phone, web widget, Test panel) under Live sessions."
         actions={
           <Button icon={<Zap />} onClick={() => setSimulating(true)}>
             Simulate call
@@ -391,7 +392,7 @@ function LiveSessionsCard() {
       <div className="card-head">
         <div>
           <h2>Live sessions</h2>
-          <div className="card-sub">Test conversations and calls handled by the call runtime. Refreshes every few seconds.</div>
+          <div className="card-sub">Every conversation an agent is in right now: phone calls, the web widget and the Test panel. Refreshes every few seconds.</div>
         </div>
         <SegmentTabs
           value={mode}
@@ -441,7 +442,11 @@ function LiveSessionsCard() {
               </table>
             </div>
           ) : (
-            <EmptyState icon={<AudioLines />} title="No sessions in progress" description="Start a published-agent conversation from an agent's Test panel to see it here." />
+            <EmptyState
+              icon={<AudioLines />}
+              title="No conversations right now"
+              description="They appear here while they run. To try one, open an agent and use Test, or call one of your numbers."
+            />
           )
         }
       </Async>
@@ -565,9 +570,9 @@ export function CallDetailPage() {
                 <Button
                   size="sm"
                   icon={<Share2 />}
-                  onClick={() => {
-                    navigator.clipboard?.writeText(window.location.href);
-                    toast('Link copied');
+                  onClick={async () => {
+                    if (await copyText(window.location.href)) toast('Link copied. Anyone in your company who can see calls can open it.');
+                    else toast(`Couldn't copy. The link is ${window.location.href}`, 'error');
                   }}
                 >
                   Share
@@ -624,7 +629,13 @@ export function CallDetailPage() {
                       />
                     </div>
                   ) : (
-                    <p className="muted small">{recording.isLoading ? 'Loading…' : 'No recording — still uploading, or recording is off for this agent.'}</p>
+                    <p className="muted small">
+                      {recording.isLoading
+                        ? 'Loading…'
+                        : call.data?.has_recording
+                          ? "The recording couldn't be loaded. Try again in a minute."
+                          : "This call has no recording: calls aren't recorded yet. The transcript has everything that was said."}
+                    </p>
                   )}
                 </div>
                 <div className="card">
@@ -1208,7 +1219,8 @@ export function InboundPage() {
       />
 
       <div className="stack">
-        <LiveCallsPage embedded />
+        {/* Calls coming in are handled by the call runtime: they show as live sessions. */}
+        <LiveSessionsCard />
         <div className="card">
           <div className="card-head">
             <h2>Recent inbound calls</h2>

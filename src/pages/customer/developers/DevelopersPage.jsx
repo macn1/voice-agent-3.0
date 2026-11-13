@@ -134,7 +134,7 @@ function DeployLanding() {
       `- Start a call: POST ${base}/calls with { "agent_id", "to_number" (E.164), "variables" }`,
       `- Call status: GET ${base}/calls/{id}`,
       '- Responses are { success, data } or { success: false, error: { code, message } }.',
-      '- Results: add a webhook for call.completed. The body is { id, type, created_at, tenant_id, data: { call_id, status, outcome, is_success, duration_seconds, summary, ... } }. Verify the X-Aurlynn-Signature header "t=<unix>,v1=<hex>": v1 is HMAC-SHA256 of "<t>.<raw body>" with the endpoint\'s signing secret.',
+      '- Results: add a webhook for call.completed. The body is { id, type, created_at, tenant_id, data: { call_id, status, outcome, is_success, sentiment, duration_seconds, summary, extracted: { the values the agent collected, e.g. caller_name, preferred_time }, ... } }. Verify the X-Aurlynn-Signature header "t=<unix>,v1=<hex>": v1 is HMAC-SHA256 of "<t>.<raw body>" with the endpoint\'s signing secret.',
       `- Docs: ${window.location.origin}/docs`,
     ].join('\n');
     try {

@@ -49,19 +49,19 @@ export function CompanyProfilePage() {
             </h4>
             <div className="form-grid">
               <Field label="Business name">
-                <Input placeholder="e.g. CareFirst Clinic" value={p.about.name} onChange={(e) => patch({ about: { ...p.about, name: e.target.value } })} />
+                <Input placeholder="e.g. CareFirst Clinic" value={p.about.name ?? ''} onChange={(e) => patch({ about: { ...p.about, name: e.target.value } })} />
               </Field>
               <Field label="Industry">
-                <Input placeholder="e.g. Healthcare" value={p.about.industry} onChange={(e) => patch({ about: { ...p.about, industry: e.target.value } })} />
+                <Input placeholder="e.g. Healthcare" value={p.about.industry ?? ''} onChange={(e) => patch({ about: { ...p.about, industry: e.target.value } })} />
               </Field>
               <Field label="Website" className="full">
-                <Input value={p.about.website} placeholder="https://" onChange={(e) => patch({ about: { ...p.about, website: e.target.value } })} />
+                <Input value={p.about.website ?? ''} placeholder="https://" onChange={(e) => patch({ about: { ...p.about, website: e.target.value } })} />
               </Field>
               <Field label="What you do" className="full">
                 <Textarea
                   rows={3}
                   placeholder="A short summary of your business, who you serve and what you offer"
-                  value={p.about.description}
+                  value={p.about.description ?? ''}
                   onChange={(e) =>
                     patch({
                       about: { ...p.about, description: e.target.value },
@@ -107,7 +107,7 @@ export function CompanyProfilePage() {
                         className="input"
                         style={{ width: 130 }}
                         disabled={h.closed}
-                        value={h.open}
+                        value={h.open ?? ''}
                         onChange={(e) => set({ open: e.target.value })}
                       />
                       <span className="muted">to</span>
@@ -116,7 +116,7 @@ export function CompanyProfilePage() {
                         className="input"
                         style={{ width: 130 }}
                         disabled={h.closed}
-                        value={h.close}
+                        value={h.close ?? ''}
                         onChange={(e) => set({ close: e.target.value })}
                       />
                     </div>
@@ -144,7 +144,7 @@ export function CompanyProfilePage() {
                     <Input
                       type={k === 'email' ? 'email' : 'text'}
                       placeholder={{ phone: '+91 98765 43210', email: 'hello@company.com', whatsapp: '+91 98765 43210' }[k]}
-                      value={p.contact[k]}
+                      value={p.contact[k] ?? ''}
                       onChange={(e) =>
                         patch({
                           contact: { ...p.contact, [k]: e.target.value },
@@ -164,7 +164,7 @@ export function CompanyProfilePage() {
                     <Textarea
                       rows={2}
                       placeholder={`Describe your ${k} policy in a sentence or two`}
-                      value={p.policies[k]}
+                      value={p.policies[k] ?? ''}
                       onChange={(e) =>
                         patch({
                           policies: { ...p.policies, [k]: e.target.value },

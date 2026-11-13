@@ -4,6 +4,7 @@ import { ChevronDown, LogOut, Menu, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { useTheme } from '../lib/theme';
+import { ErrorBoundary } from './ErrorBoundary';
 import { Brand } from './Logo';
 
 function SideNavItem({ item }) {
@@ -188,7 +189,8 @@ export function AppShell({ sidebar, topbarRight, children }) {
           </button>
           {topbarRight}
         </div>
-        {children ?? <Outlet />}
+        {/* A page that crashes shows the error here; the sidebar keeps working. */}
+        <ErrorBoundary resetKey={pathname}>{children ?? <Outlet />}</ErrorBoundary>
       </main>
     </div>
   );

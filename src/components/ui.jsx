@@ -138,6 +138,17 @@ export function ErrorState({ error, onRetry }) {
       </div>
     );
   }
+  if (error?.missing) {
+    return (
+      <div className="state">
+        <div className="state-icon">
+          <Inbox />
+        </div>
+        <h3>Not found</h3>
+        <p>This doesn't exist, or it was deleted. Check the link, or go back to the list.</p>
+      </div>
+    );
+  }
   if (error?.status === 403) {
     return (
       <div className="state error">

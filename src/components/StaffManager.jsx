@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Copy, MailPlus, Pencil, Search, Trash2, UserPlus, Users, Wand2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { copyText } from '../lib/clipboard';
 import { dateTime, initials } from '../lib/format';
 import { asList, roleId, roleLabel } from '../lib/normalize';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, StatusBadge, Toggle, useToast } from './ui';
@@ -210,10 +211,14 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
           <Button
             variant="primary"
             icon={<Copy />}
-            onClick={() => {
-              navigator.clipboard?.writeText(inviteLink ?? '');
-              toast('Copied');
-              setInviteLink(null);
+            onClick={async () => {
+              // Keep the link on screen if copying fails: it isn't shown again.
+              if (await copyText(inviteLink ?? '')) {
+                toast('Copied');
+                setInviteLink(null);
+              } else {
+                toast("Couldn't copy. Select the link and copy it yourself.", 'error');
+              }
             }}
           >
             Copy link
@@ -234,9 +239,10 @@ export function StaffManager({ hooks, title, noun = 'team member' }) {
           <>
             <Button
               icon={<Copy />}
-              onClick={() => {
-                navigator.clipboard?.writeText(`Sign in at ${window.location.origin}/login\nEmail: ${created.email}\nPassword: ${created.password}`);
-                toast('Copied to clipboard');
+              onClick={async () => {
+                const ok = await copyText(`Sign in at ${window.location.origin}/login\nEmail: ${created.email}\nPassword: ${created.password}`);
+                if (ok) toast('Copied to clipboard');
+                else toast("Couldn't copy. Select the details and copy them yourself.", 'error');
               }}
             >
               Copy
@@ -274,6 +280,7 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate, invite = false
   const [password, setPassword] = useState('');
   const [byInvite, setByInvite] = useState(invite);
   const [roleIds, setRoleIds] = useState([]);
+  const [rolesPicked, setRolesPicked] = useState(false);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -285,10 +292,17 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate, invite = false
       setPassword(generatePassword());
       setByInvite(invite);
       setRoleIds([]);
+      setRolesPicked(false);
       setTouched(false);
       setError(null);
     }
   }, [open]);
+
+  // New people start as Members (the built-in role) unless roles are picked.
+  const memberId = roles.find((r) => String(r.name ?? '').toLowerCase() === 'member')?.id;
+  useEffect(() => {
+    if (open && !rolesPicked) setRoleIds(memberId ? [memberId] : []);
+  }, [open, memberId, rolesPicked]);
 
   const errs = {
     name: !name.trim() ? 'Enter a name' : null,
@@ -372,11 +386,19 @@ function CreateStaffModal({ open, onClose, roles, noun, onCreate, invite = false
                   <input
                     type="checkbox"
                     checked={roleIds.includes(r.id)}
-                    onChange={(e) => setRoleIds((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((x) => x !== r.id)))}
+                    onChange={(e) => {
+                      setRolesPicked(true);
+                      setRoleIds((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((x) => x !== r.id)));
+                    }}
                   />
 
                   <span>
                     <span className="fw-medium">{roleLabel(r)}</span>
+                    {r.is_system && (
+                      <span style={{ marginLeft: 6 }}>
+                        <Badge>Built-in</Badge>
+                      </span>
+                    )}
                     {r.description && (
                       <span className="muted small" style={{ display: 'block' }}>
                         {r.description}

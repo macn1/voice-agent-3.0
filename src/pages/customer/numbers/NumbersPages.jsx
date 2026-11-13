@@ -346,7 +346,8 @@ function BuyNumberModal({ open, onClose, onBought }) {
   const [type, setType] = useState('local');
   const [areaCode, setAreaCode] = useState('80');
   const [contains, setContains] = useState('');
-  const [busy, setBusy] = useState(null);
+  // The number picked to buy, waiting for the person to confirm the price.
+  const [pick, setPick] = useState(null);
   // Search runs when the button is pressed; `at` makes each press a fresh query.
   const [search, setSearch] = useState(null);
   const results = useSearchAvailableNumbersQuery(search ?? {}, { skip: !open || !search });
@@ -387,24 +388,7 @@ function BuyNumberModal({ open, onClose, onBought }) {
                             /mo
                           </td>
                           <td className="actions">
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              loading={busy === n.e164}
-                              onClick={async () => {
-                                setBusy(n.e164);
-                                try {
-                                  await purchaseNumber(n.e164).unwrap();
-                                  toast(`${n.e164} is yours`);
-                                  onBought();
-                                  onClose();
-                                } catch (e) {
-                                  toast(e?.status === 409 ? 'Someone just took that number — pick another.' : errMsg(e), 'error');
-                                } finally {
-                                  setBusy(null);
-                                }
-                              }}
-                            >
+                            <Button size="sm" variant="primary" onClick={() => setPick(n)}>
                               Buy
                             </Button>
                           </td>
@@ -420,6 +404,27 @@ function BuyNumberModal({ open, onClose, onBought }) {
           </Async>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pick}
+        onClose={() => setPick(null)}
+        title={pick ? `Buy ${pick.e164}?` : 'Buy this number?'}
+        description={
+          pick
+            ? `It costs ${money(pick.monthly_price, pick.currency ?? 'INR')} a month until you release it. It is added to your account right away.`
+            : undefined
+        }
+        confirmLabel={pick ? `Buy for ${money(pick.monthly_price, pick.currency ?? 'INR')}/mo` : 'Buy'}
+        onConfirm={async () => {
+          try {
+            await purchaseNumber(pick.e164).unwrap();
+          } catch (e) {
+            throw e?.status === 409 ? 'Someone just took that number. Pick another one.' : e;
+          }
+          toast(`${pick.e164} is yours`);
+          onBought();
+          onClose();
+        }}
+      />
     </Modal>
   );
 }

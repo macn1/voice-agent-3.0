@@ -344,7 +344,20 @@ export const flowApi = baseApi.injectEndpoints({
     removeAgentDocument: b.mutation({ query: ({ id, docId }) => C.flow(`${ag(id)}/kb-documents/${docId}`, { method: 'DELETE' }), invalidatesTags: ['Source'] }),
 
     // Company profile (AGT-08) -------------------------------------------
-    getCompanyProfile: b.query({ query: () => C.flow('/customer/company-profile'), providesTags: ['Company'] }),
+    getCompanyProfile: b.query({
+      query: () => C.flow('/customer/company-profile'),
+      // A new company's profile can come back with parts missing; the page
+      // expects every part, each field editable from empty.
+      transformResponse: (p) => ({
+        ...(p ?? {}),
+        about: { ...(p?.about ?? {}) },
+        contact: { ...(p?.contact ?? {}) },
+        policies: { ...(p?.policies ?? {}) },
+        hours: { ...(p?.hours ?? {}) },
+        offerings: Array.isArray(p?.offerings) ? p.offerings : [],
+      }),
+      providesTags: ['Company'],
+    }),
     putCompanyProfile: b.mutation({ query: (body) => C.flow('/customer/company-profile', { method: 'PUT', body }), invalidatesTags: ['Company'] }),
     importCompanyFromWebsite: b.mutation({ query: (url) => C.flow('/customer/company-profile/import-from-website', { method: 'POST', body: { url } }) }),
 

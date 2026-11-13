@@ -72,14 +72,23 @@ async function send({ service = 'auth', url, method = 'GET', body, params }, tok
   }
 
   // A route is "not served" when the status says so and the body carries no
-  // domain code of its own (live_audio_unavailable is a real 503 answer).
-  const domainCode = !!json?.error?.code && !GENERIC_NOT_FOUND.includes(code) && !/^http_\d+$/.test(code);
+  // domain code of its own (live_audio_unavailable is a real 503 answer). Our
+  // services answer an unknown route with plain text, so a JSON "not_found"
+  // is a record that doesn't exist (deleted, or a stale link), not a missing
+  // service.
+  const missing = status === 404 && code === 'not_found' && !!json?.error;
+  const domainCode = missing || (!!json?.error?.code && !GENERIC_NOT_FOUND.includes(code) && !/^http_\d+$/.test(code));
   const notAvailable = [404, 405, 501, 502, 503].includes(status) && !domainCode;
   return {
     error: {
       status,
       code: notAvailable ? 'not_available' : code,
-      message: notAvailable ? `${SERVICE_LABEL[service]} doesn't serve ${method} ${path} yet.` : (err.message ?? (res.statusText || 'Request failed')),
+      missing,
+      message: notAvailable
+        ? `${SERVICE_LABEL[service]} doesn't serve ${method} ${path} yet.`
+        : missing
+          ? "This doesn't exist, or it was deleted."
+          : (err.message ?? (res.statusText || 'Request failed')),
       notAvailable,
       fields: json?.meta?.fields,
       service,

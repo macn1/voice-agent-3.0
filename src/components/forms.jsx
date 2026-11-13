@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, Plus, Trash2, X } from 'lucide-react';
 import { Async, Button, errMsg, useToast } from './ui';
+import { copyText } from '../lib/clipboard';
 
 /* Basic inputs -------------------------------------------------------- */
 
@@ -271,8 +272,11 @@ export function useSection(query, mutation, toArg = (d) => d) {
   };
 }
 
-/** Card wrapper with title, save bar and async states for a section. */
-export function SectionCard({ title, description, section, children, actions }) {
+/**
+ * Card wrapper with title, save bar and async states for a section. invalid,
+ * when set, is what must be fixed before saving: Save stays off and says why.
+ */
+export function SectionCard({ title, description, section, children, actions, invalid }) {
   return (
     <div className="card">
       <div className="card-head">
@@ -287,11 +291,24 @@ export function SectionCard({ title, description, section, children, actions }) 
               Discard
             </Button>
           )}
-          <Button size="sm" variant="primary" icon={<Check />} loading={section.saving} disabled={!section.dirty} onClick={section.save}>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Check />}
+            loading={section.saving}
+            disabled={!section.dirty || !!invalid}
+            title={invalid || undefined}
+            onClick={section.save}
+          >
             Save
           </Button>
         </div>
       </div>
+      {invalid && section.dirty && (
+        <div className="banner danger" role="alert" style={{ margin: '0 24px 12px' }}>
+          <span className="grow">{invalid}</span>
+        </div>
+      )}
       <Async
         state={{
           data: section.draft,
@@ -374,9 +391,9 @@ export function CopyField({ value, mono = true }) {
         type="button"
         className="input-icon"
         title="Copy"
-        onClick={() => {
-          navigator.clipboard?.writeText(value);
-          toast('Copied');
+        onClick={async () => {
+          if (await copyText(value)) toast('Copied');
+          else toast("Couldn't copy. Select the text and copy it yourself.", 'error');
         }}
       >
         <Copy size={16} />

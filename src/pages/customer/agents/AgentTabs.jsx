@@ -32,6 +32,7 @@ import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, 
 import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Slider, Textarea, useSection } from '../../../components/forms';
 import { HBars, TimeChart } from '../../../components/charts';
 import { LanguageSelect, ModelSelect, useModels, VoicePicker } from './pickers';
+import { copyText } from '../../../lib/clipboard';
 
 /* {{variable}} aware prompt field (AGT-10.4) --------------------------- */
 
@@ -493,6 +494,34 @@ function swap(xs, i, j) {
 
 /* Variables (AGT-10) -------------------------------------------------- */
 
+// The same rule the server applies on save and publish.
+const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** What is wrong with the variable names, in words, or null. */
+export function variableProblems(vars) {
+  if (!Array.isArray(vars)) return null;
+  const empty = vars.filter((v) => !v.name).length;
+  const bad = vars.filter((v) => v.name && !VARIABLE_NAME.test(v.name)).map((v) => v.name);
+  const seen = new Set();
+  const dups = new Set();
+  for (const v of vars) {
+    if (!v.name) continue;
+    if (seen.has(v.name)) dups.add(v.name);
+    seen.add(v.name);
+  }
+  const out = [];
+  if (empty) out.push(empty === 1 ? 'One variable has no name.' : `${empty} variables have no name.`);
+  if (bad.length) out.push(`${bad.map((n) => `"${n}"`).join(', ')}: start with a letter or underscore, and use only letters, numbers and underscores (no spaces).`);
+  if (dups.size) out.push(`${[...dups].map((n) => `"${n}"`).join(', ')} ${dups.size === 1 ? 'is' : 'are'} used more than once; each name must be unique.`);
+  return out.length ? `Fix before saving: ${out.join(' ')}` : null;
+}
+
+const nextVariableName = (vars) => {
+  let n = vars.length + 1;
+  while (vars.some((v) => v.name === `var_${n}`)) n += 1;
+  return `var_${n}`;
+};
+
 export function VariablesTab({ agent }) {
   const s = useAgentSection(agent.id, 'variables');
   return (
@@ -500,6 +529,7 @@ export function VariablesTab({ agent }) {
       title="Call variables"
       description="Inputs arrive with each call (from the API, a campaign CSV, or the contact). Outputs are what the agent must collect. Use them as {{name}}."
       section={s}
+      invalid={variableProblems(s.draft)}
     >
       {(vars, _patch, set) => (
         <>
@@ -519,14 +549,18 @@ export function VariablesTab({ agent }) {
               <tbody>
                 {vars.map((v, i) => {
                   const upd = (p) => set(vars.map((x, j) => (j === i ? { ...x, ...p } : x)));
-                  const dup = vars.filter((x) => x.name === v.name).length > 1;
+                  const dup = !!v.name && vars.filter((x) => x.name === v.name).length > 1;
+                  const bad = dup || !VARIABLE_NAME.test(v.name ?? '');
                   return (
                     <tr key={i}>
                       <td>
                         <input
-                          className={`input mono ${dup || !/^[a-z_][a-z0-9_]*$/.test(v.name) ? 'invalid' : ''}`}
+                          className={`input mono ${bad ? 'invalid' : ''}`}
+                          aria-invalid={bad || undefined}
+                          aria-label="Variable name"
+                          title={dup ? 'This name is already used' : bad ? 'Letters, numbers and underscores; no spaces' : undefined}
                           style={{ height: 36, minWidth: 140 }}
-                          value={v.name}
+                          value={v.name ?? ''}
                           onChange={(e) => upd({ name: e.target.value.trim() })}
                         />
                       </td>
@@ -573,7 +607,7 @@ export function VariablesTab({ agent }) {
                 set([
                   ...vars,
                   {
-                    name: `var_${vars.length + 1}`,
+                    name: nextVariableName(vars),
                     type: 'text',
                     required: false,
                     direction: 'input',
@@ -584,7 +618,7 @@ export function VariablesTab({ agent }) {
               Add variable
             </Button>
           </div>
-          <p className="muted small">Names use lowercase letters, numbers and underscores.</p>
+          <p className="muted small">Names use letters, numbers and underscores (for example caller_name), start with a letter, and must be unique.</p>
         </>
       )}
     </SectionCard>
@@ -2062,9 +2096,9 @@ function CopyInline({ value }) {
       type="button"
       className="btn sm ghost"
       style={{ height: 24, padding: '0 8px' }}
-      onClick={() => {
-        navigator.clipboard?.writeText(value);
-        toast('Copied');
+      onClick={async () => {
+        if (await copyText(value)) toast('Copied');
+        else toast("Couldn't copy. Select the text and copy it yourself.", 'error');
       }}
     >
       Copy

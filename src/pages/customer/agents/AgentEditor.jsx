@@ -254,6 +254,67 @@ export function AgentEditor() {
 
 /* Publish (AGT-04) ---------------------------------------------------- */
 
+// Which tab fixes a problem the publish check found, by the draft section the
+// problem names (flow.system_prompt, variables[2].name, ...).
+const ISSUE_TABS = {
+  persona: ['identity', 'Identity'],
+  flow: ['conversation', 'Conversation'],
+  variables: ['variables', 'Variables'],
+  guidelines: ['rules', 'Rules'],
+  behaviour: ['behaviour', 'Behaviour'],
+  speech: ['voice', 'Voice'],
+  keywords: ['voice', 'Voice'],
+  languages: ['languages', 'Languages'],
+  tools: ['tools', 'Tools'],
+  follow_ups: ['follow-ups', 'Follow-ups'],
+  analysis: ['analysis', 'Analysis'],
+  outcomes: ['analysis', 'Analysis'],
+  compliance: ['compliance', 'Compliance'],
+  settings: ['settings', 'Settings'],
+  model: ['settings', 'Settings'],
+  memory: ['settings', 'Settings'],
+};
+
+// Plain words for the checks people hit most; anything else shows the
+// server's message.
+const ISSUE_TEXT = {
+  'flow.system_prompt': 'The agent has no instructions yet. Write what it should do under Instructions.',
+  'behaviour.transfer_number': 'The transfer number needs the country code, e.g. +918012345678.',
+};
+
+/** The problem in words, and the tab that fixes it ([key, label]) if known. */
+export function describeIssue(issue) {
+  const field = String(issue?.field ?? '');
+  const message = String(issue?.message ?? '');
+  const undefinedVar = message.match(/^\{\{(.+?)\}\} is used but not defined/);
+  if (undefinedVar) {
+    const where = ISSUE_TABS[field]?.[1];
+    return {
+      text: `{{${undefinedVar[1]}}} is used${where ? ` in ${where}` : ''} but isn't a variable. Add it on the Variables tab, or remove it.`,
+      tab: ISSUE_TABS.variables,
+    };
+  }
+  const text = ISSUE_TEXT[field] ?? (message ? message[0].toUpperCase() + message.slice(1) + (/[.!?]$/.test(message) ? '' : '.') : field);
+  return { text, tab: ISSUE_TABS[field.split(/[.[]/)[0]] };
+}
+
+function IssueList({ items, tone, agentId, onGo }) {
+  return items.map((issue, i) => {
+    const { text, tab } = describeIssue(issue);
+    return (
+      <div key={`${tone}${i}`} className={`banner ${tone}`} style={{ margin: 0 }}>
+        <AlertTriangle />
+        <span className="grow">{text}</span>
+        {tab && (
+          <Link className="btn sm ghost" style={{ whiteSpace: 'nowrap' }} to={`/agents/${agentId}/${tab[0]}`} onClick={onGo}>
+            Fix in {tab[1]} →
+          </Link>
+        )}
+      </div>
+    );
+  });
+}
+
 function PublishDialog({ open, onClose, agent, onPublished }) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -345,22 +406,11 @@ function PublishDialog({ open, onClose, agent, onPublished }) {
             </div>
             {c?.validation && (
               <div className="stack" style={{ gap: 6 }}>
-                {c.validation.errors.map((e, i) => (
-                  <div key={`e${i}`} className="banner danger" style={{ margin: 0 }}>
-                    <AlertTriangle />
-                    <span className="grow">
-                      <b>{e.field}</b>: {e.message}
-                    </span>
-                  </div>
-                ))}
-                {c.validation.warnings.map((w, i) => (
-                  <div key={`w${i}`} className="banner warn" style={{ margin: 0 }}>
-                    <AlertTriangle />
-                    <span className="grow">
-                      <b>{w.field}</b>: {w.message}
-                    </span>
-                  </div>
-                ))}
+                {c.validation.errors.length > 0 && (
+                  <div className="small muted">Fix these before publishing:</div>
+                )}
+                <IssueList items={c.validation.errors} tone="danger" agentId={agent.id} onGo={onClose} />
+                <IssueList items={c.validation.warnings} tone="warn" agentId={agent.id} onGo={onClose} />
                 {c.validation.valid && !c.validation.warnings.length && (
                   <div className="row small" style={{ color: 'var(--green)' }}>
                     <CheckCircle2 size={16} /> Configuration is valid
