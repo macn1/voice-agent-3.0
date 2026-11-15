@@ -27,14 +27,18 @@ export const CATEGORIES = [
   'Real Estate',
 ];
 
-/** Template gallery shown on Home (AGT-11 templates by use case). */
+/**
+ * Icons and wording for the use cases the platform has templates for, by the
+ * template's key. Which cards show, and their filter chips, come from the
+ * templates themselves (GET /customer/agent-templates: key, categories).
+ */
 export const USE_CASES = [
   {
     key: 'appointment-management',
     title: 'Appointment management',
     description: 'Turn customer calls into instant bookings, reschedules, and confirmations.',
     icon: CalendarCheck2,
-    categories: ['Reminder', 'Customer Support', 'Healthcare'],
+
     warm: true,
   },
   {
@@ -42,83 +46,94 @@ export const USE_CASES = [
     title: 'Sales discovery',
     description: 'Meet customers with a natural conversation and turn warm leads into booked meetings.',
     icon: BarChart3,
-    categories: ['Sales'],
   },
   {
     key: 'emi-collection',
     title: 'EMI collection',
     description: 'Manage EMI reminders and simplify customer payments with an AI voice agent.',
     icon: WalletCards,
-    categories: ['Collections', 'Reminder'],
   },
   {
     key: 'real-estate-lead-qualification',
     title: 'Real Estate Lead Qualification',
     description: 'Turn property inquiries into qualified leads and schedule site visits.',
     icon: House,
-    categories: ['Real Estate', 'Lead Qualification'],
   },
   {
     key: 'cart-recovery',
     title: 'Cart recovery',
     description: 'Re-engage customers and recover abandoned carts with personalized calls.',
     icon: ShoppingCart,
-    categories: ['Recovery', 'Sales'],
   },
   {
     key: 'health-insurance-renewal',
     title: 'Health Insurance Renewal',
     description: 'Call policyholders to confirm and renew health insurance plans.',
     icon: ShieldCheck,
-    categories: ['Healthcare', 'Reminder'],
   },
   {
     key: 'order-support',
     title: 'Order status & support',
     description: 'Answer where-is-my-order calls, track shipments and raise tickets automatically.',
     icon: Headset,
-    categories: ['Customer Support'],
   },
   {
     key: 'admission-enquiries',
     title: 'Admission enquiries',
     description: 'Guide prospective students through courses, fees and application deadlines.',
     icon: GraduationCap,
-    categories: ['Education', 'Lead Qualification'],
   },
   {
     key: 'payment-reminders',
     title: 'Payment reminders',
     description: 'Remind customers of upcoming dues in their language and capture promise-to-pay dates.',
     icon: BellRing,
-    categories: ['Reminder', 'Collections'],
   },
   {
     key: 'b2b-lead-qualification',
     title: 'B2B lead qualification',
     description: 'Qualify inbound leads on budget, need and timeline before handing them to sales.',
     icon: Target,
-    categories: ['Lead Qualification', 'Sales'],
   },
   {
     key: 'patient-follow-ups',
     title: 'Patient follow-ups',
     description: 'Check on patients after visits, share care instructions and book follow-ups.',
     icon: Stethoscope,
-    categories: ['Healthcare', 'Customer Support'],
   },
   {
     key: 'subscription-win-back',
     title: 'Subscription win-back',
     description: 'Call lapsed subscribers, learn why they left and offer them a way back.',
     icon: RotateCcw,
-    categories: ['Recovery'],
   },
   {
     key: 'feedback-surveys',
     title: 'Feedback & NPS surveys',
     description: 'Collect post-purchase feedback and NPS scores through quick, friendly calls.',
     icon: Smile,
-    categories: ['Customer Support', 'Education'],
   },
 ];
+
+/** A template as a gallery card: its icon by key, falling back to a generic one. */
+export function templateCard(t, Fallback) {
+  const uc = USE_CASES.find((u) => u.key && u.key === t.key);
+  return {
+    id: t.id,
+    key: t.key ?? t.id,
+    title: t.name,
+    description: t.description ?? uc?.description ?? '',
+    icon: uc?.icon ?? Fallback,
+    warm: !!uc?.warm,
+    categories: Array.isArray(t.categories) ? t.categories : [],
+    order: uc ? USE_CASES.indexOf(uc) : USE_CASES.length,
+  };
+}
+
+/** The chips for a set of cards: All, then the known categories in order, then any others. */
+export function categoriesOf(cards) {
+  const present = new Set(cards.flatMap((c) => c.categories));
+  const known = CATEGORIES.filter((c) => c !== 'All' && present.has(c));
+  const other = [...present].filter((c) => !CATEGORIES.includes(c)).sort();
+  return ['All', ...known, ...other];
+}

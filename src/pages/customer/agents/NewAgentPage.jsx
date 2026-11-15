@@ -10,7 +10,7 @@ import {
 } from '../../../store/api/flowApi';
 import { Async, Button, EmptyState, errMsg, Field, Input, PageHeader, SegmentTabs, useToast } from '../../../components/ui';
 import { Textarea } from '../../../components/forms';
-import { USE_CASES } from '../useCases';
+import { categoriesOf, templateCard } from '../useCases';
 import { LanguageSelect, ModelSelect, VoicePicker } from './pickers';
 
 const START_OPTIONS = [
@@ -126,8 +126,8 @@ function FromTemplate({ preselect }) {
   const [createFromTemplate] = useCreateFromTemplateMutation();
   const [busy, setBusy] = useState(null);
 
-  // Home's use-case cards pass a key; match it to a template by name / use case.
-  const homeCase = USE_CASES.find((u) => u.key === preselect);
+  // Home's use-case cards pass the template's key (or id).
+  const [category, setCategory] = useState('All');
 
   const create = async (t) => {
     setBusy(t.id);
@@ -146,40 +146,49 @@ function FromTemplate({ preselect }) {
     <Async state={templates}>
       {(list) =>
         list.length ? (
-          <div className="usecase-grid" style={{ marginTop: 0 }}>
-            {list.map((t) => {
-              const match =
-                homeCase &&
-                (t.name.toLowerCase().includes(homeCase.title.split(' ')[0].toLowerCase()) ||
-                  homeCase.categories.some((c) => c.toLowerCase().includes(t.use_case.replace('_', ' '))));
-              const uc = USE_CASES.find((u) => u.title.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));
-              const Icon = uc?.icon ?? LayoutTemplate;
-              return (
-                <button
-                  key={t.id}
-                  className="usecase"
-                  style={
-                    match
-                      ? {
-                          borderColor: 'var(--accent-border)',
-                          boxShadow: 'var(--shadow-glow)',
-                        }
-                      : undefined
-                  }
-                  disabled={!!busy}
-                  onClick={() => create(t)}
-                >
-                  <span className={`clay ${match ? 'warm' : ''}`}>
-                    <Icon />
-                  </span>
-                  <span>
-                    <h3>{t.name}</h3>
-                    <p>{t.description}</p>
-                  </span>
-                  <span className="arrow-btn">{busy === t.id ? <span className="spinner" /> : <ArrowRight />}</span>
+          <div className="stack" style={{ gap: 12 }}>
+            <div className="chips" role="tablist" aria-label="Template categories">
+              {categoriesOf(list.map((t) => templateCard(t, LayoutTemplate))).map((c) => (
+                <button key={c} role="tab" aria-selected={category === c} className={`chip ${category === c ? 'active' : ''}`} onClick={() => setCategory(c)}>
+                  {c}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+            <div className="usecase-grid" style={{ marginTop: 0 }}>
+              {list
+                .map((t) => ({ t, card: templateCard(t, LayoutTemplate) }))
+                .filter(({ card }) => category === 'All' || card.categories.includes(category))
+                .sort((a, b) => a.card.order - b.card.order || a.card.title.localeCompare(b.card.title))
+                .map(({ t, card }) => {
+                  const match = !!preselect && (t.key === preselect || t.id === preselect);
+                  const Icon = card.icon;
+                  return (
+                    <button
+                      key={t.id}
+                      className="usecase"
+                      style={
+                        match
+                          ? {
+                              borderColor: 'var(--accent-border)',
+                              boxShadow: 'var(--shadow-glow)',
+                            }
+                          : undefined
+                      }
+                      disabled={!!busy}
+                      onClick={() => create(t)}
+                    >
+                      <span className={`clay ${match ? 'warm' : ''}`}>
+                        <Icon />
+                      </span>
+                      <span>
+                        <h3>{t.name}</h3>
+                        <p>{t.description}</p>
+                      </span>
+                      <span className="arrow-btn">{busy === t.id ? <span className="spinner" /> : <ArrowRight />}</span>
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         ) : (
           <div className="card">
@@ -254,7 +263,12 @@ function Describe({ initial }) {
     <div className="stack">
       <div className="card card-pad stack">
         <Field label="What should your agent do?" hint="e.g. “Call customers whose EMI is due in 3 days, remind them in Hindi, and record when they'll pay.”">
-          <Textarea rows={3} placeholder="Describe what the agent should do, who it talks to and in which language…" value={text} onChange={(e) => setText(e.target.value)} />
+          <Textarea
+            rows={3}
+            placeholder="Describe what the agent should do, who it talks to and in which language…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
         </Field>
         {error && <div className="alert-inline">{error}</div>}
         <div>
@@ -382,7 +396,12 @@ function Blank() {
           <Input placeholder="Hi, this is Riya from CareFirst…" value={f.greeting} onChange={(e) => set('greeting', e.target.value)} />
         </Field>
         <Field label="Instructions" className="full" hint="What the agent is for and how it should behave. You can refine this in the editor.">
-          <Textarea rows={4} placeholder="e.g. Book appointments, answer questions about opening hours, and hand off to a human for complaints." value={f.system_prompt} onChange={(e) => set('system_prompt', e.target.value)} />
+          <Textarea
+            rows={4}
+            placeholder="e.g. Book appointments, answer questions about opening hours, and hand off to a human for complaints."
+            value={f.system_prompt}
+            onChange={(e) => set('system_prompt', e.target.value)}
+          />
         </Field>
       </div>
       <div className="field">

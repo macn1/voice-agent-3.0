@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronDown, Sparkles } from 'lucide-react';
-import { CATEGORIES, USE_CASES } from './useCases';
+import { ArrowRight, ChevronDown, LayoutTemplate, Sparkles } from 'lucide-react';
+import { categoriesOf, templateCard } from './useCases';
+import { useListTemplatesQuery } from '../../store/api/flowApi';
 
 const INITIAL_VISIBLE = 6;
 
@@ -106,14 +107,22 @@ export function UseCaseGallery({ centered = false }) {
   const navigate = useNavigate();
   const [category, setCategory] = useState('All');
   const [expanded, setExpanded] = useState(false);
+  const templates = useListTemplatesQuery();
 
-  const filtered = useMemo(() => (category === 'All' ? USE_CASES : USE_CASES.filter((u) => u.categories.includes(category))), [category]);
+  // Cards are the templates there are: the use-case ones first, in their order.
+  const cards = useMemo(
+    () => (templates.data ?? []).map((t) => templateCard(t, LayoutTemplate)).sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
+    [templates.data],
+  );
+  const chips = useMemo(() => categoriesOf(cards), [cards]);
+  const filtered = useMemo(() => (category === 'All' ? cards : cards.filter((u) => u.categories.includes(category))), [cards, category]);
   const visible = expanded ? filtered : filtered.slice(0, INITIAL_VISIBLE);
+  if (!cards.length) return null;
 
   return (
     <>
       <div className={`chips ${centered ? 'centered' : ''}`} role="tablist" aria-label="Use case categories" style={{ position: 'relative', zIndex: 1 }}>
-        {CATEGORIES.map((c) => (
+        {chips.map((c) => (
           <button
             key={c}
             role="tab"
