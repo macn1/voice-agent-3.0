@@ -170,6 +170,40 @@ export async function uploadToSignedUrl({ url, file, authed }) {
 }
 
 /**
+ * POST JSON to a route that answers with a file (e.g. a voice preview's WAV)
+ * and return it as a Blob; throws an Error carrying the API's message.
+ */
+export async function postForBlob({ service, realm = 'customer', url, body }) {
+  const { store } = await import('../index');
+  const run = (token) =>
+    fetch(`${API_BASE}${PREFIX[service]}/api/v1${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body ?? {}),
+    });
+  let res;
+  try {
+    res = await run(store.getState().auth[realm].tokens?.access_token);
+    if (res.status === 401) {
+      const next = await refreshTokens(realm, store);
+      if (next) res = await run(next.access_token);
+    }
+  } catch {
+    throw new Error('Could not reach the server. Check your connection and try again.');
+  }
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      message = (await res.json())?.error?.message ?? message;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(message);
+  }
+  return res.blob();
+}
+
+/**
  * Fetch a non-JSON route (PDF / CSV) with the realm's token and save it as
  * `filename`. Returns the Blob; throws an Error carrying the API's message.
  */

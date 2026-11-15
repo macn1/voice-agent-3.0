@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Play } from 'lucide-react';
 import { useListLanguagesQuery, useListModelsQuery, useListVoicesQuery } from '../../../store/api/flowApi';
 import { API_BASE } from '../../../store/api/services';
+import { postForBlob } from '../../../store/api/baseQuery';
 import { Select } from '../../../components/forms';
-import { useToast } from '../../../components/ui';
+import { Button, Modal, SegmentTabs, useToast } from '../../../components/ui';
 
 // AGT-02 catalog pickers.
 
@@ -15,8 +16,9 @@ export const DEFAULT_VOICE = 'Shubh';
  * The voice saying a short greeting, made by the media server with the same
  * Sarvam voice calls use (made once per voice and language, then kept).
  */
-export const previewUrl = (v, language) =>
-  `${API_BASE}/realtime/v1/voices/${encodeURIComponent(v.provider_voice_id || v.name)}/sample?language=${encodeURIComponent(language || 'en-IN')}`;
+export const previewUrl = (v, language, speed) =>
+  `${API_BASE}/realtime/v1/voices/${encodeURIComponent(v.provider_voice_id || v.name)}/sample?language=${encodeURIComponent(language || 'en-IN')}` +
+  (speed ? `&pace=${Number(speed).toFixed(2)}` : '');
 
 const titleWord = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '');
 
@@ -44,15 +46,17 @@ export function findVoice(list, value) {
   return list.find((v) => v.id === value || v.provider_voice_id === String(value).toLowerCase()) ?? null;
 }
 
-export function VoicePicker({ language, value, onChange }) {
+/** The voice list with real previews. gender narrows it; speed plays previews at the agent's speed. */
+export function VoicePicker({ language, value, onChange, speed, gender }) {
   const toast = useToast();
   const voices = useListVoicesQuery(language);
   const audio = useRef(null);
   const [playing, setPlaying] = useState(null);
   // 'loading' from the click until sound actually starts, then 'playing'.
   const [phase, setPhase] = useState('playing');
-  const list = voices.data ?? [];
-  const selected = findVoice(list, value);
+  const all = voices.data ?? [];
+  const list = gender ? all.filter((v) => v.gender === gender) : all;
+  const selected = findVoice(all, value);
 
   useEffect(() => () => audio.current?.pause(), []);
 
@@ -69,7 +73,7 @@ export function VoicePicker({ language, value, onChange }) {
     setPhase('loading');
     setPlaying(v.id);
     const start = (lang, retry) => {
-      const a = new Audio(previewUrl(v, lang));
+      const a = new Audio(previewUrl(v, lang, speed));
       audio.current = a;
       a.onplaying = () => setPhase('playing');
       a.onwaiting = () => setPhase('loading');
@@ -86,7 +90,7 @@ export function VoicePicker({ language, value, onChange }) {
     start(language || 'en-IN', !!language && language !== 'en-IN');
   };
 
-  if (!list.length) {
+  if (!all.length) {
     return (
       <div className="muted small">{voices.isLoading ? 'Loading voices…' : voices.error ? "Couldn't load the voices. Reload to try again." : 'No voices available.'}</div>
     );
@@ -191,4 +195,88 @@ export function ModelSelect({ kind, value, onChange, placeholder }) {
   return (
     <Select value={value} options={opts} placeholder={placeholder ?? (models.isLoading ? 'Loading…' : 'Choose')} onChange={(e) => onChange(e.target.value)} />
   );
+}
+
+/** Choose the agent's voice in a popup: female / male filter, real previews at its speed. */
+export function VoiceDialog({ open, onClose, language, value, speed, onSave, saving }) {
+  const [pick, setPick] = useState(value);
+  const [gender, setGender] = useState('');
+  useEffect(() => {
+    if (open) setPick(value);
+  }, [open, value]);
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      wide
+      title="Choose the agent's voice"
+      description="Press play to hear each voice at the agent's speaking speed. Every voice speaks all the agent's languages."
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={saving} disabled={!pick || pick === value} onClick={() => onSave(pick)}>
+            Use this voice
+          </Button>
+        </>
+      }
+    >
+      <div className="stack" style={{ gap: 12 }}>
+        <SegmentTabs
+          value={gender}
+          onChange={setGender}
+          items={[
+            { value: '', label: 'All' },
+            { value: 'female', label: 'Female' },
+            { value: 'male', label: 'Male' },
+          ]}
+        />
+        <VoicePicker language={language} value={pick} onChange={setPick} speed={speed} gender={gender} />
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Plays the agent's greeting (or a given line) in its real voice, made by the
+ * server. play({ voice_id, speed, text }) overrides the saved settings.
+ */
+export function useGreetingPreview(agentId) {
+  const toast = useToast();
+  const audio = useRef(null);
+  const [state, setState] = useState('idle'); // idle | loading | playing
+  useEffect(
+    () => () => {
+      audio.current?.pause();
+    },
+    [],
+  );
+  const stop = () => {
+    audio.current?.pause();
+    audio.current = null;
+    setState('idle');
+  };
+  const play = async (opts = {}) => {
+    if (state !== 'idle') return stop();
+    setState('loading');
+    try {
+      const blob = await postForBlob({ service: 'flow', url: `/customer/agents/${agentId}/voice-preview`, body: opts });
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      audio.current = a;
+      a.onplaying = () => setState('playing');
+      a.onended = () => {
+        URL.revokeObjectURL(url);
+        setState('idle');
+      };
+      a.onerror = () => {
+        setState('idle');
+        toast("Couldn't play the preview.", 'error');
+      };
+      await a.play();
+    } catch (e) {
+      setState('idle');
+      toast(e?.message || "Couldn't make the preview. Try again.", 'error');
+    }
+  };
+  return { play, stop, state };
 }

@@ -51,6 +51,7 @@ const TABS = [
         icon: IdCard,
         el: Tabs.IdentityTab,
       },
+      { key: 'voice', label: 'Voice', icon: Mic, el: Tabs.VoiceTab },
       {
         key: 'conversation',
         label: 'Conversation',
@@ -73,9 +74,8 @@ const TABS = [
     ],
   },
   {
-    group: 'Voice & language',
+    group: 'Language',
     items: [
-      { key: 'voice', label: 'Voice', icon: Mic, el: Tabs.VoiceTab },
       {
         key: 'languages',
         label: 'Languages',
@@ -295,6 +295,8 @@ export function describeIssue(issue) {
     };
   }
   const text = ISSUE_TEXT[field] ?? (message ? message[0].toUpperCase() + message.slice(1) + (/[.!?]$/.test(message) ? '' : '.') : field);
+  // The voice itself is chosen on the Identity tab.
+  if (field === 'speech.voice_id') return { text, tab: ['identity', 'Identity'] };
   return { text, tab: ISSUE_TABS[field.split(/[.[]/)[0]] };
 }
 
@@ -492,7 +494,7 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
       }
     >
       {mode === 'chat' && (target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />)}
-      {mode === 'voice' && <VoiceTest key={target} agent={agent} draft={target === 'draft'} />}
+      {mode === 'voice' && <VoiceTest key={target} agent={agent} draft={target === 'draft'} variables={values} />}
       {mode === 'phone' && <PhoneTest agent={agent} />}
     </Drawer>
   );

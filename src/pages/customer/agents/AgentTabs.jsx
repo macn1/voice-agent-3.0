@@ -8,7 +8,6 @@ import {
   useDuplicateAgentMutation,
   useGetAgentSectionQuery,
   useLazyExportAgentQuery,
-  useLazyGetAgentSectionQuery,
   useLazyGetVersionQuery,
   useListAgentDocumentsQuery,
   useListGuidelinePresetsQuery,
@@ -33,7 +32,7 @@ import { date, dateTime, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Slider, Textarea, useSection } from '../../../components/forms';
 import { HBars, TimeChart } from '../../../components/charts';
-import { DEFAULT_VOICE, findVoice, LanguageSelect, ModelSelect, useModels, VoicePicker } from './pickers';
+import { DEFAULT_VOICE, findVoice, LanguageSelect, ModelSelect, useGreetingPreview, useModels, VoiceDialog } from './pickers';
 import { copyText } from '../../../lib/clipboard';
 
 /* {{variable}} aware prompt field (AGT-10.4) --------------------------- */
@@ -121,27 +120,72 @@ const PROFILE_SECTIONS = [
   { key: 'faqs', label: 'Common questions' },
 ];
 
+/** The agent's voice on the Identity tab: which one, and a popup to change it. */
+function VoiceField({ agent }) {
+  const toast = useToast();
+  const speech = useAgentSection(agent.id, 'speech');
+  const voices = useListVoicesQuery(agent.language);
+  const [putSection, { isLoading: saving }] = usePutAgentSectionMutation();
+  const [open, setOpen] = useState(false);
+  const saved = speech.data?.voice_id;
+  const voice = findVoice(voices.data ?? [], saved);
+  const save = async (voiceId) => {
+    try {
+      await putSection({ id: agent.id, section: 'speech', body: { ...(speech.data ?? {}), voice_id: voiceId } }).unwrap();
+      toast('Voice saved. Publish to use it on calls.');
+      setOpen(false);
+    } catch (e) {
+      toast(errMsg(e), 'error');
+    }
+  };
+  return (
+    <div className="field full">
+      <span className="field-label">Voice</span>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <span>
+          {voice ? (
+            <>
+              <b>{voice.name}</b> <span className="muted">({voice.gender})</span>
+            </>
+          ) : saved ? (
+            <span style={{ color: 'var(--red)' }}>The saved voice isn't available any more: calls use {DEFAULT_VOICE}.</span>
+          ) : (
+            <>
+              <b>{DEFAULT_VOICE}</b> <span className="muted">(default; none picked)</span>
+            </>
+          )}
+        </span>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          Change voice
+        </Button>
+      </div>
+      <LiveVoiceNote agent={agent} saved={saved} />
+      <VoiceDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        language={agent.language}
+        value={voice?.id ?? saved}
+        speed={speech.data?.speed}
+        saving={saving}
+        onSave={save}
+      />
+    </div>
+  );
+}
+
+// The Identity tab's sliders: they shape how the agent words its replies
+// (the middle means no preference). Speaking speed is on the Voice tab.
+const MANNER = [
+  ['warmth', 'Reserved', 'Warm'],
+  ['formality', 'Casual', 'Formal'],
+  ['humour', 'Serious', 'Playful'],
+  ['persuasiveness', 'Gentle', 'Persuasive'],
+];
+
 export function IdentityTab({ agent }) {
   const persona = useAgentSection(agent.id, 'persona');
   const overrides = useAgentSection(agent.id, 'profileOverrides');
-  const [speaking, setSpeaking] = useState(false);
-  const [loadSection] = useLazyGetAgentSectionQuery();
-
-  const hear = async (p) => {
-    if (!('speechSynthesis' in window)) return;
-    let greeting = '';
-    try {
-      greeting = (await loadSection({ id: agent.id, section: 'flow' }).unwrap()).greeting;
-    } catch {
-      /* fall back to a generic introduction */
-    }
-    const u = new SpeechSynthesisUtterance(greeting || `Hi, I'm ${p.name}, ${p.role}. How can I help you today?`);
-    u.rate = 0.8 + ((p.personality?.energy ?? 50) / 100) * 0.5;
-    u.onend = () => setSpeaking(false);
-    setSpeaking(true);
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
-  };
+  const preview = useGreetingPreview(agent.id);
 
   return (
     <div className="stack">
@@ -150,23 +194,30 @@ export function IdentityTab({ agent }) {
         description="Who the agent is. This opens the prompt at call time, before company facts and rules."
         section={persona}
         actions={
-          persona.draft && (
-            <Button size="sm" variant="ghost" icon={<Volume2 />} loading={speaking} onClick={() => hear(persona.draft)} title="Preview in your browser's voice">
-              Hear the introduction
-            </Button>
-          )
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Volume2 />}
+            loading={preview.state === 'loading'}
+            onClick={() => preview.play()}
+            title="Plays the saved greeting in the agent's voice, at its speaking speed"
+          >
+            {preview.state === 'playing' ? 'Stop' : 'Hear the greeting'}
+          </Button>
         }
       >
         {(p, patch) => (
           <>
             <div className="form-grid">
-              <Field label="Agent's name">
+              <Field label="Agent's name" hint="The name it introduces itself with on calls, e.g. Riya.">
                 <Input value={p.name ?? ''} onChange={(e) => patch({ name: e.target.value })} />
               </Field>
-              <Field label="Gender">
-                <Select value={p.gender} options={['female', 'male', 'neutral']} onChange={(e) => patch({ gender: e.target.value })} />
-              </Field>
-              <Field label="Role" className="full" hint="e.g. “Front-desk assistant for CareFirst Clinics”">
+              <VoiceField agent={agent} />
+              <Field
+                label="Job title"
+                className="full"
+                hint="What the agent says it does, e.g. “front-desk assistant at CareFirst Clinics”. It starts its instructions: “You are Riya, working as front-desk assistant at CareFirst Clinics.”"
+              >
                 <Input value={p.role ?? ''} onChange={(e) => patch({ role: e.target.value })} />
               </Field>
             </div>
@@ -181,17 +232,15 @@ export function IdentityTab({ agent }) {
               </div>
             </div>
             <div className="grid-2">
-              {[
-                ['warmth', 'Reserved', 'Warm'],
-                ['energy', 'Calm', 'Energetic'],
-                ['formality', 'Casual', 'Formal'],
-                ['humour', 'Serious', 'Playful'],
-              ].map(([k, l, r]) => (
+              {MANNER.map(([k, l, r]) => (
                 <Field key={k} label={titleCase(k)}>
                   <Slider value={p.personality?.[k] ?? 50} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
                 </Field>
               ))}
             </div>
+            <p className="muted small" style={{ margin: '-8px 0 0' }}>
+              The sliders shape how the agent words its replies; the middle means no preference. Speaking speed is on the Voice tab.
+            </p>
             <Field label="Speaking style" hint="Anything about how it talks — sentence length, words to use or avoid.">
               <Textarea rows={3} value={p.style ?? ''} onChange={(e) => patch({ style: e.target.value })} />
             </Field>
@@ -794,18 +843,40 @@ function LiveVoiceNote({ agent, saved }) {
 export function VoiceTab({ agent }) {
   const speech = useAgentSection(agent.id, 'speech');
   const keywords = useAgentSection(agent.id, 'keywords');
+  const voices = useListVoicesQuery(agent.language);
+  const preview = useGreetingPreview(agent.id);
+  const voice = findVoice(voices.data ?? [], speech.data?.voice_id)?.name ?? DEFAULT_VOICE;
   return (
     <div className="stack">
-      <SectionCard title="Voice" description="How the agent sounds and how easily callers can interrupt it. Every voice speaks all the agent's languages." section={speech}>
+      <SectionCard title="Voice" description="How fast the agent speaks and how easily callers can interrupt it." section={speech}>
         {(s, patch) => (
           <>
-            <LiveVoiceNote agent={agent} saved={speech.data?.voice_id} />
-            <div className="field">
-              <span className="field-label">Voice</span>
-              <VoicePicker language={agent.language} value={s.voice_id} onChange={(v) => patch({ voice_id: v })} />
+            <div className="row small" style={{ gap: 6 }}>
+              <span>
+                Voice: <b>{voice}</b>
+              </span>
+              <Link to={`/agents/${agent.id}/identity`} className="btn sm ghost">
+                Change on the Identity tab
+              </Link>
             </div>
             <div className="grid-2">
-              <Field label="Speaking speed">
+              <Field
+                label={
+                  <span className="row" style={{ gap: 6 }}>
+                    Speaking speed
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={<Volume2 />}
+                      loading={preview.state === 'loading'}
+                      onClick={() => preview.play({ speed: s.speed })}
+                      title="Plays the greeting at this speed"
+                    >
+                      {preview.state === 'playing' ? 'Stop' : 'Hear it'}
+                    </Button>
+                  </span>
+                }
+              >
                 <Slider
                   value={s.speed}
                   min={0.7}
@@ -882,8 +953,8 @@ export function LanguagesTab({ agent }) {
             <span>
               Voice: <b>{voice}</b>, which speaks all of these languages.
             </span>
-            <Link to={`/agents/${agent.id}/voice`} className="btn sm ghost">
-              Change on the Voice tab
+            <Link to={`/agents/${agent.id}/identity`} className="btn sm ghost">
+              Change on the Identity tab
             </Link>
           </div>
           <div className="form-grid">

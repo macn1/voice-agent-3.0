@@ -224,7 +224,7 @@ const WHY_BROWSER = {
   agent_not_live: 'Real voice needs the agent to be live, and this agent is paused.',
 };
 
-export function VoiceTest({ agent, draft = false }) {
+export function VoiceTest({ agent, draft = false, variables = {} }) {
   const [create] = useCreateTestSessionMutation();
   const [session, setSession] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -240,7 +240,8 @@ export function VoiceTest({ agent, draft = false }) {
     const call = new VoiceCall();
     call.unlock();
     try {
-      const r = await create({ id: agent.id, draft }).unwrap();
+      const vars = Object.fromEntries(Object.entries(variables).filter(([, v]) => v !== ''));
+      const r = await create({ id: agent.id, draft, variables: vars }).unwrap();
       if (r.mode === 'realtime' && r.media_url) {
         callRef.current = call;
       } else {
@@ -264,7 +265,7 @@ export function VoiceTest({ agent, draft = false }) {
   if (session?.mode === 'realtime' && callRef.current) {
     return <LiveVoice call={callRef.current} session={session} draft={draft} onReset={reset} />;
   }
-  if (session) return <BrowserSpeech agent={agent} session={session} onReset={reset} />;
+  if (session) return <BrowserSpeech agent={agent} session={session} variables={variables} onReset={reset} />;
   return (
     <div className="stack">
       <p className="muted" style={{ margin: 0 }}>
@@ -379,7 +380,7 @@ function LiveVoice({ call, session, draft, onReset }) {
 }
 
 /** The browser's own speech on the draft: when real voice isn't available. */
-function BrowserSpeech({ agent, session, onReset }) {
+function BrowserSpeech({ agent, session, variables = {}, onReset }) {
   const [chat] = useChatTestMutation();
   const [turns, setTurns] = useState([{ role: 'them', text: session.greeting, meta: 'greeting' }]);
   const [text, setText] = useState('');
@@ -419,7 +420,7 @@ function BrowserSpeech({ agent, session, onReset }) {
     setBusy(true);
     try {
       const history = turns.filter((t) => t.role === 'me' || t.role === 'them').map((t) => ({ role: t.role === 'me' ? 'user' : 'agent', text: t.text }));
-      const r = await chat({ id: agent.id, message: msg, history }).unwrap();
+      const r = await chat({ id: agent.id, message: msg, history, variables }).unwrap();
       setTurns([...next, { role: 'them', text: r.reply, meta: r.rule ? `Rule: ${r.rule}` : undefined }]);
       speak(r.reply, session.language);
     } catch (e) {

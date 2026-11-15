@@ -322,8 +322,8 @@ export const flowApi = baseApi.injectEndpoints({
     // instructions, rules as they are now) instead of the published version.
     createTestSession: b.mutation({
       query: (arg) => {
-        const { id, draft } = typeof arg === 'object' ? arg : { id: arg };
-        return C.flow(`${ag(id)}/test-session`, { method: 'POST', body: { draft: !!draft } });
+        const { id, draft, variables } = typeof arg === 'object' ? arg : { id: arg };
+        return C.flow(`${ag(id)}/test-session`, { method: 'POST', body: { draft: !!draft, variables: variables ?? {} } });
       },
     }),
     // Rings to_number with the DRAFT agent; returns the call (poll outbound GET /calls/{id}).
