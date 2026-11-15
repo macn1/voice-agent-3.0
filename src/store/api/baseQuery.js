@@ -137,21 +137,77 @@ export async function baseQueryWithReauth(args, api) {
  * PUT a file's bytes to the upload_url the API returned (knowledge / agent documents).
  * `authed` sends the customer token: our own upload routes need it.
  */
-export async function uploadToSignedUrl({ url, file, authed }) {
-  const headers = { 'Content-Type': file.type || 'application/octet-stream' };
-  let target = url;
-  if (authed) {
-    const { store } = await import('../index');
-    const token = store.getState().auth.customer.tokens?.access_token;
-    if (token) headers.Authorization = `Bearer ${token}`;
-    // upload_url is absolute; keep it on this app's API origin (dev proxy, no CORS).
+// Files go up in pieces of this size, so a large one (audio and video up to
+// 500 MB) gets through the server's request time limit; each piece is retried.
+const UPLOAD_PIECE = 4 * 1024 * 1024;
+
+async function sendWithRetry(target, init, tries = 3) {
+  let last;
+  for (let i = 0; i < tries; i += 1) {
     try {
-      const u = new URL(url);
-      target = API_BASE + u.pathname + u.search;
-    } catch {
-      /* already relative */
+      const r = await fetch(target, init);
+      if (r.ok || (r.status < 500 && r.status !== 408 && r.status !== 429)) return r;
+      last = r;
+    } catch (e) {
+      last = e;
     }
+    await new Promise((ok) => setTimeout(ok, 1000 * 2 ** i));
   }
+  if (last instanceof Response) return last;
+  throw last;
+}
+
+async function uploadError(r, file) {
+  let message = `Upload of ${file.name} failed (${r.status})`;
+  try {
+    message = (await r.json())?.error?.message ?? message;
+  } catch {
+    /* not JSON */
+  }
+  return { error: { status: r.status, code: 'upload_failed', message } };
+}
+
+/**
+ * Upload a file to a knowledge source's upload_url in pieces, then finish
+ * it. onProgress(fraction) reports how much has gone up.
+ */
+export async function uploadInPieces({ url, file, onProgress }) {
+  const { store } = await import('../index');
+  let target = url;
+  try {
+    const u = new URL(url);
+    target = API_BASE + u.pathname;
+  } catch {
+    /* already relative */
+  }
+  const auth = () => {
+    const token = store.getState().auth.customer.tokens?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+  try {
+    for (let offset = 0; offset < file.size; offset += UPLOAD_PIECE) {
+      const piece = file.slice(offset, Math.min(offset + UPLOAD_PIECE, file.size));
+      const r = await sendWithRetry(`${target}?offset=${offset}`, {
+        method: 'PUT',
+        body: piece,
+        headers: { 'Content-Type': 'application/octet-stream', ...auth() },
+      });
+      if (!r.ok) return uploadError(r, file);
+      onProgress?.(Math.min(1, (offset + piece.size) / file.size));
+    }
+    const done = await sendWithRetry(`${target}/complete`, { method: 'POST', headers: auth() });
+    if (!done.ok) return uploadError(done, file);
+    return { data: { ok: true } };
+  } catch {
+    return { error: { status: 0, code: 'network_error', message: `Upload of ${file.name} failed: check your connection and try again.` } };
+  }
+}
+
+export async function uploadToSignedUrl({ url, file, authed, onProgress }) {
+  // Knowledge files (our own API) go up in pieces.
+  if (authed) return uploadInPieces({ url, file, onProgress });
+  const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+  const target = url;
   try {
     const r = await fetch(target, { method: 'PUT', body: file, headers });
     if (!r.ok) {

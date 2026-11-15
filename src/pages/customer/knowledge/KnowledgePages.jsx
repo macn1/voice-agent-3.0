@@ -30,6 +30,7 @@ import { date, dateTime, titleCase } from '../../../lib/format';
 import { asList } from '../../../lib/normalize';
 import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, StatusBadge, useToast } from '../../../components/ui';
 import { Select, Textarea } from '../../../components/forms';
+import { fileProblem, formatSize, isMediaFile, KNOWLEDGE_ACCEPT, KNOWLEDGE_HINT } from '../../../lib/uploads';
 
 /** P-12 Knowledge list (KNW-01). */
 export function KnowledgeListPage() {
@@ -497,6 +498,8 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
     try {
       if (type === 'file') {
         if (!files.length) throw new Error('Choose at least one file');
+        const problem = files.map(fileProblem).find(Boolean);
+        if (problem) throw new Error(problem);
         for (const f of files) {
           // Creates the source and uploads the file to its signed URL.
           await addSource({ kbId, type: 'file', title: f.name, file: f }).unwrap();
@@ -566,7 +569,7 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               type="file"
               multiple
               hidden
-              accept=".pdf,.docx,.txt,.md,.csv"
+              accept={KNOWLEDGE_ACCEPT}
               onChange={(e) => setFiles([...(e.target.files ?? [])])}
             />
             <button
@@ -584,14 +587,20 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               <div className="fw-medium" style={{ marginTop: 8 }}>
                 Choose files
               </div>
-              <div className="muted small">PDF, Word (.docx), text, Markdown, CSV · up to 10 MB. Scanned PDFs have no text to read.</div>
+              <div className="muted small">{KNOWLEDGE_HINT}</div>
             </button>
-            {files.map((f) => (
-              <div key={f.name} className="row between small">
-                <span>{f.name}</span>
-                <span className="muted">{Math.round(f.size / 1024)} KB</span>
-              </div>
-            ))}
+            {files.map((f) => {
+              const problem = fileProblem(f);
+              return (
+                <div key={f.name} className="row between small">
+                  <span style={problem ? { color: 'var(--red)' } : undefined}>{problem ?? f.name}</span>
+                  <span className="muted">
+                    {formatSize(f.size)}
+                    {isMediaFile(f) && !problem ? ' · will be transcribed' : ''}
+                  </span>
+                </div>
+              );
+            })}
           </>
         )}
         {type === 'url' && (

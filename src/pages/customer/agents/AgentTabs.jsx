@@ -34,6 +34,7 @@ import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, 
 import { HBars, TimeChart } from '../../../components/charts';
 import { DEFAULT_VOICE, findVoice, LanguageSelect, ModelSelect, useGreetingPreview, useModels, VoiceDialog } from './pickers';
 import { copyText } from '../../../lib/clipboard';
+import { fileProblem, KNOWLEDGE_ACCEPT, KNOWLEDGE_HINT } from '../../../lib/uploads';
 
 /* {{variable}} aware prompt field (AGT-10.4) --------------------------- */
 
@@ -1038,6 +1039,8 @@ export function KnowledgeTab({ agent }) {
   const [uploading, setUploading] = useState(false);
 
   const upload = async (file) => {
+    const problem = fileProblem(file);
+    if (problem) return toast(problem, 'error');
     setUploading(true);
     try {
       // Creates the document and uploads the file to its signed URL.
@@ -1104,7 +1107,7 @@ export function KnowledgeTab({ agent }) {
             <h2>Agent documents</h2>
             <div className="card-sub">Files only this agent uses.</div>
           </div>
-          <input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx,.txt,.md,.csv" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <input ref={fileRef} type="file" hidden accept={KNOWLEDGE_ACCEPT} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           <Button size="sm" icon={<FileUp />} loading={uploading} onClick={() => fileRef.current?.click()}>
             Upload
           </Button>
@@ -1145,7 +1148,7 @@ export function KnowledgeTab({ agent }) {
                 </table>
               </div>
             ) : (
-              <EmptyState title="No documents" description="Upload PDFs, Word files or text." />
+              <EmptyState title="No documents" description={KNOWLEDGE_HINT} />
             )
           }
         </Async>
