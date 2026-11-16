@@ -170,6 +170,24 @@ class TabBoundary extends Component {
 export function AgentEditor() {
   const { id = '', tab = 'identity' } = useParams();
   const agent = useGetAgentQuery(id);
+  // Fit the sub-menu + editor to the viewport so each scrolls on its own and the page stays still.
+  const gridRef = useRef(null);
+  const hasAgent = Boolean(agent.data);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return undefined;
+    const fit = () => {
+      if (window.innerWidth <= 960) {
+        el.style.height = '';
+        return;
+      }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(320, window.innerHeight - top - 64)}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [hasAgent]);
   // The API has no "unpublished changes" flag: compare the draft with the live version.
   const diffQ = useGetAgentDiffQuery(id, { skip: !agent.data?.published_version });
   const unpublished = !!diffQ.data?.changed_sections?.length;
@@ -220,7 +238,7 @@ export function AgentEditor() {
         )}
       </Async>
       {agent.data && (
-        <div className="section-grid">
+        <div className="section-grid fit" ref={gridRef}>
           <nav className="subnav" aria-label="Agent sections">
             {TABS.map((g) => (
               <div key={g.group} style={{ display: 'contents' }}>
@@ -234,7 +252,7 @@ export function AgentEditor() {
               </div>
             ))}
           </nav>
-          <div style={{ minWidth: 0 }}>
+          <div className="section-pane">
             <TabBoundary key={current.key}>
               <Tab agent={agent.data} />
             </TabBoundary>

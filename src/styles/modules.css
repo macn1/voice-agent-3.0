@@ -101,6 +101,64 @@
   align-items: start;
 }
 
+.section-pane {
+  min-width: 0;
+}
+
+/* Agent editor: both columns scroll independently, the page itself stays put. */
+@media (min-width: 961px) {
+  .section-grid.fit {
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .section-grid.fit .subnav,
+  .section-grid.fit .section-pane {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Left menu: scrolls, but no visible scrollbar. */
+  .section-grid.fit .subnav {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .section-grid.fit .subnav::-webkit-scrollbar {
+    display: none;
+  }
+  /* Right pane: slim, translucent scrollbar. */
+  .section-grid.fit .section-pane {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(128, 128, 128, 0.35) transparent;
+  }
+  .section-grid.fit .section-pane::-webkit-scrollbar {
+    width: 8px;
+  }
+  .section-grid.fit .section-pane::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 6px 0;
+  }
+  .section-grid.fit .section-pane::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.28);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.2s;
+  }
+  .section-grid.fit .section-pane:hover::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.5);
+    background-clip: padding-box;
+  }
+  .section-grid.fit .subnav {
+    position: static;
+    justify-content: flex-start;
+    padding-bottom: 16px;
+  }
+  .section-grid.fit .section-pane {
+    padding: 2px 6px 24px 2px;
+  }
+}
+
 .subnav {
   position: sticky;
   top: 16px;
@@ -1842,4 +1900,426 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spin { animation-duration: 1.6s; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Agent editor forms: calmer cards, grouped fields, sticky save bar    */
+/* ------------------------------------------------------------------ */
+
+.section-pane .card {
+  border-radius: 18px;
+  overflow: visible;
+}
+
+.section-pane .card-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 16px 24px;
+  border-radius: 18px 18px 0 0;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.section-pane .card-head h2 {
+  font-size: 16px;
+}
+
+.section-pane .card-sub {
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.section-pane .card-pad.stack {
+  gap: 28px !important;
+  padding: 24px;
+}
+
+/* AI-style live preview strip */
+.ai-preview {
+  position: relative;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--series-1) 28%, var(--divider));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--series-1) 9%, transparent), color-mix(in srgb, #8b5cf6 7%, transparent));
+}
+
+.ai-preview p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.ai-preview p b {
+  color: var(--text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ai-preview-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--series-1);
+}
+
+/* Grouped fields */
+.fgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fgroup + .fgroup {
+  padding-top: 24px;
+  border-top: 1px dashed var(--divider);
+}
+
+.fgroup-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.fgroup-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
+.fgroup-head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.fgroup-step {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--series-1);
+  background: color-mix(in srgb, var(--series-1) 12%, transparent);
+}
+
+.fgroup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-left: 36px;
+}
+
+@media (max-width: 720px) {
+  .fgroup-body {
+    padding-left: 0;
+  }
+}
+
+.section-pane .field-label {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.section-pane .field .hint {
+  line-height: 1.45;
+}
+
+.section-pane .input,
+.section-pane .select,
+.section-pane .textarea {
+  height: 42px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.section-pane .textarea {
+  height: auto;
+  padding-top: 11px;
+  line-height: 1.5;
+}
+
+.section-pane .input:focus,
+.section-pane .select:focus,
+.section-pane .textarea:focus {
+  border-color: var(--series-1);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--series-1) 16%, transparent);
+}
+
+/* Voice picker row */
+.voice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+/* Sliders */
+.section-pane .range {
+  height: 4px;
+  accent-color: var(--series-1);
+}
+
+.section-pane .field .range + .mono {
+  padding: 2px 8px;
+  border-radius: 999px;
+  min-width: 0 !important;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+  color: var(--series-1);
+}
+
+/* Chips: lighter selected state with accent */
+.section-pane .chip {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.section-pane .chip.active {
+  background: color-mix(in srgb, var(--series-1) 14%, transparent);
+  border-color: var(--series-1);
+  color: var(--series-1);
+  box-shadow: none;
+}
+
+/* Inline cards (steps, rules) sit flatter */
+.section-pane .card .card {
+  border-radius: 14px;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--surface) 50%, transparent);
+}
+
+/* Knowledge: chosen-file previews */
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.35) transparent;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.file-card.bad {
+  border-color: var(--red);
+}
+
+.file-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--kind, #888) 14%, transparent);
+  color: var(--kind, #888);
+  cursor: default;
+}
+
+.file-thumb:not(:disabled) {
+  cursor: zoom-in;
+}
+
+.file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-ext {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.kind-pdf { --kind: #e5484d; }
+.kind-doc { --kind: #2a78d6; }
+.kind-sheet { --kind: #1baf7a; }
+.kind-slides { --kind: #eb6834; }
+.kind-audio, .kind-video { --kind: #8b5cf6; }
+.kind-data { --kind: #eda100; }
+.kind-image { --kind: #0ea5b7; }
+
+.file-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: var(--font-weight-medium);
+}
+
+.file-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.file-tag {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--kind, #888);
+  background: color-mix(in srgb, var(--kind, #888) 14%, transparent);
+}
+
+.file-problem {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+/* ------------------------------------------------------------------ */
+/* Build hub: "how do you want to start" cards                          */
+/* ------------------------------------------------------------------ */
+
+.build-options .build-option {
+  --t: #2a78d6;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  min-height: 0;
+  padding: 18px;
+  border: 1px solid var(--divider);
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--t) 9%, transparent), transparent 60%),
+    var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.build-options .tone-blue { --t: #64748b; }
+.build-options .tone-violet { --t: #64748b; }
+.build-options .tone-slate { --t: #64748b; }
+
+.build-options .build-option:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--t) 45%, var(--divider));
+  box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--t) 55%, transparent);
+}
+
+.build-options .build-option.active {
+  border-color: var(--t);
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--t) 16%, transparent), transparent 62%),
+    var(--surface);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--t) 18%, transparent),
+    0 14px 32px -16px color-mix(in srgb, var(--t) 60%, transparent);
+}
+
+.bo-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bo-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--t) 78%, #fff), var(--t));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 14px -6px color-mix(in srgb, var(--t) 70%, transparent);
+}
+
+.build-options .bo-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8;
+  color: #fff;
+}
+
+.bo-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong, var(--divider));
+  transition: all 0.2s;
+}
+
+.build-option.active .bo-check {
+  border-color: var(--t);
+  background: var(--t);
+  box-shadow: inset 0 0 0 4px var(--surface);
+}
+
+.bo-copy b {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.bo-copy small {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bo-tag {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--t);
+  background: color-mix(in srgb, var(--t) 12%, transparent);
+}
+
+@media (max-width: 960px) {
+  .build-options .build-option {
+    min-height: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

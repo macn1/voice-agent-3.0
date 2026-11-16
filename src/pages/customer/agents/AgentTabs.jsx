@@ -140,9 +140,9 @@ function VoiceField({ agent }) {
     }
   };
   return (
-    <div className="field full">
+    <div className="field">
       <span className="field-label">Voice</span>
-      <div className="row wrap" style={{ gap: 8 }}>
+      <div className="voice-row">
         <span>
           {voice ? (
             <>
@@ -183,6 +183,22 @@ const MANNER = [
   ['persuasiveness', 'Gentle', 'Persuasive'],
 ];
 
+/** A titled, numbered block inside a section card: groups related fields with a plain-language hint. */
+export function FormGroup({ step, title, help, children }) {
+  return (
+    <section className="fgroup">
+      <header className="fgroup-head">
+        {step && <span className="fgroup-step">{step}</span>}
+        <div>
+          <h3>{title}</h3>
+          {help && <p>{help}</p>}
+        </div>
+      </header>
+      <div className="fgroup-body">{children}</div>
+    </section>
+  );
+}
+
 export function IdentityTab({ agent }) {
   const persona = useAgentSection(agent.id, 'persona');
   const overrides = useAgentSection(agent.id, 'profileOverrides');
@@ -209,42 +225,43 @@ export function IdentityTab({ agent }) {
       >
         {(p, patch) => (
           <>
-            <div className="form-grid">
-              <Field label="Agent's name" hint="The name it introduces itself with on calls, e.g. Riya.">
-                <Input value={p.name ?? ''} onChange={(e) => patch({ name: e.target.value })} />
-              </Field>
-              <VoiceField agent={agent} />
-              <Field
-                label="Job title"
-                className="full"
-                hint="What the agent says it does, e.g. “front-desk assistant at CareFirst Clinics”. It starts its instructions: “You are Riya, working as front-desk assistant at CareFirst Clinics.”"
-              >
-                <Input value={p.role ?? ''} onChange={(e) => patch({ role: e.target.value })} />
-              </Field>
-            </div>
-            <div className="field">
-              <span className="field-label">Tone</span>
-              <div className="row wrap" style={{ gap: 6 }}>
-                {TONES.map((t) => (
-                  <button key={t} type="button" className={`chip ${p.tone === t ? 'active' : ''}`} style={{ height: 34 }} onClick={() => patch({ tone: t })}>
-                    {t}
-                  </button>
+            <FormGroup step="1" title="Basics" help="The name, voice and job the caller hears first.">
+              <div className="form-grid">
+                <Field label="Agent's name" hint="The name it uses on calls, e.g. Riya.">
+                  <Input placeholder="e.g. Riya" value={p.name ?? ''} onChange={(e) => patch({ name: e.target.value })} />
+                </Field>
+                <VoiceField agent={agent} />
+                <Field label="Job title" className="full" hint="What the agent says it does, e.g. “front-desk assistant at CareFirst Clinics”.">
+                  <Input placeholder="e.g. front-desk assistant at CareFirst Clinics" value={p.role ?? ''} onChange={(e) => patch({ role: e.target.value })} />
+                </Field>
+              </div>
+            </FormGroup>
+
+            <FormGroup step="2" title="Personality" help="Pick a tone, then fine-tune. The middle of a slider means no preference.">
+              <div className="field">
+                <span className="field-label">Tone</span>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  {TONES.map((t) => (
+                    <button key={t} type="button" className={`chip ${p.tone === t ? 'active' : ''}`} style={{ height: 34 }} onClick={() => patch({ tone: t })}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid-2">
+                {MANNER.map(([k, l, r]) => (
+                  <Field key={k} label={titleCase(k)}>
+                    <Slider value={p.personality?.[k] ?? 50} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
+                  </Field>
                 ))}
               </div>
-            </div>
-            <div className="grid-2">
-              {MANNER.map(([k, l, r]) => (
-                <Field key={k} label={titleCase(k)}>
-                  <Slider value={p.personality?.[k] ?? 50} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
-                </Field>
-              ))}
-            </div>
-            <p className="muted small" style={{ margin: '-8px 0 0' }}>
-              The sliders shape how the agent words its replies; the middle means no preference. Speaking speed is on the Voice tab.
-            </p>
-            <Field label="Speaking style" hint="Anything about how it talks — sentence length, words to use or avoid.">
-              <Textarea rows={3} value={p.style ?? ''} onChange={(e) => patch({ style: e.target.value })} />
-            </Field>
+            </FormGroup>
+
+            <FormGroup step="3" title="Speaking style" help="Optional. Speaking speed is on the Voice tab.">
+              <Field label="How it should talk" hint="Sentence length, words to use or avoid, e.g. “Short sentences. Never say ‘unfortunately’.”">
+                <Textarea rows={3} value={p.style ?? ''} onChange={(e) => patch({ style: e.target.value })} />
+              </Field>
+            </FormGroup>
           </>
         )}
       </SectionCard>

@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeft,
   AudioLines,
   Inbox,
   MessageCircle,
@@ -178,6 +179,17 @@ function TenantBadge() {
   );
 }
 
+/** A "back" link for pages opened from another page's shortcut (Link state `backTo` / `backLabel`). */
+function ReturnBar() {
+  const { state } = useLocation();
+  if (!state?.backTo) return null;
+  return (
+    <Link to={state.backTo} className="back-link" style={{ marginBottom: 12 }}>
+      <ArrowLeft /> Back to {state.backLabel ?? 'previous page'}
+    </Link>
+  );
+}
+
 export function CustomerLayout() {
   return (
     <>
@@ -202,6 +214,7 @@ export function CustomerLayout() {
       >
         <div className="main-inner">
           <AccountBanners />
+          <ReturnBar />
           <Outlet />
         </div>
       </AppShell>

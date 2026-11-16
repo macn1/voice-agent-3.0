@@ -14,9 +14,9 @@ import { categoriesOf, templateCard } from '../useCases';
 import { LanguageSelect, ModelSelect, VoicePicker } from './pickers';
 
 const START_OPTIONS = [
-  { value: 'template', icon: LayoutTemplate, title: 'From a template', text: 'Pick a ready-made agent for your use case.' },
-  { value: 'describe', icon: Sparkles, title: 'Describe it', text: 'Explain the job in a line and get a draft.' },
-  { value: 'blank', icon: Plus, title: 'Blank agent', text: 'Start empty and configure everything yourself.' },
+  { value: 'template', icon: LayoutTemplate, tone: 'blue', tag: 'Fastest', title: 'From a template', text: 'Pick a ready-made agent for your use case.' },
+  { value: 'describe', icon: Sparkles, tone: 'violet', tag: 'AI draft', title: 'Describe it', text: 'Explain the job in a line and get a draft.' },
+  { value: 'blank', icon: Plus, tone: 'slate', tag: 'Full control', title: 'Blank agent', text: 'Start empty and configure everything yourself.' },
 ];
 
 const BUILDING_BLOCKS = [
@@ -62,15 +62,19 @@ export function NewAgentPage({ hub = false }) {
                   key={o.value}
                   role="tab"
                   aria-selected={mode === o.value}
-                  className={`build-option ${mode === o.value ? 'active' : ''}`}
+                  className={`build-option tone-${o.tone} ${mode === o.value ? 'active' : ''}`}
                   onClick={() => setMode(o.value)}
                 >
-                  <o.icon aria-hidden />
-                  <span>
+                  <span className="bo-top">
+                    <span className="bo-icon">
+                      <o.icon aria-hidden />
+                    </span>
+                    <span className="bo-check" aria-hidden />
+                  </span>
+                  <span className="bo-copy">
                     <b>{o.title}</b>
                     <small>{o.text}</small>
-                  </span>
-                </button>
+                  </span>                </button>
               ))}
             </div>
             <div className="build-step-label">
@@ -86,7 +90,7 @@ export function NewAgentPage({ hub = false }) {
             <ul>
               {BUILDING_BLOCKS.map((b) => (
                 <li key={b.to}>
-                  <Link to={b.to} className="build-block">
+                  <Link to={b.to} state={{ backTo: '/build', backLabel: 'Build' }} className="build-block">
                     <b.icon aria-hidden />
                     <span>
                       <b>{b.title}</b>

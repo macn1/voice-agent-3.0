@@ -470,6 +470,74 @@ function UnansweredCard() {
   );
 }
 
+/** What kind of file this is, for the badge and icon: image, pdf, doc, sheet, slides, audio, video, data, text. */
+function fileKind(f) {
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  const t = f.type || '';
+  if (t.startsWith('image/')) return { kind: 'image', label: ext.toUpperCase() || 'IMG' };
+  if (t.startsWith('audio/')) return { kind: 'audio', label: ext.toUpperCase() || 'AUDIO' };
+  if (t.startsWith('video/')) return { kind: 'video', label: ext.toUpperCase() || 'VIDEO' };
+  if (ext === 'pdf') return { kind: 'pdf', label: 'PDF' };
+  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return { kind: 'doc', label: ext.toUpperCase() };
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return { kind: 'sheet', label: ext.toUpperCase() };
+  if (['ppt', 'pptx', 'odp'].includes(ext)) return { kind: 'slides', label: ext.toUpperCase() };
+  if (['json', 'xml', 'html', 'htm'].includes(ext)) return { kind: 'data', label: ext.toUpperCase() };
+  return { kind: 'text', label: ext.toUpperCase() || 'FILE' };
+}
+
+/** One chosen file: a real preview for images (and a first-page view for PDFs), a typed tile for the rest. */
+function FilePreview({ file, problem, onRemove }) {
+  const { kind, label } = fileKind(file);
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (kind !== 'image' && kind !== 'pdf') return undefined;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, kind]);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <div className={`file-card ${problem ? 'bad' : ''}`}>
+        <button
+          type="button"
+          className={`file-thumb kind-${kind}`}
+          onClick={() => url && setOpen(true)}
+          title={url ? 'Click to preview' : undefined}
+          disabled={!url}
+        >
+          {kind === 'image' && url ? <img src={url} alt={file.name} /> : <span className="file-ext">{label}</span>}
+        </button>
+        <div className="file-meta">
+          <div className="file-name" title={file.name}>
+            {file.name}
+          </div>
+          <div className="file-sub">
+            <span className={`file-tag kind-${kind}`}>{label}</span>
+            {formatSize(file.size)}
+            {isMediaFile(file) && !problem ? ' · will be transcribed' : ''}
+            {kind === 'image' && !problem ? ' · read by AI' : ''}
+          </div>
+          {problem && <div className="file-problem">{problem}</div>}
+        </div>
+        <button type="button" className="icon-btn" aria-label={`Remove ${file.name}`} onClick={onRemove}>
+          <Trash2 size={16} />
+        </button>
+      </div>
+      {open && url && (
+        <Modal open onClose={() => setOpen(false)} wide title={file.name} footer={<Button onClick={() => setOpen(false)}>Close</Button>}>
+          {kind === 'image' ? (
+            <img src={url} alt={file.name} style={{ maxWidth: '100%', maxHeight: '70vh', display: 'block', margin: '0 auto', borderRadius: 12 }} />
+          ) : (
+            <iframe title={file.name} src={url} style={{ width: '100%', height: '70vh', border: 0, borderRadius: 12 }} />
+          )}
+        </Modal>
+      )}
+    </>
+  );
+}
+
 function AddSourceModal({ kbId, type, onClose, onAdded }) {
   const [addSource] = useAddSourceMutation();
   const [title, setTitle] = useState('');
@@ -589,18 +657,18 @@ function AddSourceModal({ kbId, type, onClose, onAdded }) {
               </div>
               <div className="muted small">{KNOWLEDGE_HINT}</div>
             </button>
-            {files.map((f) => {
-              const problem = fileProblem(f);
-              return (
-                <div key={f.name} className="row between small">
-                  <span style={problem ? { color: 'var(--red)' } : undefined}>{problem ?? f.name}</span>
-                  <span className="muted">
-                    {formatSize(f.size)}
-                    {isMediaFile(f) && !problem ? ' · will be transcribed' : ''}
-                  </span>
-                </div>
-              );
-            })}
+            {files.length > 0 && (
+              <div className="file-list">
+                {files.map((f, i) => (
+                  <FilePreview
+                    key={`${f.name}-${f.size}-${i}`}
+                    file={f}
+                    problem={fileProblem(f)}
+                    onRemove={() => setFiles(files.filter((_, j) => j !== i))}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
         {type === 'url' && (
