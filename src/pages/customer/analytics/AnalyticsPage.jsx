@@ -9,7 +9,7 @@ import {
   usePutScheduledReportsMutation,
   useSaveViewMutation,
 } from '../../../store/api/analyticsApi';
-import { useListCampaignsQuery } from '../../../store/api/callsApi';
+import { useListCampaignsQuery } from '../../../store/api/flowApi';
 import { money, number, percent, titleCase } from '../../../lib/format';
 import { Async, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, useToast } from '../../../components/ui';
 import { Select, ListEditor } from '../../../components/forms';

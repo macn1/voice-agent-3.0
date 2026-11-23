@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, Flag, MessageSquare, PhoneOff } from 'lucide-react';
-import { useListAgentsQuery } from '../../store/api/flowApi';
+import { useListCampaignsQuery } from '../../store/api/flowApi';
 import { useGetAnalyticsQuery } from '../../store/api/analyticsApi';
 import { useListCallsQuery } from '../../store/api/callsApi';
 import { useListConversationsQuery } from '../../store/api/integrationApi';
@@ -23,16 +23,13 @@ export function HomeDashboard() {
   const failedQ = useListCallsQuery({ range: '1d', status: 'failed', limit: 1 });
   const flaggedQ = useListCallsQuery({ range: '7d', flagged: true, limit: 1 });
   const waitingQ = useListConversationsQuery({ status: 'needs_human' });
-  const agents = useListAgentsQuery({ limit: 6 });
-  // Calls per agent in the last 7 days (the agent list has no counts).
-  const perAgent = useGetAnalyticsQuery({ report: 'agents', range: '7d' });
-  const callsByAgent = Object.fromEntries((perAgent.data ?? []).map((r) => [r.agent_id, r.calls]));
+  const campaigns = useListCampaignsQuery({ limit: 6 });
   const failed = { data: failedQ.data?.total };
   const flagged = { data: flaggedQ.data?.total };
   const waiting = { data: waitingQ.data?.length };
 
   // Render nothing until at least one of these services is deployed.
-  const allMissing = [summary, recent, agents].every((s) => s.error?.notAvailable);
+  const allMissing = [summary, recent, campaigns].every((s) => s.error?.notAvailable);
   if (allMissing) return null;
 
   const attention = [
@@ -134,25 +131,26 @@ export function HomeDashboard() {
             />
           </div>
         )}
-        {agents.data && agents.data.items.length > 0 && (
+        {campaigns.data && campaigns.data.items.length > 0 && (
           <div className="card">
             <div className="card-head">
-              <h2>Agents</h2>
-              <Link to="/agents" className="btn sm ghost">
+              <h2>Campaigns</h2>
+              <Link to="/campaigns" className="btn sm ghost">
                 All
               </Link>
             </div>
             <div className="table-wrap">
               <table className="table">
                 <tbody>
-                  {agents.data.items.map((a) => (
-                    <tr key={a.id} className="clickable" onClick={() => navigate(`/agents/${a.id}`)}>
-                      <td className="cell-main">{a.name}</td>
+                  {campaigns.data.items.map((c) => (
+                    <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
                       <td>
-                        <StatusBadge status={a.status} />
+                        <div className="cell-main">{c.name}</div>
+                        <div className="cell-sub">{c.agent_name ?? 'No agent'}</div>
                       </td>
-                      <td className="num muted" title="Last 7 days">
-                        {number(callsByAgent[a.id] ?? 0)} calls
+                      <td className="muted">{c.direction === 'outbound' ? 'Outbound' : 'Inbound'}</td>
+                      <td>
+                        <StatusBadge status={c.status} />
                       </td>
                     </tr>
                   ))}

@@ -47,7 +47,7 @@ function Bubbles({ turns, busy, endRef }) {
 
 /* Chat with the PUBLISHED agent through the orchestrator ------------------- */
 
-export function PublishedChat({ agent, variables }) {
+export function PublishedChat({ campaign, variables }) {
   const [session, setSession] = useState(null);
   const [turns, setTurns] = useState([]);
   const [text, setText] = useState('');
@@ -80,7 +80,7 @@ export function PublishedChat({ agent, variables }) {
     setBusy(true);
     try {
       const vars = Object.fromEntries(Object.entries(variables).filter(([, v]) => v));
-      const r = await start({ agent_id: agent.id, ...(Object.keys(vars).length ? { variables: vars } : {}) }).unwrap();
+      const r = await start({ campaign_id: campaign.id, agent_id: campaign.agent_id, ...(Object.keys(vars).length ? { variables: vars } : {}) }).unwrap();
       setSession(r.session);
       openId.current = r.session.id;
       setTurns([{ role: 'them', text: r.greeting?.text ?? '', meta: 'greeting' }]);
@@ -132,7 +132,7 @@ export function PublishedChat({ agent, variables }) {
     return (
       <div className="stack">
         <p className="muted small">
-          Talk to the agent's <b>published</b> version, exactly as a caller would reach it. The conversation is saved to your call log; typed conversations aren't billed per minute.
+          Talk to the campaign's <b>published</b> version, exactly as a caller would reach it. The conversation is saved to your call log; typed conversations aren't billed per minute.
         </p>
         {error && (
           <div className="banner danger" style={{ margin: 0 }}>
@@ -220,11 +220,13 @@ const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 const STATE_LABEL = { connecting: 'Connecting', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', ended: 'Call ended' };
 const STATE_TONE = { listening: 'green', thinking: 'amber', speaking: 'blue' };
 const WHY_BROWSER = {
-  agent_not_published: "This agent isn't published yet: switch to Draft to hear it with its real voice.",
-  agent_not_live: 'Real voice needs the agent to be live, and this agent is paused.',
+  agent_not_published: "This campaign isn't published yet: switch to Draft to hear it with its real voice.",
+  agent_not_live: 'Real voice needs the campaign to be live, and this campaign is paused.',
+  campaign_not_published: "This campaign isn't published yet: switch to Draft to hear it with its real voice.",
+  campaign_not_live: 'Real voice needs the campaign to be live, and this campaign is paused.',
 };
 
-export function VoiceTest({ agent, draft = false, variables = {} }) {
+export function VoiceTest({ campaign, draft = false, variables = {} }) {
   const [create] = useCreateTestSessionMutation();
   const [session, setSession] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -241,7 +243,7 @@ export function VoiceTest({ agent, draft = false, variables = {} }) {
     call.unlock();
     try {
       const vars = Object.fromEntries(Object.entries(variables).filter(([, v]) => v !== ''));
-      const r = await create({ id: agent.id, draft, variables: vars }).unwrap();
+      const r = await create({ id: campaign.id, draft, variables: vars }).unwrap();
       if (r.mode === 'realtime' && r.media_url) {
         callRef.current = call;
       } else {
@@ -265,7 +267,7 @@ export function VoiceTest({ agent, draft = false, variables = {} }) {
   if (session?.mode === 'realtime' && callRef.current) {
     return <LiveVoice call={callRef.current} session={session} draft={draft} onReset={reset} />;
   }
-  if (session) return <BrowserSpeech agent={agent} session={session} variables={variables} onReset={reset} />;
+  if (session) return <BrowserSpeech campaign={campaign} session={session} variables={variables} onReset={reset} />;
   return (
     <div className="stack">
       <p className="muted" style={{ margin: 0 }}>
@@ -380,7 +382,7 @@ function LiveVoice({ call, session, draft, onReset }) {
 }
 
 /** The browser's own speech on the draft: when real voice isn't available. */
-function BrowserSpeech({ agent, session, variables = {}, onReset }) {
+function BrowserSpeech({ campaign, session, variables = {}, onReset }) {
   const [chat] = useChatTestMutation();
   const [turns, setTurns] = useState([{ role: 'them', text: session.greeting, meta: 'greeting' }]);
   const [text, setText] = useState('');
@@ -420,7 +422,7 @@ function BrowserSpeech({ agent, session, variables = {}, onReset }) {
     setBusy(true);
     try {
       const history = turns.filter((t) => t.role === 'me' || t.role === 'them').map((t) => ({ role: t.role === 'me' ? 'user' : 'agent', text: t.text }));
-      const r = await chat({ id: agent.id, message: msg, history, variables }).unwrap();
+      const r = await chat({ id: campaign.id, message: msg, history, variables }).unwrap();
       setTurns([...next, { role: 'them', text: r.reply, meta: r.rule ? `Rule: ${r.rule}` : undefined }]);
       speak(r.reply, session.language);
     } catch (e) {
@@ -492,9 +494,9 @@ function BrowserSpeech({ agent, session, variables = {}, onReset }) {
   );
 }
 
-/* "Call my phone" with the draft agent ---------------------------------- */
+/* "Call my phone" with the campaign's draft ------------------------------ */
 
-export function PhoneTest({ agent }) {
+export function PhoneTest({ campaign }) {
   const [to, setTo] = useState('');
   const [call, setCall] = useState(null);
   const [error, setError] = useState(null);
@@ -510,7 +512,7 @@ export function PhoneTest({ agent }) {
     if (!E164.test(to.trim())) return setError('Enter the number in international format, e.g. +919876543210');
     setError(null);
     try {
-      setCall(await testCall({ id: agent.id, to_number: to.trim() }).unwrap());
+      setCall(await testCall({ id: campaign.id, to_number: to.trim() }).unwrap());
     } catch (e) {
       setError(errMsg(e));
     }
@@ -552,7 +554,7 @@ export function PhoneTest({ agent }) {
 
   return (
     <div className="stack">
-      <p className="muted small">Rings your phone with the <b>draft</b> agent — no need to publish first. Do-not-call, plan limits and calling hours apply.</p>
+      <p className="muted small">Rings your phone with the campaign's <b>draft</b> — no need to publish first. Do-not-call, plan limits and calling hours apply.</p>
       {error && <div className="alert-inline">{error}</div>}
       <Field label="Your phone number">
         <Input className="mono" placeholder="+919876543210" value={to} onChange={(e) => setTo(e.target.value)} />

@@ -8,15 +8,16 @@ import { CustomerLayout } from './pages/customer/CustomerLayout';
 import { HomePage } from './pages/customer/HomePage';
 import { DocsPage } from './pages/customer/DocsPage';
 import { AgentsPage } from './pages/customer/agents/AgentsPage';
-import { NewAgentPage } from './pages/customer/agents/NewAgentPage';
-import { AgentEditor } from './pages/customer/agents/AgentEditor';
+import { AgentPage } from './pages/customer/agents/AgentPage';
+import { NewCampaignPage } from './pages/customer/campaigns/NewCampaignPage';
+import { CampaignEditor } from './pages/customer/campaigns/CampaignEditor';
+import { CampaignsPage } from './pages/customer/campaigns/CampaignsPage';
 import { CompanyProfilePage } from './pages/customer/build/CompanyProfilePage';
 import { ToolsPage } from './pages/customer/build/ToolsPage';
 import { WorkflowsPage } from './pages/customer/workflows/WorkflowsPage';
 import { KnowledgeDetailPage, KnowledgeListPage } from './pages/customer/knowledge/KnowledgePages';
 import { NumberRoutingPage, NumbersPage } from './pages/customer/numbers/NumbersPages';
-import { CallDetailPage, CallsPage, InboundPage, LiveCallsPage, ReviewPage } from './pages/customer/calls/CallsPages';
-import { CampaignDetailPage, CampaignsPage, CampaignWizard } from './pages/customer/campaigns/CampaignPages';
+import { CallDetailPage, CallsPage, LiveCallsPage, ReviewPage } from './pages/customer/calls/CallsPages';
 import { ContactDetailPage, ContactsPage } from './pages/customer/contacts/ContactsPages';
 import { DevelopersPage } from './pages/customer/developers/DevelopersPage';
 import { AnalyticsPage } from './pages/customer/analytics/AnalyticsPage';
@@ -104,13 +105,19 @@ export function App() {
               <Route path="welcome" element={<WelcomePage />} />
 
               {/* Build */}
-              <Route path="build" element={<NewAgentPage hub />} />
+              <Route path="build" element={<NewCampaignPage hub />} />
               <Route path="agents" element={<AgentsPage />} />
-              <Route path="agents/new" element={<NewAgentPage />} />
-              <Route path="agents/:id" element={<AgentEditor />} />
-              <Route path="agents/:id/:tab" element={<AgentEditor />} />
+              {/* Agents are an identity now; making a campaign starts from Campaigns. */}
+              <Route path="agents/new" element={<Navigate to="/campaigns/new" replace />} />
+              <Route path="agents/:id" element={<AgentPage />} />
+              <Route path="agents/:id/:tab" element={<AgentPage />} />
+              <Route path="campaigns" element={<CampaignsPage />} />
+              <Route path="campaigns/new" element={<NewCampaignPage />} />
+              <Route path="campaigns/:id" element={<CampaignEditor />} />
+              <Route path="campaigns/:id/:tab" element={<CampaignEditor />} />
               <Route path="company" element={<CompanyProfilePage />} />
               <Route path="tools" element={<ToolsPage />} />
+              {/* Call triggers and scheduled calls: reached from Campaigns, not the menu. */}
               <Route path="workflows" element={<WorkflowsPage />} />
               <Route path="knowledge" element={<KnowledgeListPage />} />
               <Route path="knowledge/:id" element={<KnowledgeDetailPage />} />
@@ -118,10 +125,7 @@ export function App() {
               {/* Deploy */}
               <Route path="numbers" element={<NumbersPage />} />
               <Route path="numbers/:id" element={<NumberRoutingPage />} />
-              <Route path="inbound" element={<InboundPage />} />
-              <Route path="campaigns" element={<CampaignsPage />} />
-              <Route path="campaigns/new" element={<CampaignWizard />} />
-              <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+              <Route path="inbound" element={<Navigate to="/campaigns?type=inbound" replace />} />
               <Route path="contacts" element={<ContactsPage />} />
               <Route path="contacts/:id" element={<ContactDetailPage />} />
               <Route path="developers" element={<DevelopersPage />} />

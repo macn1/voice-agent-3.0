@@ -38,7 +38,7 @@ import {
   useTakeOverCallMutation,
   useUpdateCallMutation,
 } from '../../../store/api/callsApi';
-import { useGetAgentSectionQuery } from '../../../store/api/flowApi';
+import { LEGACY_DISPOSITIONS, useGetAgentSectionQuery } from '../../../store/api/flowApi';
 import { useGetLiveSessionQuery, useListLiveSessionsQuery } from '../../../store/api/orchestratorApi';
 import { useCreateExportMutation } from '../../../store/api/analyticsApi';
 import { dateTime, money, number, titleCase } from '../../../lib/format';
@@ -135,7 +135,11 @@ export function CallsTable({ calls, onOpen }) {
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
                 </td>
                 <td data-label="Outcome">
-                  {c.outcome ? <Badge tone={OUTCOME_TONE(c.is_success)}>{titleCase(c.outcome)}</Badge> : <span className="muted">—</span>}
+                  {c.disposition || c.outcome ? (
+                    <Badge tone={OUTCOME_TONE(c.is_success)}>{c.disposition_label ?? titleCase(c.disposition ?? c.outcome)}</Badge>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
                 </td>
                 <td data-label="Sentiment">
                   {c.sentiment ? (
@@ -499,7 +503,8 @@ export function CallDetailPage() {
   // Only ask for a recording when the call says it has one (else the API answers 404).
   const recording = useGetRecordingQuery(id, { skip: !call.data?.has_recording });
   const reviews = useListReviewsQuery(id);
-  const outcomes = useGetAgentSectionQuery({ id: call.data?.agent_id, section: 'outcomes' }, { skip: !call.data?.agent_id });
+  // Outcome labels come from the call's campaign (its agent's, for a call from before campaigns).
+  const outcomes = useGetAgentSectionQuery({ id: call.data?.campaign_id, section: 'outcomes' }, { skip: !call.data?.campaign_id });
   const [updateCall] = useUpdateCallMutation();
   const [rerunAnalysis] = useRerunAnalysisMutation();
   const [pushToCrm] = usePushCallToCrmMutation();
@@ -539,7 +544,7 @@ export function CallDetailPage() {
                 <div className="row" style={{ gap: 10 }}>
                   <h1 className="text-detail-title">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</h1>
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
-                  {c.outcome && <Badge tone={OUTCOME_TONE(c.is_success)}>{titleCase(c.outcome)}</Badge>}
+                  {(c.disposition || c.outcome) && <Badge tone={OUTCOME_TONE(c.is_success)}>{c.disposition_label ?? titleCase(c.disposition ?? c.outcome)}</Badge>}
                   {c.flagged && <Badge tone="orange">Flagged</Badge>}
                   {c.is_simulated && <Badge>Simulated</Badge>}
                 </div>
@@ -856,21 +861,24 @@ function KvCard({ title, data }) {
   );
 }
 
+/** The call's disposition (how it ended) and tags; an older call's outcome shows as the disposition it became. */
 function OutcomeModal({ open, onClose, call, outcomes, onSaved }) {
-  const [outcome, setOutcome] = useState(call.outcome ?? '');
+  const current = () => call.disposition ?? LEGACY_DISPOSITIONS[call.outcome] ?? call.outcome ?? '';
+  const [outcome, setOutcome] = useState(current());
   const [tags, setTags] = useState(call.tags);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const [updateCall] = useUpdateCallMutation();
   useEffect(() => {
-    setOutcome(call.outcome ?? '');
+    setOutcome(current());
     setTags(call.tags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call, open]);
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Outcome & tags"
+      title="Disposition & tags"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -880,7 +888,8 @@ function OutcomeModal({ open, onClose, call, outcomes, onSaved }) {
             onClick={async () => {
               setBusy(true);
               try {
-                onSaved(await updateCall({ id: call.id, outcome, tags }).unwrap());
+                const label = (outcomes?.outcomes ?? []).find((o) => o.key === outcome)?.label;
+                onSaved(await updateCall({ id: call.id, disposition: outcome || undefined, ...(label ? { disposition_label: label } : {}), tags }).unwrap());
                 onClose();
               } catch (e) {
                 toast(errMsg(e), 'error');
@@ -895,14 +904,14 @@ function OutcomeModal({ open, onClose, call, outcomes, onSaved }) {
       }
     >
       <div className="stack">
-        <Field label="Outcome">
+        <Field label="Disposition" hint="How the call ended. Follow-up actions use it.">
           <Select
             value={outcome}
             options={(outcomes?.outcomes ?? []).map((o) => ({
               value: o.key,
               label: o.label,
             }))}
-            placeholder="No outcome"
+            placeholder="None"
             onChange={(e) => setOutcome(e.target.value)}
           />
         </Field>

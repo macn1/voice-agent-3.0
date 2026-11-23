@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {
   useAddConnectionMutation,
-  useAssignNumberAgentMutation,
+  useAssignNumberCampaignMutation,
   useGetNumberQuery,
   useGetRoutingQuery,
   useDeleteConnectionMutation,
@@ -34,7 +34,7 @@ import {
   usePutRoutingMutation,
   useSearchAvailableNumbersQuery,
   useSimulateRoutingMutation,
-  useUnassignNumberAgentMutation,
+  useUnassignNumberCampaignMutation,
 } from '../../../store/api/callsApi';
 import { date, dateTime, money, titleCase } from '../../../lib/format';
 import {
@@ -54,7 +54,7 @@ import {
   useToast,
 } from '../../../components/ui';
 import { SectionCard, Select, Textarea, useSection } from '../../../components/forms';
-import { useAgentOptions } from '../shared';
+import { useCampaignOptions } from '../shared';
 import { useGetAnalyticsQuery } from '../../../store/api/analyticsApi';
 
 // Telephony providers shown on "Bring your own telephony". Each logo is read from
@@ -89,11 +89,15 @@ export function NumbersPage() {
   const usage = useGetAnalyticsQuery({ report: 'phone-numbers', range: '7d' });
   // The report is keyed by the number itself (E.164).
   const calls7d = Object.fromEntries((Array.isArray(usage.data) ? usage.data : []).map((r) => [r.number, r.calls]));
-  const [assignAgent] = useAssignNumberAgentMutation();
-  const [unassignAgent] = useUnassignNumberAgentMutation();
-  const { options: agentOptions, agents } = useAgentOptions();
+  const [assignCampaign] = useAssignNumberCampaignMutation();
+  const [unassignCampaign] = useUnassignNumberCampaignMutation();
+  const { campaigns } = useCampaignOptions();
+  // Inbound campaigns first: they are the ones that answer numbers.
+  const campaignOptions = [...campaigns]
+    .sort((a, b) => (a.direction === 'inbound' ? 0 : 1) - (b.direction === 'inbound' ? 0 : 1) || a.name.localeCompare(b.name))
+    .map((c) => ({ value: c.id, label: `${c.name}${c.agent_name ? ` · ${c.agent_name}` : ''}${c.direction === 'outbound' ? ' (outbound)' : ''}` }));
   const [assigning, setAssigning] = useState(null);
-  const [agentId, setAgentId] = useState('');
+  const [campaignId, setCampaignId] = useState('');
   const [unassigning, setUnassigning] = useState(null);
   const [buying, setBuying] = useState(false);
   const [tab, setTab] = useState('numbers');
@@ -110,7 +114,7 @@ export function NumbersPage() {
   return (
     <>
       <section className="page-hero">
-        <h1>Take your agent live</h1>
+        <h1>Take your campaigns live</h1>
         <div className="option-grid">
           <article className="option-card">
             <span className="clay warm" aria-hidden>
@@ -182,7 +186,7 @@ export function NumbersPage() {
         <div className="page-section-head">
           <div>
             <h2 className="text-subheading">Your numbers</h2>
-            <p className="muted small">Numbers allocated to your company, and the agent that answers each one.</p>
+            <p className="muted small">Numbers allocated to your company, and the campaign that answers each one.</p>
           </div>
           <Button icon={<ShoppingCart />} onClick={() => setBuying(true)}>
             Get a number
@@ -217,8 +221,7 @@ export function NumbersPage() {
                       </thead>
                       <tbody>
                         {nums.map((n) => {
-                          const agent = agents.find((a) => a.id === n.agent_id);
-                          const unpublished = n.agent_id && (n.agent_published === false || (agent && !agent.published_version));
+                          const unpublished = n.campaign_id && n.campaign_published === false;
                           return (
                             <tr key={n.id}>
                               <td>
@@ -228,14 +231,15 @@ export function NumbersPage() {
                                 </div>
                               </td>
                               <td>
-                                {n.agent_id ? (
+                                {n.campaign_id ? (
                                   <>
-                                    <Link to={`/agents/${n.agent_id}`} className="cell-main">
-                                      {n.agent_name ?? agent?.name ?? n.agent_id}
+                                    <Link to={`/campaigns/${n.campaign_id}`} className="cell-main">
+                                      {n.campaign_name ?? 'Deleted campaign'}
                                     </Link>
+                                    {n.agent_name && <div className="cell-sub">spoken by {n.agent_name}</div>}
                                     {unpublished && (
                                       <div className="cell-sub row" style={{ color: 'var(--amber)', gap: 4 }}>
-                                        <AlertTriangle size={13} /> Agent has no published version — calls won't be answered
+                                        <AlertTriangle size={13} /> Campaign isn't published — calls won't be answered
                                       </div>
                                     )}
                                   </>
@@ -255,12 +259,12 @@ export function NumbersPage() {
                                   icon={<Link2 />}
                                   onClick={() => {
                                     setAssigning(n);
-                                    setAgentId(n.agent_id ?? '');
+                                    setCampaignId(n.campaign_id ?? '');
                                   }}
                                 >
-                                  {n.agent_id ? 'Change' : 'Assign'}
+                                  {n.campaign_id ? 'Change' : 'Assign'}
                                 </Button>
-                                {n.agent_id && <Button size="sm" variant="ghost" icon={<Unlink />} title="Remove agent" onClick={() => setUnassigning(n)} />}
+                                {n.campaign_id && <Button size="sm" variant="ghost" icon={<Unlink />} title="Remove campaign" onClick={() => setUnassigning(n)} />}
                               </td>
                             </tr>
                           );
@@ -293,11 +297,11 @@ export function NumbersPage() {
             <Button onClick={() => setAssigning(null)}>Cancel</Button>
             <Button
               variant="primary"
-              disabled={!agentId}
+              disabled={!campaignId}
               onClick={async () => {
                 try {
-                  await assignAgent({ id: assigning.id, agent_id: agentId }).unwrap();
-                  toast('Agent assigned');
+                  await assignCampaign({ id: assigning.id, campaign_id: campaignId }).unwrap();
+                  toast('Campaign assigned');
                   setAssigning(null);
                 } catch (e) {
                   toast(errMsg(e), 'error');
@@ -309,19 +313,19 @@ export function NumbersPage() {
           </>
         }
       >
-        <Field label="Agent" hint="Calls use the agent's published version.">
-          <Select value={agentId} options={agentOptions} placeholder="Choose an agent" onChange={(e) => setAgentId(e.target.value)} />
+        <Field label="Campaign" hint="Callers get the campaign's published version, spoken by its agent.">
+          <Select value={campaignId} options={campaignOptions} placeholder="Choose a campaign" onChange={(e) => setCampaignId(e.target.value)} />
         </Field>
       </Modal>
       <ConfirmDialog
         open={!!unassigning}
         onClose={() => setUnassigning(null)}
         danger
-        title={`Remove the agent from ${unassigning?.e164}?`}
-        description="Calls to this number won't be answered until you assign another agent."
+        title={`Remove the campaign from ${unassigning?.e164}?`}
+        description="Calls to this number won't be answered until you assign another campaign."
         confirmLabel="Remove"
         onConfirm={async () => {
-          await unassignAgent(unassigning.id).unwrap();
+          await unassignCampaign(unassigning.id).unwrap();
         }}
       />
 
@@ -647,7 +651,7 @@ export function NumberRoutingPage() {
   const current = num ?? single.data;
   const routing = useSection(useGetRoutingQuery(id), usePutRoutingMutation(), (body) => ({ id, body }));
   const [simulate, { isLoading: simBusy }] = useSimulateRoutingMutation();
-  const { options } = useAgentOptions();
+  const { options } = useCampaignOptions();
   const [sim, setSim] = useState(null);
   const [simAt, setSimAt] = useState('');
   const toast = useToast();
@@ -661,7 +665,7 @@ export function NumberRoutingPage() {
       <PageHeader
         eyebrow="Routing"
         title={current?.e164 ?? 'Number routing'}
-        description="Business hours, what happens after hours, and the fallback if the agent can't take the call."
+        description="Business hours, what happens after hours, and the fallback if the campaign can't take the call."
       />
       <div className="stack">
         <div className="card card-pad stack">
@@ -685,7 +689,8 @@ export function NumberRoutingPage() {
             <div className="banner info" style={{ margin: 0 }}>
               <span className="grow">
                 <b>{sim.outcome}</b>
-                {sim.agent_name ? ` (${sim.agent_name})` : ''} — {sim.detail} · local time {sim.local_time}
+                {sim.campaign_name ? ` (${sim.campaign_name}${sim.agent_name ? `, spoken by ${sim.agent_name}` : ''})` : ''} — {sim.detail} · local time{' '}
+                {sim.local_time}
               </span>
             </div>
           )}
@@ -704,7 +709,7 @@ export function NumberRoutingPage() {
                 checked={r.always_open}
                 onChange={(v) => patch({ always_open: v })}
                 label="Open around the clock"
-                description="The agent answers at any time. Turn off to set business hours; calls outside them follow the after-hours rule."
+                description="The campaign answers at any time. Turn off to set business hours; calls outside them follow the after-hours rule."
               />
               <div style={r.always_open ? { display: 'none' } : undefined}>
                 <span className="field-label">Business hours</span>
@@ -806,11 +811,11 @@ export function NumberRoutingPage() {
                   <Select
                     value={r.after_hours_action}
                     options={[
-                      { value: 'agent', label: 'Same agent answers anyway' },
+                      { value: 'agent', label: 'Same campaign answers anyway' },
                       { value: 'message', label: 'Play a message and hang up' },
                       {
-                        value: 'other_agent',
-                        label: 'A different agent answers',
+                        value: 'other_campaign',
+                        label: 'A different campaign answers',
                       },
                       { value: 'voicemail', label: 'Take a voicemail' },
                       { value: 'forward', label: 'Forward to another number' },
@@ -818,13 +823,13 @@ export function NumberRoutingPage() {
                     onChange={(e) => patch({ after_hours_action: e.target.value })}
                   />
                 </Field>
-                {r.after_hours_action === 'other_agent' && (
-                  <Field label="After-hours agent">
+                {r.after_hours_action === 'other_campaign' && (
+                  <Field label="After-hours campaign">
                     <Select
-                      value={r.after_hours_agent_id ?? ''}
+                      value={r.after_hours_campaign_id ?? ''}
                       options={options}
                       placeholder="Choose"
-                      onChange={(e) => patch({ after_hours_agent_id: e.target.value })}
+                      onChange={(e) => patch({ after_hours_campaign_id: e.target.value })}
                     />
                   </Field>
                 )}

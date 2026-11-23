@@ -2,12 +2,15 @@ import { baseApi } from './baseApi';
 import { uploadToSignedUrl } from './baseQuery';
 import { C } from './services';
 
-// voice-flow-be (all proposed in FEATURE-TICKETS.md): agents (AGT-01..19),
+// voice-flow-be: agents (who speaks: name, role, voice, languages,
+// personality, model), campaigns (what the calls are for: instructions,
+// rules, variables, knowledge, tools, outcomes, follow-ups; draft -> publish),
 // catalog (AGT-02), company profile (AGT-08), knowledge (KNW-01/02, AGT-05),
-// tools (ACT-01), pronunciations (AGT-13.3), voices (AGT-15), teams (AGT-16),
-// test scenarios (QTY-01), chat test (QTY-02).
+// tools (ACT-01), pronunciations (AGT-13.3), voices (AGT-15), test scenarios
+// (QTY-01), chat test (QTY-02).
 
 const ag = (id) => `/customer/agents/${id}`;
+const cp = (id) => `/customer/campaigns/${id}`;
 
 // Knowledge source bodies: the screens send {type, title, content}; the API wants
 // faqs[{q,a}] / text / url / file details.
@@ -62,8 +65,10 @@ const toolTo = ({ parameters, ...t }) => {
 };
 
 /**
- * Each tab of the agent editor is one GET/PUT pair on the draft
- * (DB-DESIGN §6: one jsonb column per section). `wrap` shapes the PUT body
+ * Each tab of the campaign editor (and each part of an agent's Identity page)
+ * is one GET/PUT pair on a section. `agent: true` sections belong to the
+ * agent (/customer/agents/:id/...) and apply at once; the rest to the
+ * campaign's draft (/customer/campaigns/:id/...). `wrap` shapes the PUT body
  * where the API expects an object around a list.
  */
 // Sections whose stored shape differs from what the editor tab edits:
@@ -90,8 +95,35 @@ const withDefaults = (defaults) => (d) => ({ ...defaults, ...(d && typeof d === 
 
 const PROFILE_KEYS = ['about', 'offerings', 'hours', 'locations', 'contact', 'policies', 'faqs'];
 
+// Outcomes from before dispositions -> the built-in disposition they became.
+export const LEGACY_DISPOSITIONS = {
+  appointment_booked: 'appointment',
+  question_answered: 'success',
+  transferred_to_human: 'transferred',
+  callback_requested: 'call_back_later',
+  question_unanswered: 'failed',
+  not_interested: 'failed',
+  no_answer: 'not_connected',
+  voicemail: 'not_connected',
+};
+
+// A follow-up as the tab edits it: { trigger: call_completed | disposition, disposition?, action, ... }.
+// Ones saved before dispositions (trigger outcome / no_answer) show as disposition follow-ups.
+const followUpFrom = (f) => {
+  const out = { action: 'message', enabled: true, ...f };
+  if (f.trigger === 'outcome') {
+    out.trigger = 'disposition';
+    out.disposition = LEGACY_DISPOSITIONS[f.outcome] ?? f.outcome;
+    delete out.outcome;
+  } else if (f.trigger === 'no_answer') {
+    out.trigger = 'disposition';
+    out.disposition = 'not_connected';
+  }
+  return out;
+};
+
 export const AGENT_SECTIONS = {
-  persona: { path: 'persona', from: withDefaults({ name: '', gender: 'female', role: '', tone: 'friendly', personality: {}, style: '' }) },
+  persona: { agent: true, path: 'persona', from: withDefaults({ name: '', gender: 'female', role: '', tone: 'friendly', personality: {}, style: '' }) },
   profileOverrides: { path: 'company-profile-overrides', from: withDefaults({ sections: PROFILE_KEYS }) },
   flow: { path: 'flow/draft', from: withDefaults({ greeting: '', system_prompt: '', steps: [] }) },
   guidelines: {
@@ -118,15 +150,16 @@ export const AGENT_SECTIONS = {
     }),
   },
   speech: {
+    agent: true,
     path: 'speech-settings',
     from: withDefaults({ voice_id: '', speed: 1, interruption_sensitivity: 0.5, ambience: 'none', backchannel: true }),
   },
   keywords: { path: 'keywords', from: (d) => d?.keywords ?? d?.items ?? [], wrap: (list) => ({ keywords: list }) },
-  languages: { path: 'languages', from: langFrom, wrap: langWrap },
+  languages: { agent: true, path: 'languages', from: langFrom, wrap: langWrap },
   settings: {
     path: 'settings',
     from: withDefaults({ tags: [], description: '', event_webhook_url: '' }),
-    // GET returns the whole agent record; only these fields are editable.
+    // GET returns the whole campaign record; only these fields are editable.
     // An empty webhook URL is rejected (422), and null can't clear max_concurrent_calls, so both are left out.
     wrap: (a) => ({
       name: a.name,
@@ -138,15 +171,21 @@ export const AGENT_SECTIONS = {
     }),
   },
   model: {
+    agent: true,
     path: 'model-settings',
     from: withDefaults({ llm: '', fallback_llm: '', temperature: 0.4, max_reply_tokens: 200, asr_provider: '', tts_provider: '', fallback_tts: '' }),
   },
   memory: { path: 'memory-settings' },
   knowledgeBases: { path: 'knowledge-bases', wrap: (ids) => ({ knowledge_base_ids: ids }) },
   tools: { path: 'tools', wrap: (ids) => ({ tool_ids: ids }) },
-  followUps: { path: 'follow-ups' },
+  followUps: { path: 'follow-ups', from: (d) => (Array.isArray(d) ? d : []).map(followUpFrom) },
   analysis: { path: 'analysis-config', from: withDefaults({ summary: true, sentiment: true, fields: [] }) },
-  outcomes: { path: 'outcomes', from: withDefaults({ outcomes: [], success_rule: '' }) },
+  // Dispositions: GET lists the built-in ones (builtin: true) and the campaign's own; PUT takes only its own.
+  outcomes: {
+    path: 'outcomes',
+    from: withDefaults({ outcomes: [] }),
+    wrap: (o) => ({ outcomes: (o.outcomes ?? []).filter((x) => !x.builtin).map(({ builtin: _b, ...x }) => x) }),
+  },
   // Stored as recording_notice / ai_disclosure text; the tab also keeps an on/off flag per line.
   compliance: {
     path: 'compliance',
@@ -162,20 +201,21 @@ export const AGENT_SECTIONS = {
   chatSettings: { path: 'chat-settings' },
 };
 
-// Version config key -> draft endpoint, used to compare the draft with the live
-// version on the client (the backend has no diff route).
+/** The section's address: the agent's or the campaign's. */
+const sectionUrl = (id, section) => `${AGENT_SECTIONS[section].agent ? ag(id) : cp(id)}/${AGENT_SECTIONS[section].path}`;
+
+// Version config key -> draft endpoint, used to compare a campaign's draft with
+// its live version on the client (the backend has no diff route). The agent's
+// sections aren't versioned: they apply at once.
 const DIFF_SECTIONS = {
   flow: 'flow/draft',
-  persona: 'persona',
   behaviour: 'behaviour',
   variables: 'variables',
   guidelines: 'guidelines',
   analysis: 'analysis-config',
   compliance: 'compliance',
   profile_overrides: 'company-profile-overrides',
-  speech: 'speech-settings',
-  model: 'model-settings',
-  languages: 'languages',
+  vocabulary: 'vocabulary',
 };
 const isEmpty = (v) => v == null || (Array.isArray(v) ? !v.length : typeof v === 'object' ? !Object.keys(v).length : v === '');
 const canon = (v) =>
@@ -187,62 +227,73 @@ const sectionTag = (id, section) => ({ type: 'AgentSection', id: `${id}:${sectio
 
 export const flowApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    // Agents (AGT-01) ------------------------------------------------------
-    // The API only returns published_version_id; the screens want a truthy
-    // "is published" flag in lists and the version number on the editor.
-    listAgents: b.query({
-      query: (params = {}) => C.flow('/customer/agents', { params }),
-      transformResponse: (d) =>
-        d?.items ? { ...d, items: d.items.map((a) => ({ ...a, published_version: a.published_version ?? (a.published_version_id ? true : null) })) } : d,
-      providesTags: ['Agent'],
-    }),
-    getAgent: b.query({
+    // Agents: who speaks (identity only; edits apply at once) -------------
+    // Items: { id, name, role, language, voice_id, gender, campaigns, updated_at }.
+    listAgents: b.query({ query: (params = {}) => C.flow('/customer/agents', { params }), providesTags: ['Agent'] }),
+    getAgent: b.query({ query: (id) => C.flow(ag(id)), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
+    // { persona, speech, languages, model } in one go.
+    getAgentIdentity: b.query({ query: (id) => C.flow(`${ag(id)}/identity`), providesTags: (_r, _e, id) => [{ type: 'Agent', id }] }),
+    // body: { name, role } (name is what callers hear). 409 agent_name_in_use.
+    createAgent: b.mutation({ query: (body) => C.flow('/customer/agents', { method: 'POST', body }), invalidatesTags: ['Agent'] }),
+    updateAgent: b.mutation({ query: ({ id, ...body }) => C.flow(ag(id), { method: 'PATCH', body }), invalidatesTags: ['Agent', 'Campaign'] }),
+    // 409 agent_in_use while campaigns use it.
+    deleteAgent: b.mutation({ query: (id) => C.flow(ag(id), { method: 'DELETE' }), invalidatesTags: ['Agent'] }),
+
+    // Campaigns: what the calls are for ------------------------------------
+    // { items: [{ id, name, direction, agent_id, agent_name, agent_role, status, last_published_at, has_unpublished_changes }],
+    //   total, usage: { used, limit } } (limit 0 = none).
+    listCampaigns: b.query({ query: (params = {}) => C.flow('/customer/campaigns', { params }), providesTags: ['Campaign'] }),
+    getCampaignUsage: b.query({ query: () => C.flow('/customer/campaigns/usage'), providesTags: ['Campaign'] }),
+    // The API only returns published_version_id; the editor wants the version number.
+    getCampaign: b.query({
       async queryFn(id, _api, _extra, baseQuery) {
-        const r = await baseQuery(C.flow(ag(id)));
+        const r = await baseQuery(C.flow(cp(id)));
         if (r.error || !r.data?.published_version_id || r.data.published_version) return r;
-        const v = await baseQuery(C.flow(`${ag(id)}/flow/versions`));
+        const v = await baseQuery(C.flow(`${cp(id)}/flow/versions`));
         const cur = Array.isArray(v.data) ? (v.data.find((x) => x.id === r.data.published_version_id) ?? v.data.find((x) => x.is_current)) : null;
         return { data: { ...r.data, published_version: cur?.version ?? true } };
       },
-      providesTags: (_r, _e, id) => [{ type: 'Agent', id }],
+      providesTags: (_r, _e, id) => [{ type: 'Campaign', id }],
     }),
-    createAgent: b.mutation({ query: (body) => C.flow('/customer/agents', { method: 'POST', body }), invalidatesTags: ['Agent'] }),
-    updateAgent: b.mutation({ query: ({ id, ...body }) => C.flow(ag(id), { method: 'PATCH', body }), invalidatesTags: ['Agent'] }),
-    deleteAgent: b.mutation({ query: (id) => C.flow(ag(id), { method: 'DELETE' }), invalidatesTags: ['Agent', 'Number'] }),
-    // arg: agent id, or { id, name } ("<name> (copy)" by default).
-    duplicateAgent: b.mutation({
+    // body: { name, direction, agent_id | new_agent: { name, role }, template_id?, config? }. 402 campaign_limit over the plan.
+    createCampaign: b.mutation({ query: (body) => C.flow('/customer/campaigns', { method: 'POST', body }), invalidatesTags: ['Campaign', 'Agent'] }),
+    updateCampaign: b.mutation({ query: ({ id, ...body }) => C.flow(cp(id), { method: 'PATCH', body }), invalidatesTags: ['Campaign', 'Agent', 'Number'] }),
+    deleteCampaign: b.mutation({ query: (id) => C.flow(cp(id), { method: 'DELETE' }), invalidatesTags: ['Campaign', 'Agent', 'Number'] }),
+    // arg: campaign id, or { id, name } ("<name> (copy)" by default).
+    duplicateCampaign: b.mutation({
       query: (arg) => {
         const { id, name } = typeof arg === 'string' ? { id: arg } : arg;
-        return C.flow(`${ag(id)}/duplicate`, { method: 'POST', body: name ? { name } : {} });
+        return C.flow(`${cp(id)}/duplicate`, { method: 'POST', body: name ? { name } : {} });
       },
-      invalidatesTags: ['Agent'],
+      invalidatesTags: ['Campaign', 'Agent'],
     }),
-    pauseAgent: b.mutation({ query: (id) => C.flow(`${ag(id)}/pause`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
-    resumeAgent: b.mutation({ query: (id) => C.flow(`${ag(id)}/resume`, { method: 'POST', body: {} }), invalidatesTags: ['Agent'] }),
-    exportAgent: b.query({ query: (id) => C.flow(`${ag(id)}/export`), keepUnusedDataFor: 0 }),
-    // arg: the export file, or { export, name }. 409 agent_name_in_use if the name is taken.
-    importAgent: b.mutation({
-      query: (arg) =>
-        C.flow('/customer/agents/import', {
-          method: 'POST',
-          body: arg?.export ? { export: arg.export, ...(arg.name ? { name: arg.name } : {}) } : { export: arg },
-        }),
-      invalidatesTags: ['Agent'],
+    pauseCampaign: b.mutation({ query: (id) => C.flow(`${cp(id)}/pause`, { method: 'POST', body: {} }), invalidatesTags: ['Campaign'] }),
+    resumeCampaign: b.mutation({ query: (id) => C.flow(`${cp(id)}/resume`, { method: 'POST', body: {} }), invalidatesTags: ['Campaign'] }),
+    exportCampaign: b.query({ query: (id) => C.flow(`${cp(id)}/export`), keepUnusedDataFor: 0 }),
+    // { agent_id, export, name? }. Older agent export files import too.
+    importCampaign: b.mutation({
+      query: ({ agent_id, export: file, name }) =>
+        C.flow('/customer/campaigns/import', { method: 'POST', body: { agent_id, export: file, ...(name ? { name } : {}) } }),
+      invalidatesTags: ['Campaign', 'Agent'],
     }),
 
-    // Editor sections (AGT-03, 07..14, 17, 18; KNW-01.7; ACT-01.6, 03; PCA-01/02; CMP-01; CON-02.2; WID-01; WA-03.2/06.2)
+    // Sections (AGT-03, 07..14, 17, 18; KNW-01.7; ACT-01.6, 03; PCA-01/02; CMP-01; CON-02.2; WID-01; WA-03.2/06.2)
+    // id is the agent's for agent sections, the campaign's for the rest.
     getAgentSection: b.query({
-      query: ({ id, section }) => C.flow(`${ag(id)}/${AGENT_SECTIONS[section].path}`),
+      query: ({ id, section }) => C.flow(sectionUrl(id, section)),
       transformResponse: (d, _m, { section }) => (AGENT_SECTIONS[section].from ? AGENT_SECTIONS[section].from(d) : d),
       providesTags: (_r, _e, { id, section }) => [sectionTag(id, section)],
     }),
     putAgentSection: b.mutation({
       query: ({ id, section, body }) => {
         const def = AGENT_SECTIONS[section];
-        return C.flow(`${ag(id)}/${def.path}`, { method: 'PUT', body: def.wrap ? def.wrap(body) : body });
+        return C.flow(sectionUrl(id, section), { method: 'PUT', body: def.wrap ? def.wrap(body) : body });
       },
-      // Saving a section changes "unpublished changes" on the agent itself.
-      invalidatesTags: (_r, _e, { id, section }) => [sectionTag(id, section), { type: 'Agent', id }],
+      // A campaign section changes "unpublished changes"; an agent section (the name) shows in lists.
+      invalidatesTags: (_r, _e, { id, section }) =>
+        AGENT_SECTIONS[section].agent
+          ? [sectionTag(id, section), { type: 'Agent', id }, 'Campaign']
+          : [sectionTag(id, section), { type: 'Campaign', id }],
     }),
 
     // Catalog (AGT-02, AGT-18.3) -----------------------------------------
@@ -251,10 +302,10 @@ export const flowApi = baseApi.injectEndpoints({
     listModels: b.query({ query: () => C.flow('/customer/catalog/models'), providesTags: ['Catalog'] }),
     listGuidelinePresets: b.query({ query: () => C.flow('/customer/guideline-presets'), providesTags: ['Catalog'] }),
 
-    // Publish & versions (AGT-03.3, AGT-04) -------------------------------
+    // Publish & versions (AGT-03.3, AGT-04): campaigns -------------------
     // API: { valid, issues: [{ field, message }] }; the screens read errors / warnings.
     validateFlow: b.mutation({
-      query: (id) => C.flow(`${ag(id)}/flow/validate`, { method: 'POST', body: {} }),
+      query: (id) => C.flow(`${cp(id)}/flow/validate`, { method: 'POST', body: {} }),
       transformResponse: (d) => ({
         ...d,
         errors: d?.errors ?? d?.issues ?? [],
@@ -263,15 +314,15 @@ export const flowApi = baseApi.injectEndpoints({
     }),
     // No diff route on the backend: compare each draft tab with the live
     // version's config. Never published -> every non-empty tab counts as changed.
-    getAgentDiff: b.query({
+    getCampaignDiff: b.query({
       async queryFn(id, _api, _extra, baseQuery) {
-        const versions = await baseQuery(C.flow(`${ag(id)}/flow/versions`));
+        const versions = await baseQuery(C.flow(`${cp(id)}/flow/versions`));
         if (versions.error) return versions;
         const cur = (versions.data ?? []).find((v) => v.is_current);
-        const live = cur ? await baseQuery(C.flow(`${ag(id)}/flow/versions/${cur.version}`)) : null;
+        const live = cur ? await baseQuery(C.flow(`${cp(id)}/flow/versions/${cur.version}`)) : null;
         if (live?.error) return live;
         const keys = Object.keys(DIFF_SECTIONS);
-        const drafts = await Promise.all(keys.map((k) => baseQuery(C.flow(`${ag(id)}/${DIFF_SECTIONS[k]}`))));
+        const drafts = await Promise.all(keys.map((k) => baseQuery(C.flow(`${cp(id)}/${DIFF_SECTIONS[k]}`))));
         const changed = keys.filter((k, i) => {
           if (drafts[i].error) return false;
           const d = drafts[i].data;
@@ -280,35 +331,38 @@ export const flowApi = baseApi.injectEndpoints({
         });
         return { data: { changed_sections: changed, published: !!cur, current_version: cur?.version ?? null } };
       },
-      providesTags: (_r, _e, id) => [{ type: 'Agent', id }, 'Version'],
+      providesTags: (_r, _e, id) => [{ type: 'Campaign', id }, 'Version'],
     }),
-    publishAgent: b.mutation({
-      query: ({ id, note }) => C.flow(`${ag(id)}/flow/publish`, { method: 'POST', body: { note } }),
-      invalidatesTags: ['Agent', 'Version', 'Number'],
+    publishCampaign: b.mutation({
+      query: ({ id, note }) => C.flow(`${cp(id)}/flow/publish`, { method: 'POST', body: { note } }),
+      invalidatesTags: ['Campaign', 'Version', 'Number'],
     }),
-    listVersions: b.query({ query: (id) => C.flow(`${ag(id)}/flow/versions`), providesTags: ['Version'] }),
-    getVersion: b.query({ query: ({ id, version }) => C.flow(`${ag(id)}/flow/versions/${version}`) }),
+    listVersions: b.query({ query: (id) => C.flow(`${cp(id)}/flow/versions`), providesTags: ['Version'] }),
+    getVersion: b.query({ query: ({ id, version }) => C.flow(`${cp(id)}/flow/versions/${version}`) }),
     rollbackVersion: b.mutation({
-      query: ({ id, version }) => C.flow(`${ag(id)}/flow/versions/${version}/rollback`, { method: 'POST', body: {} }),
-      invalidatesTags: ['Agent', 'Version'],
+      query: ({ id, version }) => C.flow(`${cp(id)}/flow/versions/${version}/rollback`, { method: 'POST', body: {} }),
+      invalidatesTags: ['Campaign', 'Version'],
     }),
 
-    // Templates & generator (AGT-11) -------------------------------------
-    listTemplates: b.query({ query: () => C.flow('/customer/agent-templates'), providesTags: ['Template'] }),
+    // Templates & generator (AGT-11): they make campaigns ------------------
+    listTemplates: b.query({ query: () => C.flow('/customer/campaign-templates'), providesTags: ['Template'] }),
+    // { template_id, name?, direction?, agent_id | new_agent }
     createFromTemplate: b.mutation({
-      query: ({ template_id, name }) => C.flow('/customer/agents/from-template', { method: 'POST', body: { template_id, name } }),
-      invalidatesTags: ['Agent'],
+      query: (body) => C.flow('/customer/campaigns/from-template', { method: 'POST', body }),
+      invalidatesTags: ['Campaign', 'Agent'],
     }),
-    // API: { template_id, name, config: { flow, persona, guidelines, variables, ... }, simulated }.
-    // The "describe it" screen edits { name, flow, persona, guidelines, variables }.
+    // API: { template_id, name, agent_name, config: { flow, persona, guidelines, variables, ... }, simulated }.
+    // The "describe it" screen edits { name, agent_name, flow, persona, guidelines, variables } and sends config back.
     generateDraft: b.mutation({
-      query: (description) => C.flow('/customer/agents/generate-draft', { method: 'POST', body: { description } }),
+      query: (description) => C.flow('/customer/campaigns/generate-draft', { method: 'POST', body: { description } }),
       transformResponse: (d) => {
         const c = d?.config ?? d ?? {};
         return {
           template_id: d?.template_id,
           simulated: !!d?.simulated,
-          name: d?.name ?? 'New agent',
+          name: d?.name ?? 'New campaign',
+          agent_name: d?.agent_name || c.persona?.name || '',
+          config: c,
           flow: { greeting: '', system_prompt: '', steps: [], ...(c.flow ?? { greeting: d?.greeting, system_prompt: d?.system_prompt }) },
           persona: { name: '', role: '', ...(c.persona ?? {}) },
           guidelines: { always: [], never: [], blocked_topics: [], ...(c.guidelines ?? {}) },
@@ -317,28 +371,28 @@ export const flowApi = baseApi.injectEndpoints({
       },
     }),
 
-    // Testing (AGT-06, QTY-01, QTY-02) -----------------------------------
-    // { id, draft }: draft runs the voice test on the saved draft (voice,
-    // instructions, rules as they are now) instead of the published version.
+    // Testing (AGT-06, QTY-01, QTY-02): campaigns ---------------------------
+    // { id, draft }: draft runs the voice test on the saved draft (instructions,
+    // rules as they are now) instead of the published version.
     createTestSession: b.mutation({
       query: (arg) => {
         const { id, draft, variables } = typeof arg === 'object' ? arg : { id: arg };
-        return C.flow(`${ag(id)}/test-session`, { method: 'POST', body: { draft: !!draft, variables: variables ?? {} } });
+        return C.flow(`${cp(id)}/test-session`, { method: 'POST', body: { draft: !!draft, variables: variables ?? {} } });
       },
     }),
-    // Rings to_number with the DRAFT agent; returns the call (poll outbound GET /calls/{id}).
-    testCall: b.mutation({ query: ({ id, to_number }) => C.flow(`${ag(id)}/test-call`, { method: 'POST', body: { to_number } }) }),
-    chatTest: b.mutation({ query: ({ id, ...body }) => C.flow(`${ag(id)}/chat-test`, { method: 'POST', body }) }),
-    listScenarios: b.query({ query: (id) => C.flow(`${ag(id)}/test-scenarios`), providesTags: ['Scenario'] }),
-    createScenario: b.mutation({ query: ({ id, ...body }) => C.flow(`${ag(id)}/test-scenarios`, { method: 'POST', body }), invalidatesTags: ['Scenario'] }),
-    listTestRuns: b.query({ query: (id) => C.flow(`${ag(id)}/test-runs`), providesTags: ['TestRun'] }),
-    startTestRun: b.mutation({ query: (id) => C.flow(`${ag(id)}/test-runs`, { method: 'POST', body: {} }), invalidatesTags: ['TestRun'] }),
+    // Rings to_number with the campaign's DRAFT; returns the call (poll outbound GET /calls/{id}).
+    testCall: b.mutation({ query: ({ id, to_number }) => C.flow(`${cp(id)}/test-call`, { method: 'POST', body: { to_number } }) }),
+    chatTest: b.mutation({ query: ({ id, ...body }) => C.flow(`${cp(id)}/chat-test`, { method: 'POST', body }) }),
+    listScenarios: b.query({ query: (id) => C.flow(`${cp(id)}/test-scenarios`), providesTags: ['Scenario'] }),
+    createScenario: b.mutation({ query: ({ id, ...body }) => C.flow(`${cp(id)}/test-scenarios`, { method: 'POST', body }), invalidatesTags: ['Scenario'] }),
+    listTestRuns: b.query({ query: (id) => C.flow(`${cp(id)}/test-runs`), providesTags: ['TestRun'] }),
+    startTestRun: b.mutation({ query: (id) => C.flow(`${cp(id)}/test-runs`, { method: 'POST', body: {} }), invalidatesTags: ['TestRun'] }),
 
-    // Agent documents (AGT-05) -------------------------------------------
-    listAgentDocuments: b.query({ query: (id) => C.flow(`${ag(id)}/kb-documents`), providesTags: ['Source'] }),
-    addAgentDocument: b.mutation({
+    // A campaign's own documents (AGT-05) ------------------------------------
+    listCampaignDocuments: b.query({ query: (id) => C.flow(`${cp(id)}/kb-documents`), providesTags: ['Source'] }),
+    addCampaignDocument: b.mutation({
       async queryFn({ id, file }, _api, _extra, baseQuery) {
-        const created = await baseQuery(C.flow(`${ag(id)}/kb-documents`, { method: 'POST', body: { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size } }));
+        const created = await baseQuery(C.flow(`${cp(id)}/kb-documents`, { method: 'POST', body: { filename: file.name, content_type: file.type || 'application/octet-stream', size_bytes: file.size } }));
         if (created.error) return created;
         if (created.data?.upload_url) {
           const up = await uploadToSignedUrl({ url: created.data.upload_url, file, authed: true });
@@ -348,7 +402,7 @@ export const flowApi = baseApi.injectEndpoints({
       },
       invalidatesTags: ['Source'],
     }),
-    removeAgentDocument: b.mutation({ query: ({ id, docId }) => C.flow(`${ag(id)}/kb-documents/${docId}`, { method: 'DELETE' }), invalidatesTags: ['Source'] }),
+    removeCampaignDocument: b.mutation({ query: ({ id, docId }) => C.flow(`${cp(id)}/kb-documents/${docId}`, { method: 'DELETE' }), invalidatesTags: ['Source'] }),
 
     // Company profile (AGT-08) -------------------------------------------
     getCompanyProfile: b.query({
@@ -441,14 +495,22 @@ export const {
   useListAgentsQuery,
   useLazyListAgentsQuery,
   useGetAgentQuery,
+  useGetAgentIdentityQuery,
   useCreateAgentMutation,
   useUpdateAgentMutation,
   useDeleteAgentMutation,
-  useDuplicateAgentMutation,
-  usePauseAgentMutation,
-  useResumeAgentMutation,
-  useLazyExportAgentQuery,
-  useImportAgentMutation,
+  useListCampaignsQuery,
+  useLazyListCampaignsQuery,
+  useGetCampaignUsageQuery,
+  useGetCampaignQuery,
+  useCreateCampaignMutation,
+  useUpdateCampaignMutation,
+  useDeleteCampaignMutation,
+  useDuplicateCampaignMutation,
+  usePauseCampaignMutation,
+  useResumeCampaignMutation,
+  useLazyExportCampaignQuery,
+  useImportCampaignMutation,
   useGetAgentSectionQuery,
   useLazyGetAgentSectionQuery,
   usePutAgentSectionMutation,
@@ -457,8 +519,8 @@ export const {
   useListModelsQuery,
   useListGuidelinePresetsQuery,
   useValidateFlowMutation,
-  useGetAgentDiffQuery,
-  usePublishAgentMutation,
+  useGetCampaignDiffQuery,
+  usePublishCampaignMutation,
   useListVersionsQuery,
   useGetVersionQuery,
   useLazyGetVersionQuery,
@@ -474,9 +536,9 @@ export const {
   useCreateScenarioMutation,
   useListTestRunsQuery,
   useStartTestRunMutation,
-  useListAgentDocumentsQuery,
-  useAddAgentDocumentMutation,
-  useRemoveAgentDocumentMutation,
+  useListCampaignDocumentsQuery,
+  useAddCampaignDocumentMutation,
+  useRemoveCampaignDocumentMutation,
   useGetCompanyProfileQuery,
   usePutCompanyProfileMutation,
   useImportCompanyFromWebsiteMutation,

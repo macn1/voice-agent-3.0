@@ -68,7 +68,7 @@ function useTypedPlaceholder(phrases, paused) {
   return reduced || paused ? phrases[0] : text;
 }
 
-/** "Describe your agent" box shared by Home and Agents; opens the new-agent flow with the prompt.
+/** "Describe it" box on Home; opens the new-campaign flow with the prompt.
  *  Pass `placeholder` for a fixed hint, otherwise it cycles through example ideas. */
 export function AgentPromptBox({ placeholder, ideas = PROMPT_IDEAS }) {
   const navigate = useNavigate();
@@ -81,7 +81,7 @@ export function AgentPromptBox({ placeholder, ideas = PROMPT_IDEAS }) {
     e.preventDefault();
     const text = prompt.trim();
     if (!text) return;
-    navigate(`/agents/new?prompt=${encodeURIComponent(text)}`);
+    navigate(`/campaigns/new?prompt=${encodeURIComponent(text)}`);
   };
 
   return (
@@ -95,14 +95,14 @@ export function AgentPromptBox({ placeholder, ideas = PROMPT_IDEAS }) {
         placeholder={hint}
         aria-label="Describe your voice agent"
       />
-      <button type="submit" className="round-ink" aria-label="Create agent" disabled={!prompt.trim()}>
+      <button type="submit" className="round-ink" aria-label="Create campaign" disabled={!prompt.trim()}>
         <ArrowRight />
       </button>
     </form>
   );
 }
 
-/** Category chips + use-case template cards (AGT-11) shared by Home and Agents. */
+/** Category chips + use-case template cards (AGT-11) on Home: each starts a campaign. */
 export function UseCaseGallery({ centered = false }) {
   const navigate = useNavigate();
   const [category, setCategory] = useState('All');
@@ -140,7 +140,7 @@ export function UseCaseGallery({ centered = false }) {
 
       <div className="usecase-grid" style={{ position: 'relative', zIndex: 1 }}>
         {visible.map((u) => (
-          <button key={u.key} className="usecase" onClick={() => navigate(`/agents/new?template=${u.key}`)}>
+          <button key={u.key} className="usecase" onClick={() => navigate(`/campaigns/new?template=${u.key}`)}>
             <span className={`clay ${u.warm ? 'warm' : ''}`}>
               <u.icon />
             </span>

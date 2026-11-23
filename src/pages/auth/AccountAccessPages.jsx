@@ -9,7 +9,7 @@ import {
   useSignupMutation,
   useVerifyEmailMutation,
 } from '../../store/api/authApi';
-import { useListAgentsQuery, useGetCompanyProfileQuery } from '../../store/api/flowApi';
+import { useListCampaignsQuery, useGetCompanyProfileQuery } from '../../store/api/flowApi';
 import { useListCallsQuery, useListNumbersQuery } from '../../store/api/callsApi';
 import { useAuth } from '../../lib/auth';
 import { Button, errMsg, Field, Input, PageHeader, Skeleton } from '../../components/ui';
@@ -437,15 +437,15 @@ export function VerifyEmailPage() {
 export function WelcomePage() {
   const { profile } = useAuth();
   const prof = useGetCompanyProfileQuery();
-  const ag = useListAgentsQuery({ limit: 50 });
+  const ag = useListCampaignsQuery({ limit: 50 });
   const nums = useListNumbersQuery();
   const cl = useListCallsQuery({ limit: 1, range: '90d' });
   const agentList = ag.data?.items ?? [];
   const p = {
     profile: !!prof.data?.about?.description,
     agent: agentList.length > 0,
-    tested: agentList.some((a) => a.published_version),
-    number: !!nums.data?.some((n) => n.agent_id),
+    tested: agentList.some((a) => a.published_version_id || a.last_published_at),
+    number: !!nums.data?.some((n) => n.campaign_id),
     call: (cl.data?.total ?? 0) > 0,
     firstAgent: agentList[0]?.id,
   };
@@ -458,26 +458,26 @@ export function WelcomePage() {
     },
     {
       done: p?.agent,
-      title: 'Create your first agent',
-      text: 'Start from a template — it takes a minute.',
-      to: '/build',
+      title: 'Create your first campaign',
+      text: 'Start from a template and pick the agent who speaks — it takes a minute.',
+      to: '/campaigns/new',
     },
     {
       done: p?.tested,
       title: 'Test it and publish',
       text: 'Chat with the draft, then make it live.',
-      to: p?.firstAgent ? `/agents/${p.firstAgent}` : '/agents',
+      to: p?.firstAgent ? `/campaigns/${p.firstAgent}` : '/campaigns',
     },
     {
       done: p?.number,
       title: 'Attach a phone number',
-      text: 'Pick which number your agent answers.',
+      text: 'Pick which number your campaign answers.',
       to: '/numbers',
     },
     {
       done: p?.call,
       title: 'Make a real call',
-      text: 'Call your number, or have the agent call you.',
+      text: 'Call your number, or have the campaign call you.',
       to: '/calls',
     },
   ];

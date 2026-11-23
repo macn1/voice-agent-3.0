@@ -35,14 +35,15 @@ const triggerTo = ({ field_mapping, source, id: _id, trigger_key: _k, hook_url: 
 const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 // Routing on the wire: business_hours { mon: [{start,end}] } (empty object = always open),
 // after_hours_action agent | message | voicemail | forward. The page edits
-// { always_open, business_hours { mon: { open, ranges: [{from,to}] } } } and "other_agent".
+// { always_open, business_hours { mon: { open, ranges: [{from,to}] } } } and "other_campaign"
+// (after hours another campaign answers: after_hours_campaign_id).
 const routingFrom = (d) => {
   const bh = d?.business_hours ?? {};
   return {
     ...d,
     always_open: Object.keys(bh).length === 0,
     business_hours: Object.fromEntries(WEEK.map((day) => [day, { open: (bh[day] ?? []).length > 0, ranges: (bh[day] ?? []).map((w) => ({ from: w.start, to: w.end })) }])),
-    after_hours_action: d?.after_hours_action === 'agent' && d?.after_hours_agent_id ? 'other_agent' : (d?.after_hours_action ?? 'agent'),
+    after_hours_action: d?.after_hours_action === 'agent' && d?.after_hours_campaign_id ? 'other_campaign' : (d?.after_hours_action ?? 'agent'),
   };
 };
 const routingTo = (r) => ({
@@ -50,8 +51,8 @@ const routingTo = (r) => ({
   business_hours: r.always_open
     ? {}
     : Object.fromEntries(WEEK.map((day) => [day, r.business_hours[day]?.open ? r.business_hours[day].ranges.map((x) => ({ start: x.from, end: x.to })) : []])),
-  after_hours_action: r.after_hours_action === 'other_agent' ? 'agent' : r.after_hours_action,
-  after_hours_agent_id: r.after_hours_action === 'other_agent' ? (r.after_hours_agent_id || null) : null,
+  after_hours_action: r.after_hours_action === 'other_campaign' ? 'agent' : r.after_hours_action,
+  after_hours_campaign_id: r.after_hours_action === 'other_campaign' ? (r.after_hours_campaign_id || null) : null,
   after_hours_message: ['message', 'voicemail'].includes(r.after_hours_action) ? (r.after_hours_message || null) : null,
   fallback_number: r.fallback_number || null,
 });
@@ -111,7 +112,7 @@ const scorecardTo = ({ id, name, is_default, criteria }) => {
 export const callsApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
     // Phone numbers & routing ------------------------------------------------
-    // inbound knows which agent answers; telephony knows when the number was allocated.
+    // inbound knows which campaign (and so which agent) answers; telephony knows when the number was allocated.
     listNumbers: b.query({
       async queryFn(_arg, _api, _extra, baseQuery) {
         const [inb, tel] = await Promise.all([baseQuery(C.inbound('/customer/phone-numbers')), baseQuery(C.telephony('/customer/phone-numbers'))]);
@@ -121,22 +122,25 @@ export const callsApi = baseApi.injectEndpoints({
           data: (inb.data ?? []).map((n) => ({
             ...since.get(n.id),
             ...n,
+            campaign_id: n.campaign?.id ?? null,
+            campaign_name: n.campaign?.name,
+            campaign_direction: n.campaign?.direction,
+            campaign_published: n.campaign ? n.campaign.status !== 'draft' : undefined,
             agent_id: n.agent?.id ?? null,
             agent_name: n.agent?.name,
-            agent_published: n.agent ? n.agent.status !== 'draft' : undefined,
           })),
         };
       },
       providesTags: ['Number'],
     }),
     getNumber: b.query({ query: (id) => C.telephony(`/customer/phone-numbers/${id}`), providesTags: (_r, _e, id) => [{ type: 'Number', id }] }),
-    assignNumberAgent: b.mutation({
-      query: ({ id, agent_id }) => C.inbound(`/customer/phone-numbers/${id}/agent`, { method: 'PUT', body: { agent_id } }),
-      invalidatesTags: ['Number', 'Agent'],
+    assignNumberCampaign: b.mutation({
+      query: ({ id, campaign_id }) => C.inbound(`/customer/phone-numbers/${id}/campaign`, { method: 'PUT', body: { campaign_id } }),
+      invalidatesTags: ['Number', 'Campaign'],
     }),
-    unassignNumberAgent: b.mutation({
-      query: (id) => C.inbound(`/customer/phone-numbers/${id}/agent`, { method: 'DELETE' }),
-      invalidatesTags: ['Number', 'Agent'],
+    unassignNumberCampaign: b.mutation({
+      query: (id) => C.inbound(`/customer/phone-numbers/${id}/campaign`, { method: 'DELETE' }),
+      invalidatesTags: ['Number', 'Campaign'],
     }),
     getRouting: b.query({
       query: (id) => C.inbound(`/customer/phone-numbers/${id}/routing`),
@@ -152,8 +156,9 @@ export const callsApi = baseApi.injectEndpoints({
       query: ({ id, at }) => C.inbound(`/customer/phone-numbers/${id}/routing/simulate`, { method: 'POST', body: at ? { at } : {} }),
       transformResponse: (d) => ({
         ...d,
-        outcome: { agent: 'An agent answers', message: 'A message plays', voicemail: 'Voicemail takes the call', forward: 'The call is forwarded' }[d?.action] ?? d?.action,
+        outcome: { agent: 'A campaign answers', message: 'A message plays', voicemail: 'Voicemail takes the call', forward: 'The call is forwarded' }[d?.action] ?? d?.action,
         agent_name: d?.agent?.name,
+        campaign_name: d?.campaign?.name,
         detail: [d?.reason, d?.holiday && `holiday: ${d.holiday.name ?? d.holiday}`, d?.forward_to && `to ${d.forward_to}`, d?.message && `“${d.message}”`].filter(Boolean).join(' · '),
       }),
     }),
@@ -245,12 +250,15 @@ export const callsApi = baseApi.injectEndpoints({
       invalidatesTags: ['Scorecard'],
     }),
 
-    // Campaigns (CALL-03, 07, 08, 09, 11) ------------------------------------
-    listCampaigns: b.query({ query: (params = {}) => C.outbound('/customer/campaigns', { params }), providesTags: ['Campaign'] }),
-    getCampaign: b.query({ query: (id) => C.outbound(cp(id)), providesTags: CAMP }),
-    // body: { name, agent_id, from_number_id?, settings?, contact_list_id?, start_at?, end_at? }
-    createCampaign: b.mutation({ query: (body) => C.outbound('/customer/campaigns', { method: 'POST', body }), invalidatesTags: ['Campaign'] }),
-    updateCampaign: b.mutation({ query: ({ id, ...body }) => C.outbound(cp(id), { method: 'PATCH', body }), invalidatesTags: ['Campaign'] }),
+    // Outbound calling (CALL-03, 07, 08, 09, 11) -----------------------------
+    // An outbound campaign's contacts, schedule and retries live in
+    // voice-outbound-be under the same id as the campaign (voice-flow-be).
+    // A campaign with no calling set up yet answers 404 here.
+    listOutboundCampaigns: b.query({ query: (params = {}) => C.outbound('/customer/campaigns', { params }), providesTags: ['Campaign'] }),
+    getOutboundCampaign: b.query({ query: (id) => C.outbound(cp(id)), providesTags: CAMP }),
+    // body: { campaign_id, from_number_id?, settings?, contact_list_id?, start_at?, end_at? }
+    createOutboundCampaign: b.mutation({ query: (body) => C.outbound('/customer/campaigns', { method: 'POST', body }), invalidatesTags: ['Campaign'] }),
+    updateOutboundCampaign: b.mutation({ query: ({ id, ...body }) => C.outbound(cp(id), { method: 'PATCH', body }), invalidatesTags: ['Campaign'] }),
     // Adds numbers (see numbersBody). Do-not-call numbers are added as skipped.
     uploadCampaignContacts: b.mutation({
       query: ({ id, ...input }) => C.outbound(`${cp(id)}/contacts`, { method: 'POST', body: numbersBody(input) }),
@@ -440,8 +448,8 @@ export const callsApi = baseApi.injectEndpoints({
 export const {
   useListNumbersQuery,
   useGetNumberQuery,
-  useAssignNumberAgentMutation,
-  useUnassignNumberAgentMutation,
+  useAssignNumberCampaignMutation,
+  useUnassignNumberCampaignMutation,
   useGetRoutingQuery,
   usePutRoutingMutation,
   useSimulateRoutingMutation,
@@ -471,10 +479,10 @@ export const {
   useTakeOverCallMutation,
   useListScorecardsQuery,
   usePutScorecardsMutation,
-  useListCampaignsQuery,
-  useGetCampaignQuery,
-  useCreateCampaignMutation,
-  useUpdateCampaignMutation,
+  useListOutboundCampaignsQuery,
+  useGetOutboundCampaignQuery,
+  useCreateOutboundCampaignMutation,
+  useUpdateOutboundCampaignMutation,
   useUploadCampaignContactsMutation,
   useCampaignActionMutation,
   useLazyGetCampaignResultsQuery,

@@ -15,13 +15,11 @@ import {
   FileText,
   Home,
   LibraryBig,
+  Megaphone,
   Phone,
-  PhoneIncoming,
-  Send,
   Settings,
   UserRound,
   Users,
-  Workflow,
 } from 'lucide-react';
 import { AppShell, Sidebar, ThemeToggle, UserMenu } from '../../components/Shell';
 import { NotificationsBell } from '../../components/NotificationsBell';
@@ -41,8 +39,8 @@ const SECTIONS = [
         icon: Blocks,
         match: ['/company', '/tools'],
       },
+      { to: '/campaigns', label: 'Campaigns', icon: Megaphone, match: ['/workflows'] },
       { to: '/agents', label: 'Agents', icon: UserRound },
-      { to: '/workflows', label: 'Workflows', icon: Workflow },
       { to: '/knowledge', label: 'Knowledge base', icon: LibraryBig },
     ],
   },
@@ -50,8 +48,6 @@ const SECTIONS = [
     label: 'Deploy',
     items: [
       { to: '/numbers', label: 'Phone numbers', icon: Phone },
-      { to: '/inbound', label: 'Inbound calls', icon: PhoneIncoming },
-      { to: '/campaigns', label: 'Outbound campaigns', icon: Send },
       { to: '/developers', label: 'Deploy with code', icon: CodeXml },
     ],
   },

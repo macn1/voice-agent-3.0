@@ -13,3 +13,14 @@ export const REFUSAL_COPY = {
   too_many_text_sessions: 'You already have 5 test conversations open. End one to start another.',
 };
 
+
+// Codes whose answer is always shown in these words (campaigns and their calling).
+export const CODE_COPY = {
+  campaign_not_live: 'The campaign must be published and live to place calls. Publish it, or resume it if it is paused.',
+  campaign_not_found: "That campaign doesn't exist any more.",
+  campaign_not_outbound: 'Calling a list of numbers is for outbound campaigns. This campaign answers calls instead.',
+  outbound_settings_exist: 'This campaign already has its calling set up.',
+  change_agent_on_campaign: "To change who speaks, change the agent on the campaign's Agent tab.",
+  duplicate_the_campaign: 'To copy this calling, duplicate the campaign itself (Settings, then Duplicate).',
+  agent_has_no_campaign: "This agent isn't on any campaign yet. Create a campaign for it first.",
+};

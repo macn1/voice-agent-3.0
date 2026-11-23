@@ -14,7 +14,7 @@ export function ClayIcon({ icon: Icon, children, warm, motion, size }) {
 }
 
 /** Full-page empty hero: floating clay icon, headline, and API / create-agent actions. */
-export function PixelHero({ icon, motion, warm, compact, title, description, actions, apiTo = '/developers', createTo = '/agents/new' }) {
+export function PixelHero({ icon, motion, warm, compact, title, description, actions, apiTo = '/developers', createTo = '/campaigns/new' }) {
   return (
     <div className={`pixel-hero ${compact ? 'compact' : ''}`}>
       <div className="hero-icon">
@@ -31,7 +31,7 @@ export function PixelHero({ icon, motion, warm, compact, title, description, act
               Build with API <ArrowRight />
             </Link>
             <Link to={createTo} className="btn primary">
-              <Plus /> Create agent
+              <Plus /> Create campaign
             </Link>
           </>
         )}

@@ -2,14 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { AudioLines } from 'lucide-react';
 import { errMsg, useToast } from '../../components/ui';
 import { useTheme } from '../../lib/theme';
-import { useLazyListAgentsQuery } from '../../store/api/flowApi';
+import { useLazyListCampaignsQuery } from '../../store/api/flowApi';
 import { AgentPromptBox, UseCaseGallery } from './AgentStarter';
 import { HomeDashboard } from './HomeDashboard';
 
 export function HomePage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [loadLiveAgents] = useLazyListAgentsQuery();
+  const [loadLiveCampaigns] = useLazyListCampaignsQuery();
   const { theme } = useTheme();
 
   return (
@@ -37,10 +37,10 @@ export function HomePage() {
         className="fab"
         onClick={async () => {
           try {
-            const list = await loadLiveAgents({ status: 'live', limit: 1 }).unwrap();
+            const list = await loadLiveCampaigns({ status: 'live', limit: 1 }).unwrap();
             const first = list.items[0];
-            if (first) navigate(`/agents/${first.id}?test=voice`);
-            else navigate('/agents/new');
+            if (first) navigate(`/campaigns/${first.id}?test=voice`);
+            else navigate('/campaigns/new');
           } catch (e) {
             toast(errMsg(e), 'error');
           }

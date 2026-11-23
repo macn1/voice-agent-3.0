@@ -1,45 +1,41 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, Copy, Download, Eye, FileUp, Pause, Play, Plus, RotateCcw, Trash2, Volume2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Download, Eye, FileUp, Pause, Play, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import {
-  useAddAgentDocumentMutation,
+  useAddCampaignDocumentMutation,
   useCreateScenarioMutation,
-  useDeleteAgentMutation,
-  useDuplicateAgentMutation,
+  useDeleteCampaignMutation,
+  useDuplicateCampaignMutation,
   useGetAgentSectionQuery,
-  useLazyExportAgentQuery,
+  useLazyExportCampaignQuery,
   useLazyGetVersionQuery,
-  useListAgentDocumentsQuery,
+  useListCampaignDocumentsQuery,
   useListGuidelinePresetsQuery,
   useListKnowledgeBasesQuery,
   useListScenariosQuery,
   useListTestRunsQuery,
   useListToolsQuery,
   useListVersionsQuery,
-  useGetVersionQuery,
-  useListVoicesQuery,
-  usePauseAgentMutation,
+  usePauseCampaignMutation,
   usePutAgentSectionMutation,
-  useRemoveAgentDocumentMutation,
-  useResumeAgentMutation,
+  useRemoveCampaignDocumentMutation,
+  useResumeCampaignMutation,
   useRollbackVersionMutation,
   useStartTestRunMutation,
   useValidateFlowMutation,
 } from '../../../store/api/flowApi';
 import { useGetAgentDropoffQuery, useGetAgentLatencyQuery } from '../../../store/api/analyticsApi';
-import { useListMessageTemplatesQuery } from '../../../store/api/integrationApi';
 import { date, dateTime, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, StatusBadge, Toggle, useToast } from '../../../components/ui';
-import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Slider, Textarea, useSection } from '../../../components/forms';
+import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Textarea, useSection } from '../../../components/forms';
 import { HBars, TimeChart } from '../../../components/charts';
-import { DEFAULT_VOICE, findVoice, LanguageSelect, ModelSelect, useGreetingPreview, useModels, VoiceDialog } from './pickers';
 import { copyText } from '../../../lib/clipboard';
 import { fileProblem, KNOWLEDGE_ACCEPT, KNOWLEDGE_HINT } from '../../../lib/uploads';
 
 /* {{variable}} aware prompt field (AGT-10.4) --------------------------- */
 
 /** One editor tab = one draft section: GET + PUT through RTK Query. */
-function useAgentSection(id, section) {
+export function useAgentSection(id, section) {
   return useSection(useGetAgentSectionQuery({ id, section }), usePutAgentSectionMutation(), (body) => ({ id, section, body }));
 }
 
@@ -108,9 +104,8 @@ export function PromptField({ value = '', onChange, variables, rows = 4, placeho
   );
 }
 
-/* Identity (AGT-07) + profile sections (AGT-08.7) ----------------------- */
+/* Company profile sections (AGT-08.7) ------------------------------------ */
 
-const TONES = ['Warm', 'Professional', 'Friendly', 'Calm', 'Energetic', 'Empathetic', 'Formal'];
 const PROFILE_SECTIONS = [
   { key: 'about', label: 'About the company' },
   { key: 'offerings', label: 'Products, services & prices' },
@@ -119,68 +114,6 @@ const PROFILE_SECTIONS = [
   { key: 'contact', label: 'Contact details' },
   { key: 'policies', label: 'Policies' },
   { key: 'faqs', label: 'Common questions' },
-];
-
-/** The agent's voice on the Identity tab: which one, and a popup to change it. */
-function VoiceField({ agent }) {
-  const toast = useToast();
-  const speech = useAgentSection(agent.id, 'speech');
-  const voices = useListVoicesQuery(agent.language);
-  const [putSection, { isLoading: saving }] = usePutAgentSectionMutation();
-  const [open, setOpen] = useState(false);
-  const saved = speech.data?.voice_id;
-  const voice = findVoice(voices.data ?? [], saved);
-  const save = async (voiceId) => {
-    try {
-      await putSection({ id: agent.id, section: 'speech', body: { ...(speech.data ?? {}), voice_id: voiceId } }).unwrap();
-      toast('Voice saved. Publish to use it on calls.');
-      setOpen(false);
-    } catch (e) {
-      toast(errMsg(e), 'error');
-    }
-  };
-  return (
-    <div className="field">
-      <span className="field-label">Voice</span>
-      <div className="voice-row">
-        <span>
-          {voice ? (
-            <>
-              <b>{voice.name}</b> <span className="muted">({voice.gender})</span>
-            </>
-          ) : saved ? (
-            <span style={{ color: 'var(--red)' }}>The saved voice isn't available any more: calls use {DEFAULT_VOICE}.</span>
-          ) : (
-            <>
-              <b>{DEFAULT_VOICE}</b> <span className="muted">(default; none picked)</span>
-            </>
-          )}
-        </span>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          Change voice
-        </Button>
-      </div>
-      <LiveVoiceNote agent={agent} saved={saved} />
-      <VoiceDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        language={agent.language}
-        value={voice?.id ?? saved}
-        speed={speech.data?.speed}
-        saving={saving}
-        onSave={save}
-      />
-    </div>
-  );
-}
-
-// The Identity tab's sliders: they shape how the agent words its replies
-// (the middle means no preference). Speaking speed is on the Voice tab.
-const MANNER = [
-  ['warmth', 'Reserved', 'Warm'],
-  ['formality', 'Casual', 'Formal'],
-  ['humour', 'Serious', 'Playful'],
-  ['persuasiveness', 'Gentle', 'Persuasive'],
 ];
 
 /** A titled, numbered block inside a section card: groups related fields with a plain-language hint. */
@@ -199,102 +132,39 @@ export function FormGroup({ step, title, help, children }) {
   );
 }
 
-export function IdentityTab({ agent }) {
-  const persona = useAgentSection(agent.id, 'persona');
-  const overrides = useAgentSection(agent.id, 'profileOverrides');
-  const preview = useGreetingPreview(agent.id);
-
+/** Which parts of the company profile the campaign's calls may talk about. */
+export function CompanyFactsCard({ campaign }) {
+  const overrides = useAgentSection(campaign.id, 'profileOverrides');
   return (
-    <div className="stack">
-      <SectionCard
-        title="Identity"
-        description="Who the agent is. This opens the prompt at call time, before company facts and rules."
-        section={persona}
-        actions={
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<Volume2 />}
-            loading={preview.state === 'loading'}
-            onClick={() => preview.play()}
-            title="Plays the saved greeting in the agent's voice, at its speaking speed"
-          >
-            {preview.state === 'playing' ? 'Stop' : 'Hear the greeting'}
-          </Button>
-        }
-      >
-        {(p, patch) => (
-          <>
-            <FormGroup step="1" title="Basics" help="The name, voice and job the caller hears first.">
-              <div className="form-grid">
-                <Field label="Agent's name" hint="The name it uses on calls, e.g. Riya.">
-                  <Input placeholder="e.g. Riya" value={p.name ?? ''} onChange={(e) => patch({ name: e.target.value })} />
-                </Field>
-                <VoiceField agent={agent} />
-                <Field label="Job title" className="full" hint="What the agent says it does, e.g. “front-desk assistant at CareFirst Clinics”.">
-                  <Input placeholder="e.g. front-desk assistant at CareFirst Clinics" value={p.role ?? ''} onChange={(e) => patch({ role: e.target.value })} />
-                </Field>
-              </div>
-            </FormGroup>
-
-            <FormGroup step="2" title="Personality" help="Pick a tone, then fine-tune. The middle of a slider means no preference.">
-              <div className="field">
-                <span className="field-label">Tone</span>
-                <div className="row wrap" style={{ gap: 6 }}>
-                  {TONES.map((t) => (
-                    <button key={t} type="button" className={`chip ${p.tone === t ? 'active' : ''}`} style={{ height: 34 }} onClick={() => patch({ tone: t })}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid-2">
-                {MANNER.map(([k, l, r]) => (
-                  <Field key={k} label={titleCase(k)}>
-                    <Slider value={p.personality?.[k] ?? 50} left={l} right={r} onChange={(v) => patch({ personality: { ...p.personality, [k]: v } })} />
-                  </Field>
-                ))}
-              </div>
-            </FormGroup>
-
-            <FormGroup step="3" title="Speaking style" help="Optional. Speaking speed is on the Voice tab.">
-              <Field label="How it should talk" hint="Sentence length, words to use or avoid, e.g. “Short sentences. Never say ‘unfortunately’.”">
-                <Textarea rows={3} value={p.style ?? ''} onChange={(e) => patch({ style: e.target.value })} />
-              </Field>
-            </FormGroup>
-          </>
-        )}
-      </SectionCard>
-      <SectionCard
-        title="Company profile sections"
-        description="Which parts of the company profile this agent may talk about."
-        section={overrides}
-        actions={
-          <Link to="/company" className="btn sm ghost">
-            Edit profile
-          </Link>
-        }
-      >
-        {(o, patch) => (
-          <div className="perm-grid">
-            {PROFILE_SECTIONS.map((s) => (
-              <label key={s.key} className="check">
-                <input
-                  type="checkbox"
-                  checked={o.sections.includes(s.key)}
-                  onChange={(e) =>
-                    patch({
-                      sections: e.target.checked ? [...o.sections, s.key] : o.sections.filter((x) => x !== s.key),
-                    })
-                  }
-                />
-                {s.label}
-              </label>
-            ))}
-          </div>
-        )}
-      </SectionCard>
-    </div>
+    <SectionCard
+      title="Company profile sections"
+      description="Which parts of the company profile this campaign's calls may talk about."
+      section={overrides}
+      actions={
+        <Link to="/company" className="btn sm ghost">
+          Edit profile
+        </Link>
+      }
+    >
+      {(o, patch) => (
+        <div className="perm-grid">
+          {PROFILE_SECTIONS.map((s) => (
+            <label key={s.key} className="check">
+              <input
+                type="checkbox"
+                checked={o.sections.includes(s.key)}
+                onChange={(e) =>
+                  patch({
+                    sections: e.target.checked ? [...o.sections, s.key] : o.sections.filter((x) => x !== s.key),
+                  })
+                }
+              />
+              {s.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -309,10 +179,10 @@ const STEP_TYPES = [
   { value: 'end', label: 'End the call' },
 ];
 
-export function ConversationTab({ agent }) {
-  const vars = useVariableNames(agent.id);
+export function ConversationTab({ campaign }) {
+  const vars = useVariableNames(campaign.id);
   const [validateFlow] = useValidateFlowMutation();
-  const flow = useAgentSection(agent.id, 'flow');
+  const flow = useAgentSection(campaign.id, 'flow');
   const [validation, setValidation] = useState(null);
   const [validating, setValidating] = useState(false);
   const toast = useToast();
@@ -329,7 +199,7 @@ export function ConversationTab({ agent }) {
     setValidating(true);
     try {
       if (flow.dirty) await flow.save();
-      setValidation(await validateFlow(agent.id).unwrap());
+      setValidation(await validateFlow(campaign.id).unwrap());
     } catch (e) {
       toast(errMsg(e), 'error');
     } finally {
@@ -591,8 +461,8 @@ const nextVariableName = (vars) => {
   return `var_${n}`;
 };
 
-export function VariablesTab({ agent }) {
-  const s = useAgentSection(agent.id, 'variables');
+export function VariablesTab({ campaign }) {
+  const s = useAgentSection(campaign.id, 'variables');
   return (
     <SectionCard
       title="Call variables"
@@ -696,8 +566,8 @@ export function VariablesTab({ agent }) {
 
 /* Rules (AGT-09) ------------------------------------------------------ */
 
-export function RulesTab({ agent }) {
-  const s = useAgentSection(agent.id, 'guidelines');
+export function RulesTab({ campaign }) {
+  const s = useAgentSection(campaign.id, 'guidelines');
   const presets = useListGuidelinePresetsQuery();
 
   return (
@@ -768,9 +638,10 @@ export function RulesTab({ agent }) {
 
 /* Behaviour (AGT-12, CALL-06.4) --------------------------------------- */
 
-export function BehaviourTab({ agent }) {
-  const s = useAgentSection(agent.id, 'behaviour');
+export function BehaviourTab({ campaign }) {
+  const s = useAgentSection(campaign.id, 'behaviour');
   return (
+    <div className="stack">
     <SectionCard title="Conversation behaviour" description="Who speaks first, silence, call length, voicemail and transfers." section={s}>
       {(b, patch) => (
         <>
@@ -834,224 +705,41 @@ export function BehaviourTab({ agent }) {
         </>
       )}
     </SectionCard>
-  );
-}
-
-/* Voice (AGT-02, AGT-13) ---------------------------------------------- */
-
-/** Which voice calls use now, when the live version's differs from the one saved here. */
-function LiveVoiceNote({ agent, saved }) {
-  const versions = useListVersionsQuery(agent.id);
-  const cur = (versions.data ?? []).find((v) => v.is_current);
-  const live = useGetVersionQuery({ id: agent.id, version: cur?.version }, { skip: !cur });
-  const voices = useListVoicesQuery(agent.language);
-  if (!cur || !live.data || !voices.data) return null;
-  const liveId = live.data.config?.speech?.voice_id || '';
-  if (liveId === (saved || '')) return null;
-  const hears = findVoice(voices.data, liveId)?.name ?? DEFAULT_VOICE;
-  return (
-    <div className="banner info" style={{ margin: 0 }}>
-      <span className="grow">
-        Calls use <b>{hears}</b> now (live version {cur.version}). Publish to switch them to the voice saved here.
-      </span>
+    <KeywordsCard campaign={campaign} />
     </div>
   );
 }
 
-export function VoiceTab({ agent }) {
-  const speech = useAgentSection(agent.id, 'speech');
-  const keywords = useAgentSection(agent.id, 'keywords');
-  const voices = useListVoicesQuery(agent.language);
-  const preview = useGreetingPreview(agent.id);
-  const voice = findVoice(voices.data ?? [], speech.data?.voice_id)?.name ?? DEFAULT_VOICE;
-  return (
-    <div className="stack">
-      <SectionCard title="Voice" description="How fast the agent speaks and how easily callers can interrupt it." section={speech}>
-        {(s, patch) => (
-          <>
-            <div className="row small" style={{ gap: 6 }}>
-              <span>
-                Voice: <b>{voice}</b>
-              </span>
-              <Link to={`/agents/${agent.id}/identity`} className="btn sm ghost">
-                Change on the Identity tab
-              </Link>
-            </div>
-            <div className="grid-2">
-              <Field
-                label={
-                  <span className="row" style={{ gap: 6 }}>
-                    Speaking speed
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={<Volume2 />}
-                      loading={preview.state === 'loading'}
-                      onClick={() => preview.play({ speed: s.speed })}
-                      title="Plays the greeting at this speed"
-                    >
-                      {preview.state === 'playing' ? 'Stop' : 'Hear it'}
-                    </Button>
-                  </span>
-                }
-              >
-                <Slider
-                  value={s.speed}
-                  min={0.7}
-                  max={1.3}
-                  step={0.05}
-                  left="Slower"
-                  right="Faster"
-                  format={(v) => `${v.toFixed(2)}×`}
-                  onChange={(v) => patch({ speed: v })}
-                />
-              </Field>
-              <Field label="Interruption sensitivity">
-                <Slider
-                  value={s.interruption_sensitivity}
-                  left="Hard to interrupt"
-                  right="Stops instantly"
-                  onChange={(v) => patch({ interruption_sensitivity: v })}
-                />
-              </Field>
-            </div>
-            <div className="form-grid">
-              <Field label="Background ambience">
-                <Select
-                  value={s.ambience}
-                  options={[
-                    { value: 'none', label: 'None' },
-                    { value: 'office', label: 'Office' },
-                    { value: 'cafe', label: 'Café' },
-                    { value: 'call_center', label: 'Call centre' },
-                  ]}
-                  onChange={(e) => patch({ ambience: e.target.value })}
-                />
-              </Field>
-              <div style={{ alignSelf: 'end', paddingBottom: 10 }}>
-                <Toggle
-                  checked={s.backchannel}
-                  onChange={(v) => patch({ backchannel: v })}
-                  label="Short acknowledgements"
-                  description="“mm-hm”, “okay” while the caller talks."
-                />
-              </div>
-            </div>
-          </>
-        )}
-      </SectionCard>
-      <SectionCard
-        title="Recognition keywords"
-        description="Names and products the speech recogniser should expect."
-        section={keywords}
-        actions={
-          <Link to="/settings/pronunciations" className="btn sm ghost">
-            Pronunciations
-          </Link>
-        }
-      >
-        {(k, _patch, set) => <ListEditor value={k} onChange={set} placeholder="e.g. CareFirst, Dr. Iyer" />}
-      </SectionCard>
-    </div>
-  );
-}
+/* Recognition keywords (AGT-13.4) ------------------------------------ */
 
-/* Languages (AGT-14) -------------------------------------------------- */
-
-export function LanguagesTab({ agent }) {
-  const s = useAgentSection(agent.id, 'languages');
-  const speech = useAgentSection(agent.id, 'speech');
-  const voices = useListVoicesQuery(agent.language);
-  const voice = findVoice(voices.data ?? [], speech.data?.voice_id)?.name ?? DEFAULT_VOICE;
+/** Names and products the speech recogniser should expect on this campaign's calls. */
+export function KeywordsCard({ campaign }) {
+  const keywords = useAgentSection(campaign.id, 'keywords');
   return (
-    <SectionCard title="Languages" description="Primary language plus extras, each with its own greeting." section={s}>
-      {(l, patch) => (
-        <>
-          <div className="row small" style={{ gap: 6 }}>
-            <span>
-              Voice: <b>{voice}</b>, which speaks all of these languages.
-            </span>
-            <Link to={`/agents/${agent.id}/identity`} className="btn sm ghost">
-              Change on the Identity tab
-            </Link>
-          </div>
-          <div className="form-grid">
-            <Field label="Language switching" hint="The first language below is the primary one.">
-              <Select
-                value={l.detection}
-                options={[
-                  {
-                    value: 'auto',
-                    label: 'Detect the caller’s language and switch',
-                  },
-                  { value: 'ask', label: 'Ask the caller which language' },
-                  { value: 'off', label: 'Stay in the primary language' },
-                ]}
-                onChange={(e) => patch({ detection: e.target.value })}
-              />
-            </Field>
-          </div>
-          {l.languages.map((lang, i) => {
-            const upd = (p) =>
-              patch({
-                languages: l.languages.map((x, j) => (j === i ? { ...x, ...p } : x)),
-              });
-            return (
-              <div key={i} className="card" style={{ padding: 16 }}>
-                <div className="row between" style={{ marginBottom: 12 }}>
-                  <div className="row" style={{ flex: '0 1 340px', minWidth: 0 }}>
-                    <LanguageSelect value={lang.language} onChange={(v) => upd({ language: v })} />
-                    {i === 0 && <Badge plain>Primary</Badge>}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Trash2 />}
-                    disabled={l.languages.length === 1 && i === 0}
-                    onClick={() =>
-                      patch({
-                        languages: l.languages.filter((_, j) => j !== i),
-                      })
-                    }
-                  >
-                    Remove
-                  </Button>
-                </div>
-                <Field label="Greeting in this language">
-                  <Input value={lang.greeting} onChange={(e) => upd({ greeting: e.target.value })} />
-                </Field>
-              </div>
-            );
-          })}
-          <div>
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Plus />}
-              onClick={() =>
-                patch({
-                  languages: [...l.languages, { language: '', voice_id: '', greeting: '' }],
-                })
-              }
-            >
-              Add language
-            </Button>
-          </div>
-        </>
-      )}
+    <SectionCard
+      title="Recognition keywords"
+      description="Names and products the speech recogniser should expect on this campaign's calls."
+      section={keywords}
+      actions={
+        <Link to="/settings/pronunciations" className="btn sm ghost">
+          Pronunciations
+        </Link>
+      }
+    >
+      {(k, _patch, set) => <ListEditor value={k} onChange={set} placeholder="e.g. CareFirst, Dr. Iyer" />}
     </SectionCard>
   );
 }
 
 /* Knowledge (KNW-01.7, AGT-05) --------------------------------------- */
 
-export function KnowledgeTab({ agent }) {
+export function KnowledgeTab({ campaign }) {
   const toast = useToast();
   const kbs = useListKnowledgeBasesQuery();
-  const [addDocument] = useAddAgentDocumentMutation();
-  const [removeDocument] = useRemoveAgentDocumentMutation();
-  const attached = useAgentSection(agent.id, 'knowledgeBases');
-  const docs = useListAgentDocumentsQuery(agent.id);
+  const [addDocument] = useAddCampaignDocumentMutation();
+  const [removeDocument] = useRemoveCampaignDocumentMutation();
+  const attached = useAgentSection(campaign.id, 'knowledgeBases');
+  const docs = useListCampaignDocumentsQuery(campaign.id);
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
@@ -1061,7 +749,7 @@ export function KnowledgeTab({ agent }) {
     setUploading(true);
     try {
       // Creates the document and uploads the file to its signed URL.
-      await addDocument({ id: agent.id, file }).unwrap();
+      await addDocument({ id: campaign.id, file }).unwrap();
       toast(`${file.name} uploaded — processing`);
     } catch (e) {
       toast(errMsg(e), 'error');
@@ -1074,7 +762,7 @@ export function KnowledgeTab({ agent }) {
     <div className="stack">
       <SectionCard
         title="Knowledge bases"
-        description="Shared knowledge this agent answers from."
+        description="Shared knowledge this campaign's calls answer from."
         section={attached}
         actions={
           <Link to="/knowledge" className="btn sm ghost">
@@ -1122,7 +810,7 @@ export function KnowledgeTab({ agent }) {
         <div className="card-head">
           <div>
             <h2>Agent documents</h2>
-            <div className="card-sub">Files only this agent uses.</div>
+            <div className="card-sub">Files only this campaign uses.</div>
           </div>
           <input ref={fileRef} type="file" hidden accept={KNOWLEDGE_ACCEPT} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           <Button size="sm" icon={<FileUp />} loading={uploading} onClick={() => fileRef.current?.click()}>
@@ -1153,7 +841,7 @@ export function KnowledgeTab({ agent }) {
                             variant="ghost"
                             icon={<Trash2 />}
                             onClick={() =>
-                              removeDocument({ id: agent.id, docId: d.id })
+                              removeDocument({ id: campaign.id, docId: d.id })
                                 .unwrap()
                                 .catch((e) => toast(errMsg(e), 'error'))
                             }
@@ -1176,13 +864,13 @@ export function KnowledgeTab({ agent }) {
 
 /* Tools (ACT-01.6) ---------------------------------------------------- */
 
-export function ToolsTab({ agent }) {
+export function ToolsTab({ campaign }) {
   const all = useListToolsQuery();
-  const s = useAgentSection(agent.id, 'tools');
+  const s = useAgentSection(campaign.id, 'tools');
   return (
     <SectionCard
       title="Tools"
-      description="APIs this agent may call during a conversation."
+      description="APIs the agent may call during this campaign's conversations."
       section={s}
       actions={
         <Link to="/tools" className="btn sm ghost">
@@ -1228,16 +916,23 @@ export function ToolsTab({ agent }) {
   );
 }
 
-/* Follow-ups (ACT-03) ------------------------------------------------- */
+/* Follow-ups by disposition (ACT-03) ----------------------------------- */
 
-export function FollowUpsTab({ agent }) {
-  const s = useAgentSection(agent.id, 'followUps');
-  const templates = useListMessageTemplatesQuery();
-  const outcomes = useGetAgentSectionQuery({ id: agent.id, section: 'outcomes' });
+const FOLLOW_UP_ACTIONS = [
+  { value: 'message', label: 'Send a message' },
+  { value: 'callback', label: 'Call back' },
+  { value: 'do_not_call', label: 'Add the number to do-not-call' },
+  { value: 'notify', label: 'Notify the team' },
+];
+
+export function FollowUpsTab({ campaign }) {
+  const s = useAgentSection(campaign.id, 'followUps');
+  const dispositions = useGetAgentSectionQuery({ id: campaign.id, section: 'outcomes' });
+  const options = (dispositions.data?.outcomes ?? []).map((o) => ({ value: o.key, label: o.label }));
   return (
     <SectionCard
-      title="Follow-up messages"
-      description="When something happens on a call, send a WhatsApp, SMS or email with call variables filled in."
+      title="Follow-up actions"
+      description="What happens after a call, by how it ended (its disposition): send a WhatsApp, SMS or email, call back later, stop calling the number, or tell your team."
       section={s}
       actions={
         <Link to="/workflows?tab=messages" className="btn sm ghost">
@@ -1250,11 +945,10 @@ export function FollowUpsTab({ agent }) {
           {!rules.length && <p className="muted small">No follow-ups yet.</p>}
           {rules.map((r, i) => {
             const upd = (p) => set(rules.map((x, j) => (j === i ? { ...x, ...p } : x)));
-            const tpl = (templates.data ?? []).filter((t) => t.channel === r.channel);
             return (
-              <div key={r.id} className="card" style={{ padding: 16 }}>
+              <div key={r.id ?? i} className="card" style={{ padding: 16 }}>
                 <div className="row between" style={{ marginBottom: 12 }}>
-                  <Toggle checked={r.enabled} onChange={(v) => upd({ enabled: v })} label={r.enabled ? 'On' : 'Off'} />
+                  <Toggle checked={r.enabled !== false} onChange={(v) => upd({ enabled: v })} label={r.enabled !== false ? 'On' : 'Off'} />
                   <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => set(rules.filter((_, j) => j !== i))} />
                 </div>
                 <div className="form-grid">
@@ -1262,61 +956,67 @@ export function FollowUpsTab({ agent }) {
                     <Select
                       value={r.trigger}
                       options={[
-                        { value: 'call_completed', label: 'A call completes' },
-                        {
-                          value: 'appointment_booked',
-                          label: 'An appointment is booked',
-                        },
-                        {
-                          value: 'outcome',
-                          label: 'A call ends with an outcome',
-                        },
-                        {
-                          value: 'no_answer',
-                          label: 'The call isn’t answered',
-                        },
+                        { value: 'disposition', label: 'A call ends with a disposition' },
+                        { value: 'call_completed', label: 'Any call ends' },
                       ]}
-                      onChange={(e) => upd({ trigger: e.target.value })}
+                      onChange={(e) => upd({ trigger: e.target.value, ...(e.target.value === 'disposition' ? {} : { disposition: undefined }) })}
                     />
                   </Field>
-                  {r.trigger === 'outcome' && (
-                    <Field label="Outcome">
-                      <Select
-                        value={r.outcome ?? ''}
-                        options={(outcomes.data?.outcomes ?? []).map((o) => ({
-                          value: o.key,
-                          label: o.label,
-                        }))}
-                        placeholder="Choose"
-                        onChange={(e) => upd({ outcome: e.target.value })}
-                      />
+                  {r.trigger === 'disposition' && (
+                    <Field label="Disposition">
+                      <Select value={r.disposition ?? ''} options={options} placeholder="Choose" onChange={(e) => upd({ disposition: e.target.value })} />
                     </Field>
                   )}
-                  <Field label="Channel">
+                  <Field label="Then">
                     <Select
-                      value={r.channel}
-                      options={[
-                        { value: 'whatsapp', label: 'WhatsApp' },
-                        { value: 'sms', label: 'SMS' },
-                        { value: 'email', label: 'Email' },
-                      ]}
-                      onChange={(e) => upd({ channel: e.target.value, template_id: '' })}
+                      value={r.action ?? 'message'}
+                      options={FOLLOW_UP_ACTIONS}
+                      onChange={(e) => {
+                        const action = e.target.value;
+                        upd({
+                          action,
+                          ...(action === 'message' ? { channel: r.channel ?? 'whatsapp', delay_minutes: 0 } : {}),
+                          ...(action === 'callback' ? { delay_minutes: Math.max(60, r.delay_minutes ?? 0) } : {}),
+                        });
+                      }}
                     />
                   </Field>
-                  <Field label="Template" hint={r.channel === 'whatsapp' ? 'Only approved templates can be sent.' : undefined}>
-                    <Select
-                      value={r.template_id}
-                      options={tpl.map((t) => ({
-                        value: t.id,
-                        label: `${t.name}${t.status !== 'approved' ? ` (${t.status})` : ''}`,
-                      }))}
-                      placeholder="Choose a template"
-                      onChange={(e) => upd({ template_id: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Delay (minutes)">
-                    <Input type="number" min={0} value={r.delay_minutes} onChange={(e) => upd({ delay_minutes: Number(e.target.value) })} />
-                  </Field>
+                  {(r.action ?? 'message') === 'message' && (
+                    <>
+                      <Field label="Channel">
+                        <Select
+                          value={r.channel ?? 'whatsapp'}
+                          options={[
+                            { value: 'whatsapp', label: 'WhatsApp' },
+                            { value: 'sms', label: 'SMS' },
+                            { value: 'email', label: 'Email' },
+                          ]}
+                          onChange={(e) => upd({ channel: e.target.value })}
+                        />
+                      </Field>
+                      <Field label="Message" className="full" hint="Use call variables as {{name}}. WhatsApp needs an approved template with the same text.">
+                        <Textarea rows={3} value={r.template ?? ''} onChange={(e) => upd({ template: e.target.value })} />
+                      </Field>
+                      <Field label="Send after (minutes)" hint="0 to 1440">
+                        <Input type="number" min={0} max={1440} value={r.delay_minutes ?? 0} onChange={(e) => upd({ delay_minutes: Number(e.target.value) })} />
+                      </Field>
+                    </>
+                  )}
+                  {r.action === 'callback' && (
+                    <Field label="Call back after (minutes)" hint="5 minutes to 7 days (10080)">
+                      <Input type="number" min={5} max={10080} value={r.delay_minutes ?? 60} onChange={(e) => upd({ delay_minutes: Number(e.target.value) })} />
+                    </Field>
+                  )}
+                  {r.action === 'notify' && (
+                    <Field label="Note for the team" className="full" hint="Optional. Shown in the dashboard's notifications.">
+                      <Input value={r.message ?? ''} onChange={(e) => upd({ message: e.target.value })} />
+                    </Field>
+                  )}
+                  {r.action === 'do_not_call' && (
+                    <p className="muted small full" style={{ margin: 0 }}>
+                      The caller's number goes on your do-not-call list: no campaign calls it again.
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -1331,10 +1031,10 @@ export function FollowUpsTab({ agent }) {
                   ...rules,
                   {
                     id: `fu_${Date.now().toString(36)}`,
-                    trigger: 'call_completed',
-                    channel: 'whatsapp',
-                    template_id: '',
-                    delay_minutes: 0,
+                    trigger: 'disposition',
+                    disposition: 'call_back_later',
+                    action: 'callback',
+                    delay_minutes: 60,
                     enabled: true,
                   },
                 ])
@@ -1349,11 +1049,11 @@ export function FollowUpsTab({ agent }) {
   );
 }
 
-/* Analysis & outcomes (PCA-01, PCA-02) -------------------------------- */
+/* Analysis & dispositions (PCA-01, PCA-02) -------------------------------- */
 
-export function AnalysisTab({ agent }) {
-  const cfg = useAgentSection(agent.id, 'analysis');
-  const out = useAgentSection(agent.id, 'outcomes');
+export function AnalysisTab({ campaign }) {
+  const cfg = useAgentSection(campaign.id, 'analysis');
+  const out = useAgentSection(campaign.id, 'outcomes');
   return (
     <div className="stack">
       <SectionCard
@@ -1418,62 +1118,62 @@ export function AnalysisTab({ agent }) {
           </>
         )}
       </SectionCard>
-      <SectionCard title="Outcomes" description="Every call ends with one outcome. Mark which ones count as success." section={out}>
-        {(o, patch) => (
-          <>
-            {o.outcomes.map((x, i) => {
-              const upd = (p) =>
-                patch({
-                  outcomes: o.outcomes.map((y, j) => (j === i ? { ...y, ...p } : y)),
-                });
-              return (
-                <div key={i} className="row wrap" style={{ gap: 10 }}>
-                  <input
-                    className="input"
-                    style={{ flex: 2, minWidth: 160 }}
-                    placeholder="Label"
-                    value={x.label}
-                    onChange={(e) =>
-                      upd({
-                        label: e.target.value,
-                        key: x.key || e.target.value.toLowerCase().replace(/\W+/g, '_'),
-                      })
-                    }
-                  />
-                  <input
-                    className="input mono"
-                    style={{ flex: 1, minWidth: 120 }}
-                    placeholder="key"
-                    value={x.key}
-                    onChange={(e) => upd({ key: e.target.value })}
-                  />
-                  <label className="check" style={{ whiteSpace: 'nowrap' }}>
-                    <input type="checkbox" checked={x.is_success} onChange={(e) => upd({ is_success: e.target.checked })} />
-                    Success
-                  </label>
-                  <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => patch({ outcomes: o.outcomes.filter((_, j) => j !== i) })} />
-                </div>
-              );
-            })}
-            <div>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Plus />}
-                onClick={() =>
-                  patch({
-                    outcomes: [...o.outcomes, { key: '', label: '', is_success: false }],
-                  })
-                }
-              >
-                Add outcome
-              </Button>
-            </div>
-            <Field label="Success means" hint="Plain-language rule shown in reports.">
-              <Input value={o.success_rule} onChange={(e) => patch({ success_rule: e.target.value })} />
-            </Field>
-          </>
-        )}
+      <SectionCard
+        title="Dispositions"
+        description="How a call ended. After each call the agent's analysis picks one; your team can change it on the call. Follow-up actions run by disposition."
+        section={out}
+      >
+        {(o, patch) => {
+          const builtin = o.outcomes.filter((x) => x.builtin);
+          const own = o.outcomes.filter((x) => !x.builtin);
+          const setOwn = (list) => patch({ outcomes: [...builtin, ...list] });
+          return (
+            <>
+              <div className="tag-list">
+                {builtin.map((x) => (
+                  <span key={x.key} className="tag" title={x.description}>
+                    {x.label}
+                    {x.is_success ? ' ✓' : ''}
+                  </span>
+                ))}
+              </div>
+              <p className="muted small" style={{ margin: 0 }}>
+                Built in on every campaign (✓ counts as a successful call). Add your own below, with a line on when it applies.
+              </p>
+              {own.map((x, i) => {
+                const upd = (p) => setOwn(own.map((y, j) => (j === i ? { ...y, ...p } : y)));
+                return (
+                  <div key={i} className="card" style={{ padding: 14 }}>
+                    <div className="form-grid">
+                      <Field label="Label">
+                        <Input placeholder="e.g. Site visit booked" value={x.label} onChange={(e) => upd({ label: e.target.value })} />
+                      </Field>
+                      <div style={{ alignSelf: 'end', paddingBottom: 10 }}>
+                        <label className="check">
+                          <input type="checkbox" checked={!!x.is_success} onChange={(e) => upd({ is_success: e.target.checked })} />
+                          Counts as success
+                        </label>
+                      </div>
+                      <Field label="When it applies" className="full" hint="Helps the analysis pick it, e.g. “The caller agreed to visit the site”.">
+                        <Input value={x.description ?? ''} onChange={(e) => upd({ description: e.target.value })} />
+                      </Field>
+                    </div>
+                    <div style={{ textAlign: 'right', marginTop: 8 }}>
+                      <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setOwn(own.filter((_, j) => j !== i))}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+              <div>
+                <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => setOwn([...own, { label: '', description: '', is_success: false }])}>
+                  Add a disposition
+                </Button>
+              </div>
+            </>
+          );
+        }}
       </SectionCard>
     </div>
   );
@@ -1481,8 +1181,8 @@ export function AnalysisTab({ agent }) {
 
 /* Compliance (CMP-01) ------------------------------------------------- */
 
-export function ComplianceTab({ agent }) {
-  const s = useAgentSection(agent.id, 'compliance');
+export function ComplianceTab({ campaign }) {
+  const s = useAgentSection(campaign.id, 'compliance');
   return (
     <SectionCard title="Compliance" description="Recording consent and AI disclosure, spoken at the start of every call." section={s}>
       {(c, patch) => (
@@ -1516,11 +1216,11 @@ export function ComplianceTab({ agent }) {
 
 /* Tests (QTY-01) ------------------------------------------------------ */
 
-export function TestsTab({ agent }) {
+export function TestsTab({ campaign }) {
   const toast = useToast();
-  const scenarios = useListScenariosQuery(agent.id);
+  const scenarios = useListScenariosQuery(campaign.id);
   const [poll, setPoll] = useState(0);
-  const runs = useListTestRunsQuery(agent.id, { pollingInterval: poll });
+  const runs = useListTestRunsQuery(campaign.id, { pollingInterval: poll });
   const [startTestRun, { isLoading: running }] = useStartTestRunMutation();
   const [createScenario] = useCreateScenarioMutation();
   const [adding, setAdding] = useState(false);
@@ -1550,7 +1250,7 @@ export function TestsTab({ agent }) {
               disabled={!scenarios.data?.length}
               onClick={async () => {
                 try {
-                  await startTestRun(agent.id).unwrap();
+                  await startTestRun(campaign.id).unwrap();
                 } catch (e) {
                   toast(errMsg(e), 'error');
                 }
@@ -1640,7 +1340,7 @@ export function TestsTab({ agent }) {
         open={adding}
         onClose={() => setAdding(false)}
         onSave={async (b) => {
-          await createScenario({ id: agent.id, ...b }).unwrap();
+          await createScenario({ id: campaign.id, ...b }).unwrap();
           toast('Scenario added');
         }}
       />
@@ -1735,16 +1435,20 @@ function ScenarioModal({ open, onClose, onSave }) {
 
 /* Insights (ANA-F2) --------------------------------------------------- */
 
-export function InsightsTab({ agent }) {
-  const drop = useGetAgentDropoffQuery(agent.id);
-  const lat = useGetAgentLatencyQuery(agent.id);
+export function InsightsTab({ campaign }) {
+  // Analytics keeps these per agent: they cover all of this agent's campaigns.
+  const drop = useGetAgentDropoffQuery(campaign.agent_id);
+  const lat = useGetAgentLatencyQuery(campaign.agent_id);
   return (
     <div className="stack">
       <div className="card">
         <div className="card-head">
           <div>
             <h2>Where callers drop off</h2>
-            <div className="card-sub">Answered calls in the last 30 days, by how far the conversation got. Dropped: the caller left there without a good outcome.</div>
+            <div className="card-sub">
+              Answered calls of this campaign's agent (all its campaigns) in the last 30 days, by how far the conversation got. Dropped: the caller left
+              there without a good outcome.
+            </div>
           </div>
         </div>
         <div className="card-pad">
@@ -1799,9 +1503,9 @@ export function InsightsTab({ agent }) {
 
 /* Versions (AGT-04) --------------------------------------------------- */
 
-export function VersionsTab({ agent }) {
+export function VersionsTab({ campaign }) {
   const toast = useToast();
-  const versions = useListVersionsQuery(agent.id);
+  const versions = useListVersionsQuery(campaign.id);
   const [loadVersion] = useLazyGetVersionQuery();
   const [rollback] = useRollbackVersionMutation();
   const [view, setView] = useState(null);
@@ -1847,7 +1551,7 @@ export function VersionsTab({ agent }) {
                           variant="ghost"
                           icon={<Eye />}
                           onClick={() =>
-                            loadVersion({ id: agent.id, version: v.version })
+                            loadVersion({ id: campaign.id, version: v.version })
                               .unwrap()
                               .then(setView)
                               .catch((e) => toast(errMsg(e), 'error'))
@@ -1889,7 +1593,7 @@ export function VersionsTab({ agent }) {
         description="New calls use it immediately. Your current draft is kept."
         confirmLabel="Roll back"
         onConfirm={async () => {
-          await rollback({ id: agent.id, version: rolling.version }).unwrap();
+          await rollback({ id: campaign.id, version: rolling.version }).unwrap();
           toast(`Version ${rolling.version} is live`);
         }}
       />
@@ -1899,8 +1603,8 @@ export function VersionsTab({ agent }) {
 
 /* Web & chat (WID-01, WA-06.2, WA-03.2) -------------------------------- */
 
-export function ChannelsTab({ agent }) {
-  const chat = useAgentSection(agent.id, 'chatSettings');
+export function ChannelsTab({ campaign }) {
+  const chat = useAgentSection(campaign.id, 'chatSettings');
   return (
     <div className="stack">
       <div className="card card-pad">
@@ -1909,13 +1613,13 @@ export function ChannelsTab({ agent }) {
           <Badge>Coming soon</Badge>
         </div>
         <p className="muted" style={{ marginTop: 6 }}>
-          Put this agent on your website as a click-to-talk button or a chat bubble. Until then, talk to it with the Test button above.
+          Put this campaign on your website as a click-to-talk button or a chat bubble. Until then, talk to it with the Test button above.
         </p>
       </div>
 
       <SectionCard
         title="Chat settings"
-        description="How this agent replies on WhatsApp and web chat."
+        description="How this campaign replies on WhatsApp and web chat."
         section={chat}
         actions={
           <Link to="/channels/whatsapp" className="btn sm ghost">
@@ -1970,44 +1674,29 @@ export function ChannelsTab({ agent }) {
 
 const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'UTC'];
 
-export function SettingsTab({ agent }) {
+export function SettingsTab({ campaign }) {
   const toast = useToast();
   const navigate = useNavigate();
-  const settings = useAgentSection(agent.id, 'settings');
-  const model = useAgentSection(agent.id, 'model');
-  const memory = useAgentSection(agent.id, 'memory');
-  const models = useModels();
-  const [pauseAgent, { isLoading: pausingP }] = usePauseAgentMutation();
-  const [resumeAgent, { isLoading: resumingP }] = useResumeAgentMutation();
+  const settings = useAgentSection(campaign.id, 'settings');
+  const memory = useAgentSection(campaign.id, 'memory');
+  const [pauseCampaign, { isLoading: pausingP }] = usePauseCampaignMutation();
+  const [resumeCampaign, { isLoading: resumingP }] = useResumeCampaignMutation();
   const pausing = pausingP || resumingP;
-  const [exportAgent] = useLazyExportAgentQuery();
-  const [duplicateAgent] = useDuplicateAgentMutation();
-  const [deleteAgent] = useDeleteAgentMutation();
+  const [exportCampaign] = useLazyExportCampaignQuery();
+  const [duplicateCampaign] = useDuplicateCampaignMutation();
+  const [deleteCampaign] = useDeleteCampaignMutation();
   const [deleting, setDeleting] = useState(false);
-  const paused = agent.status === 'paused';
-
-  const estimate = useMemo(() => {
-    const m = model.draft;
-    const list = models.data ?? [];
-    if (!m || !list.length) return null;
-    const pick = (id) => list.find((x) => x.id === id);
-    const parts = [pick(m.llm), pick(m.asr_provider), pick(m.tts_provider)].filter(Boolean);
-    if (!parts.length) return null;
-    const latency = parts.reduce((s, p) => s + (p.latency_ms ?? 0), 0);
-    const cost = parts.reduce((s, p) => s + (p.cost_per_min ?? 0), 0);
-    if (!latency && !cost) return null;
-    return { latency, cost };
-  }, [model.draft, models.data]);
+  const paused = campaign.status === 'paused';
 
   return (
     <div className="stack">
       <div className="card card-pad row between wrap">
         <div>
-          <div className="card-title">{paused ? 'Agent is paused' : 'Agent is answering calls'}</div>
+          <div className="card-title">{paused ? 'Campaign is paused' : campaign.status === 'draft' ? 'Campaign is not published yet' : 'Campaign is taking calls'}</div>
           <div className="card-sub">
             {paused
-              ? 'Calls to its numbers are not answered and campaigns using it are on hold.'
-              : 'Pause to stop it answering without changing anything else.'}
+              ? 'Calls to its numbers are not answered and its calling is on hold.'
+              : 'Pause to stop its calls without changing anything else.'}
           </div>
         </div>
         <Button
@@ -2016,12 +1705,12 @@ export function SettingsTab({ agent }) {
           loading={pausing}
           onClick={async () => {
             try {
-              await (paused ? resumeAgent(agent.id) : pauseAgent(agent.id)).unwrap();
-              toast(paused ? 'Agent resumed' : 'Agent paused');
+              await (paused ? resumeCampaign(campaign.id) : pauseCampaign(campaign.id)).unwrap();
+              toast(paused ? 'Campaign resumed' : 'Campaign paused');
             } catch (e) {
               toast(errMsg(e), 'error');
             } finally {
-              /* the agent refetches via cache invalidation */
+              /* the campaign refetches via cache invalidation */
             }
           }}
         >
@@ -2059,55 +1748,8 @@ export function SettingsTab({ agent }) {
                 }
               />
             </Field>
-            <Field label="Send this agent's events to" hint="Optional webhook URL just for this agent.">
+            <Field label="Send this campaign's events to" hint="Optional webhook URL just for this campaign.">
               <Input className="mono" placeholder="https://" value={s.event_webhook_url} onChange={(e) => patch({ event_webhook_url: e.target.value })} />
-            </Field>
-          </div>
-        )}
-      </SectionCard>
-      <SectionCard
-        title="Model & speech providers"
-        description="Advanced. Only options your plan and company allow are listed."
-        section={model}
-        actions={
-          estimate && (
-            <Badge plain>
-              ≈ {[estimate.latency ? `${estimate.latency} ms` : null, estimate.cost ? `$${estimate.cost.toFixed(3)}/min` : null].filter(Boolean).join(' · ')}
-            </Badge>
-          )
-        }
-      >
-        {(m, patch) => (
-          <div className="form-grid">
-            <Field label="Language model">
-              <ModelSelect kind="llm" value={m.llm} onChange={(v) => patch({ llm: v })} />
-            </Field>
-            <Field label="Backup model" hint="Used if the first one fails.">
-              <ModelSelect kind="llm" value={m.fallback_llm ?? ''} placeholder="None" onChange={(v) => patch({ fallback_llm: v })} />
-            </Field>
-            <Field label="Creativity" hint="Lower is more predictable.">
-              <Slider
-                value={m.temperature}
-                min={0}
-                max={1}
-                step={0.05}
-                left="Precise"
-                right="Creative"
-                format={(v) => v.toFixed(2)}
-                onChange={(v) => patch({ temperature: v })}
-              />
-            </Field>
-            <Field label="Max reply length (tokens)">
-              <Input type="number" min={40} max={800} value={m.max_reply_tokens} onChange={(e) => patch({ max_reply_tokens: Number(e.target.value) })} />
-            </Field>
-            <Field label="Speech-to-text">
-              <ModelSelect kind="asr" value={m.asr_provider} onChange={(v) => patch({ asr_provider: v })} />
-            </Field>
-            <Field label="Text-to-speech">
-              <ModelSelect kind="tts" value={m.tts_provider} onChange={(v) => patch({ tts_provider: v })} />
-            </Field>
-            <Field label="Backup text-to-speech">
-              <ModelSelect kind="tts" value={m.fallback_tts ?? ''} placeholder="None" onChange={(v) => patch({ fallback_tts: v })} />
             </Field>
           </div>
         )}
@@ -2154,14 +1796,14 @@ export function SettingsTab({ agent }) {
       <div className="card card-pad row between wrap">
         <div>
           <div className="card-title">Copy & backup</div>
-          <div className="card-sub">Export the full configuration, or duplicate this agent.</div>
+          <div className="card-sub">Export the full configuration, or duplicate this campaign (same agent).</div>
         </div>
         <div className="row">
           <Button
             icon={<Download />}
             onClick={async () => {
               try {
-                downloadText(`${agent.name.replace(/\W+/g, '-')}.json`, JSON.stringify(await exportAgent(agent.id).unwrap(), null, 2), 'application/json');
+                downloadText(`${campaign.name.replace(/\W+/g, '-')}.json`, JSON.stringify(await exportCampaign(campaign.id).unwrap(), null, 2), 'application/json');
               } catch (e) {
                 toast(errMsg(e), 'error');
               }
@@ -2173,9 +1815,9 @@ export function SettingsTab({ agent }) {
             icon={<Copy />}
             onClick={async () => {
               try {
-                const d = await duplicateAgent({ id: agent.id }).unwrap();
+                const d = await duplicateCampaign({ id: campaign.id }).unwrap();
                 toast(`Created ${d.name}`);
-                navigate(`/agents/${d.id}`);
+                navigate(`/campaigns/${d.id}`);
               } catch (e) {
                 toast(errMsg(e), 'error');
               }
@@ -2192,18 +1834,18 @@ export function SettingsTab({ agent }) {
         open={deleting}
         onClose={() => setDeleting(false)}
         danger
-        title={`Delete ${agent.name}?`}
-        description="Blocked while the agent is attached to a number or a running campaign."
-        confirmLabel="Delete agent"
+        title={`Delete ${campaign.name}?`}
+        description="Its calls stop and its phone numbers are left without a campaign. Call history is kept."
+        confirmLabel="Delete campaign"
         onConfirm={async () => {
-          await deleteAgent(agent.id).unwrap();
-          toast('Agent deleted');
-          navigate('/agents');
+          await deleteCampaign(campaign.id).unwrap();
+          toast('Campaign deleted');
+          navigate('/campaigns');
         }}
       />
 
       <p className="muted small">
-        Agent ID: <span className="mono">{agent.id}</span> · <CopyInline value={agent.id} />
+        Campaign ID: <span className="mono">{campaign.id}</span> · <CopyInline value={campaign.id} />
       </p>
     </div>
   );

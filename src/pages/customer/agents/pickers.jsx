@@ -210,7 +210,7 @@ export function VoiceDialog({ open, onClose, language, value, speed, onSave, sav
       onClose={onClose}
       wide
       title="Choose the agent's voice"
-      description="Press play to hear each voice at the agent's speaking speed. Every voice speaks all the agent's languages."
+      description="Press play to hear each voice at the agent's speaking speed. Every voice speaks all the agent's languages. The voice applies to every campaign this agent runs."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -237,10 +237,11 @@ export function VoiceDialog({ open, onClose, language, value, speed, onSave, sav
 }
 
 /**
- * Plays the agent's greeting (or a given line) in its real voice, made by the
- * server. play({ voice_id, speed, text }) overrides the saved settings.
+ * Plays a line in the agent's real voice, made by the server: for a campaign
+ * its greeting, for an agent the agent introducing itself.
+ * play({ voice_id, speed, text }) overrides the saved settings.
  */
-export function useGreetingPreview(agentId) {
+export function useGreetingPreview(id, kind = 'campaign') {
   const toast = useToast();
   const audio = useRef(null);
   const [state, setState] = useState('idle'); // idle | loading | playing
@@ -259,7 +260,7 @@ export function useGreetingPreview(agentId) {
     if (state !== 'idle') return stop();
     setState('loading');
     try {
-      const blob = await postForBlob({ service: 'flow', url: `/customer/agents/${agentId}/voice-preview`, body: opts });
+      const blob = await postForBlob({ service: 'flow', url: `/customer/${kind === 'agent' ? 'agents' : 'campaigns'}/${id}/voice-preview`, body: opts });
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
       audio.current = a;

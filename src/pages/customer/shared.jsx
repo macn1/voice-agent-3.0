@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PhoneCall, PhoneOff } from 'lucide-react';
-import { useGetAgentSectionQuery, useListAgentsQuery } from '../../store/api/flowApi';
-import { useGetCallStatusQuery, useHangupCallMutation, useListCampaignsQuery, useListNumbersQuery, useStartCallMutation } from '../../store/api/callsApi';
+import { useGetAgentSectionQuery, useListAgentsQuery, useListCampaignsQuery } from '../../store/api/flowApi';
+import { useGetCallStatusQuery, useHangupCallMutation, useListNumbersQuery, useStartCallMutation } from '../../store/api/callsApi';
 import { Button, errMsg, Field, Input, Modal, StatusBadge } from '../../components/ui';
 import { Select } from '../../components/forms';
 
@@ -27,11 +27,22 @@ export function useAgentName() {
   return (call) => call?.agent_name ?? names[call?.agent_id] ?? (s.isSuccess && call?.agent_id ? 'Deleted agent' : '—');
 }
 
-/** Resolves a call's campaign_id to the campaign's name: calls carry only the id. */
+/** Resolves a call's campaign to its name (calls since campaigns carry campaign_name). */
 export function useCampaignName() {
   const s = useListCampaignsQuery({ limit: 200 });
   const names = Object.fromEntries((s.data?.items ?? []).map((c) => [c.id, c.name]));
   return (call) => call?.campaign_name ?? names[call?.campaign_id];
+}
+
+/** Campaigns for pickers: { campaigns, options } (published ones can take calls). */
+export function useCampaignOptions(params = {}) {
+  const s = useListCampaignsQuery({ limit: 200, ...params });
+  const list = s.data?.items ?? [];
+  return {
+    campaigns: list,
+    options: list.map((c) => ({ value: c.id, label: c.agent_name ? `${c.name} · ${c.agent_name}` : c.name })),
+    loading: s.isLoading,
+  };
 }
 
 export function useNumberOptions() {
@@ -47,12 +58,12 @@ export const E164 = /^\+[1-9]\d{7,14}$/;
 
 const LIVE_STATES = ['queued', 'ringing', 'in_progress'];
 
-/** CALL-02: "Call a number" with live status (queued → ringing → in progress → done). */
-export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
-  const { options } = useAgentOptions();
+/** CALL-02: "Call a number" with a campaign, with live status (queued → ringing → in progress → done). */
+export function CallNumberDialog({ open, onClose, campaignId, defaultTo }) {
+  const { options, campaigns } = useCampaignOptions();
   const agentName = useAgentName();
   const nums = useNumberOptions();
-  const [agent, setAgent] = useState(agentId ?? '');
+  const [agent, setAgent] = useState(campaignId ?? '');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [values, setValues] = useState({});
@@ -60,7 +71,7 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
   const [started, setStarted] = useState(null);
   const [startCall, { isLoading: busy }] = useStartCallMutation();
   const [hangupCall] = useHangupCallMutation();
-  // Input variables of the chosen agent.
+  // Input variables of the chosen campaign.
   const varsQ = useGetAgentSectionQuery({ id: agent, section: 'variables' }, { skip: !agent });
   const vars = (agent && varsQ.data ? varsQ.data : []).filter((x) => x.direction === 'input');
   // Live status: poll every 2s while the call is queued/ringing/in progress.
@@ -71,16 +82,16 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
 
   useEffect(() => {
     if (open) {
-      setAgent(agentId ?? '');
+      setAgent(campaignId ?? '');
       setTo(defaultTo ?? '');
       setValues({});
       setStarted(null);
       setError(null);
     }
-  }, [open, agentId, defaultTo]);
+  }, [open, campaignId, defaultTo]);
 
   const start = async () => {
-    if (!agent) return setError('Pick an agent');
+    if (!agent) return setError('Pick a campaign');
     if (!E164.test(to.trim())) return setError('Enter the number in international format, e.g. +919876543210');
     const missing = vars.filter((v) => v.required && !values[v.name]);
     if (missing.length) return setError(`Fill in: ${missing.map((m) => m.name).join(', ')}`);
@@ -88,7 +99,8 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
     try {
       setStarted(
         await startCall({
-          agent_id: agent,
+          campaign_id: agent,
+          agent_id: campaigns.find((c) => c.id === agent)?.agent_id,
           from_number_id: from || undefined,
           to: to.trim(),
           variables: values,
@@ -104,7 +116,7 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
       open={open}
       onClose={onClose}
       title="Call a number"
-      description="The agent's live version places the call. Do-not-call and calling-hour rules apply."
+      description="The campaign's live version places the call, spoken by its agent. Do-not-call and calling-hour rules apply."
       footer={
         call ? (
           <>
@@ -167,11 +179,11 @@ export function CallNumberDialog({ open, onClose, agentId, defaultTo }) {
       ) : (
         <div className="stack">
           {error && <div className="alert-inline">{error}</div>}
-          <Field label="Agent">
-            <Select value={agent} options={options} placeholder="Choose an agent" onChange={(e) => setAgent(e.target.value)} />
+          <Field label="Campaign">
+            <Select value={agent} options={options} placeholder="Choose a campaign" onChange={(e) => setAgent(e.target.value)} />
           </Field>
           <div className="form-grid">
-            <Field label="From number" hint="Optional — defaults to the agent's number">
+            <Field label="From number" hint="Optional — defaults to your first number">
               <Select value={from} options={nums.options} placeholder="Default" onChange={(e) => setFrom(e.target.value)} />
             </Field>
             <Field label="To number">

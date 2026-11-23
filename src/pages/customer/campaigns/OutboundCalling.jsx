@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, Ban, Copy, Download, History, Pause, Play, Plus, RotateCw, Send, Trash2, Upload } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, Ban, Download, History, Pause, Play, RotateCw, Trash2, Upload } from 'lucide-react';
 import {
   useCampaignActionMutation,
-  useCreateCampaignMutation,
+  useCreateOutboundCampaignMutation,
   useGetCampaignFunnelQuery,
   useGetCampaignOutcomesQuery,
-  useGetCampaignQuery,
+  useGetOutboundCampaignQuery,
   useGetCampaignSettingsQuery,
   useGetCampaignSummaryQuery,
   useGetCampaignTimeseriesQuery,
   useLazyGetCampaignEstimateQuery,
   useListCampaignContactsQuery,
-  useListCampaignsQuery,
   useListContactAttemptsQuery,
   useListContactListsQuery,
   usePutCampaignSettingsMutation,
   useRemoveCampaignContactMutation,
   useRetryCampaignContactMutation,
-  useUpdateCampaignMutation,
+  useUpdateOutboundCampaignMutation,
   useUploadCampaignContactsMutation,
   useValidateCampaignContactsMutation,
 } from '../../../store/api/callsApi';
@@ -34,7 +33,6 @@ import {
   errMsg,
   Field,
   Input,
-  PageHeader,
   Pager,
   SegmentTabs,
   Skeleton,
@@ -44,8 +42,10 @@ import {
 } from '../../../components/ui';
 import { Drawer, parseCsv, readFileText, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
 import { HBars, Stat, TimeChart } from '../../../components/charts';
-import { PixelHero } from '../../../components/PixelHero';
-import { useAgentOptions, useNumberOptions } from '../shared';
+import { useNumberOptions } from '../shared';
+
+// An outbound campaign's calling: who to call, when, and how it's going.
+// It lives in voice-outbound-be under the campaign's own id.
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -57,110 +57,9 @@ const WAITING_COPY = {
 };
 const waitingText = (r) => WAITING_COPY[r] ?? titleCase(r);
 
-const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'canceled'];
 const statusTone = (s) => (s === 'running' ? 'active' : s === 'canceled' ? 'cancelled' : s);
 
-/** P-20 Campaigns list (CALL-03). */
-export function CampaignsPage() {
-  const navigate = useNavigate();
-  const [status, setStatus] = useState('');
-  const [q, setQ] = useState('');
-  const { agents } = useAgentOptions();
-  const list = useListCampaignsQuery({ status: status || undefined, q: q.trim() || undefined, limit: 100 }, { pollingInterval: 15000 });
-  const items = list.data?.items ?? [];
-  const nameOf = (id) => agents.find((a) => a.id === id)?.name ?? '—';
-
-  if (list.isSuccess && !items.length && !status && !q) {
-    return (
-      <PixelHero
-        icon={Send}
-        motion="fly"
-        warm
-        title="Reach thousands of customers by phone"
-        description={agents.length ? 'Upload your numbers, pick an agent and let it make the calls.' : 'Create an agent to launch your first campaign.'}
-        actions={
-          agents.length ? (
-            <Link to="/campaigns/new" className="btn primary">
-              <Plus /> New campaign
-            </Link>
-          ) : undefined
-        }
-      />
-    );
-  }
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Deploy"
-        title="Outbound campaigns"
-        description="Call a list of numbers with an agent, with calling hours, pacing and retries."
-        actions={
-          <Link to="/campaigns/new" className="btn primary">
-            <Plus /> New campaign
-          </Link>
-        }
-      />
-      <div className="card">
-        <div className="card-head">
-          <div className="filters">
-            <Input placeholder="Search campaigns" value={q} onChange={(e) => setQ(e.target.value)} />
-            <Select value={status} options={CAMPAIGN_STATUSES.map((s) => ({ value: s, label: titleCase(s) }))} placeholder="All statuses" onChange={(e) => setStatus(e.target.value)} />
-          </div>
-        </div>
-        <Async state={list}>
-          {() =>
-            items.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Campaign</th>
-                      <th>Status</th>
-                      <th>Progress</th>
-                      <th className="num">Numbers</th>
-                      <th className="num">Successful</th>
-                      <th>Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((c) => (
-                      <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
-                        <td>
-                          <div className="cell-main">{c.name}</div>
-                          <div className="cell-sub">
-                            {nameOf(c.agent_id)} · from {c.from_number ?? '—'}
-                          </div>
-                        </td>
-                        <td>
-                          <StatusBadge status={statusTone(c.status)} label={titleCase(c.status)} />
-                          {c.waiting_reason && <div className="cell-sub">{titleCase(c.waiting_reason)}</div>}
-                        </td>
-                        <td style={{ minWidth: 140 }}>
-                          <div className="bar">
-                            <span style={{ width: `${Math.min(100, c.stats?.progress_percent ?? 0)}%` }} />
-                          </div>
-                          <div className="cell-sub">{Math.round(c.stats?.progress_percent ?? 0)}%</div>
-                        </td>
-                        <td className="num">{number(c.stats?.total)}</td>
-                        <td className="num">{number(c.stats?.successful)}</td>
-                        <td className="muted">{dateTime(c.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState title="No campaigns match" />
-            )
-          }
-        </Async>
-      </div>
-    </>
-  );
-}
-
-/* Wizard (P-21) ------------------------------------------------------- */
+/* Set up calling (was the wizard, P-21) ------------------------------- */
 
 // Settings use the API's own shape. calling_windows null = follow the company's calling rules.
 const DEFAULT_SETTINGS = {
@@ -174,26 +73,25 @@ const DEFAULT_SETTINGS = {
 
 const NAME_COLUMN = /^(full[_ ]?name|name|contact[_ ]?name)$/i;
 
-export function CampaignWizard() {
-  const navigate = useNavigate();
+/**
+ * An outbound campaign's calling, set up once: the number it calls from, who
+ * to call (a CSV or a contact list) and when. It makes the campaign's calling
+ * in voice-outbound-be (same id as the campaign).
+ */
+function CallingSetup({ campaign }) {
   const toast = useToast();
   const [params] = useSearchParams();
-  const { options: agentOptions } = useAgentOptions();
   const { options: numberOptions } = useNumberOptions();
   const lists = useListContactListsQuery();
-  const [createCampaign] = useCreateCampaignMutation();
+  const [createCampaign] = useCreateOutboundCampaignMutation();
   const [uploadContacts] = useUploadCampaignContactsMutation();
   const [validateContacts] = useValidateCampaignContactsMutation();
   const [putSettings] = usePutCampaignSettingsMutation();
   const [loadEstimate] = useLazyGetCampaignEstimateQuery();
-  const [updateCampaign] = useUpdateCampaignMutation();
+  const [updateCampaign] = useUpdateOutboundCampaignMutation();
   const [campaignAction] = useCampaignActionMutation();
   const [step, setStep] = useState(0);
-  const [basics, setBasics] = useState({
-    name: '',
-    agent_id: '',
-    from_number_id: '',
-  });
+  const [basics, setBasics] = useState({ from_number_id: '' });
   const [source, setSource] = useState(params.get('list') ? 'list' : 'csv');
   const [listId, setListId] = useState(params.get('list') ?? '');
   const [csv, setCsv] = useState(null);
@@ -201,60 +99,56 @@ export function CampaignWizard() {
   const [mapping, setMapping] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [startAt, setStartAt] = useState('');
-  const [campaign, setCampaign] = useState(null);
+  const [calling, setCalling] = useState(null);
   const [report, setReport] = useState(null);
   const [estimate, setEstimate] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
 
-  // Input variables of the chosen agent, for column mapping.
-  const varsQ = useGetAgentSectionQuery({ id: basics.agent_id, section: 'variables' }, { skip: !basics.agent_id });
-  const vars = basics.agent_id ? (varsQ.data ?? []).filter((x) => x.direction === 'input').map((x) => x.name) : [];
+  // Input variables of the campaign, for column mapping.
+  const varsQ = useGetAgentSectionQuery({ id: campaign.id, section: 'variables' });
+  const vars = (varsQ.data ?? []).filter((x) => x.direction === 'input').map((x) => x.name);
 
   // The numbers as the API wants them (CSV columns other than phone / name become variables on the number).
   const numbersInput = () =>
     source === 'csv'
       ? { rows: csv.rows, phone_column: phoneCol, name_column: csv.headers.find((h) => h !== phoneCol && NAME_COLUMN.test(h)) }
       : { contact_list_id: listId };
-  // agent variable -> the column that feeds it
+  // campaign variable -> the column that feeds it
   const variableMapping = () => Object.fromEntries(Object.entries(mapping).filter(([, v]) => v).map(([col, v]) => [v, col]));
 
   const next = async () => {
     setError(null);
     try {
       if (step === 0) {
-        if (!basics.name.trim() || !basics.agent_id) throw new Error('Fill in the name and agent');
         if (!numberOptions.length) throw new Error('Buy or connect a phone number first — campaigns call from one of your numbers');
-        setStep(1);
-      } else if (step === 1) {
         if (source === 'csv' && (!csv || !phoneCol)) throw new Error('Upload a CSV and pick the phone column');
         if (source === 'list' && !listId) throw new Error('Pick a contact list');
         setBusy(true);
         const c =
-          campaign ??
+          calling ??
           (await createCampaign({
-            name: basics.name.trim(),
-            agent_id: basics.agent_id,
+            campaign_id: campaign.id,
             ...(basics.from_number_id ? { from_number_id: basics.from_number_id } : {}),
             settings: { ...settings, variable_mapping: variableMapping() },
           }).unwrap());
-        setCampaign(c);
+        setCalling(c);
         // Dry run first so the next step can say what will and won't be called.
         const dry = await validateContacts({ id: c.id, ...numbersInput() }).unwrap();
         if (!dry.valid && !dry.will_add) throw new Error('None of those numbers can be called — check the phone column');
         await uploadContacts({ id: c.id, ...numbersInput() }).unwrap();
         setReport(dry);
-        setStep(2);
-      } else if (step === 2) {
+        setStep(1);
+      } else if (step === 1) {
         setBusy(true);
-        await putSettings({ id: campaign.id, body: settings }).unwrap();
+        await putSettings({ id: calling.id, body: settings }).unwrap();
         setEstimate(
-          await loadEstimate(campaign.id)
+          await loadEstimate(calling.id)
             .unwrap()
             .catch(() => null),
         );
-        setStep(3);
+        setStep(2);
       }
     } catch (e) {
       setError(errMsg(e));
@@ -270,11 +164,10 @@ export function CampaignWizard() {
       if (!now) {
         if (!startAt) throw new Error('Pick a start time');
         // A start time in the future makes Start schedule it instead of dialling now.
-        await updateCampaign({ id: campaign.id, start_at: new Date(startAt).toISOString() }).unwrap();
+        await updateCampaign({ id: calling.id, start_at: new Date(startAt).toISOString() }).unwrap();
       }
-      await campaignAction({ id: campaign.id, action: 'start' }).unwrap();
-      toast(now ? 'Campaign started' : 'Campaign scheduled');
-      navigate(`/campaigns/${campaign.id}`);
+      await campaignAction({ id: calling.id, action: 'start' }).unwrap();
+      toast(now ? 'Calling started' : 'Calling scheduled');
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -282,13 +175,15 @@ export function CampaignWizard() {
     }
   };
 
-  const STEPS = ['Basics', 'Contacts', 'Schedule', 'Review'];
+  const STEPS = ['Who to call', 'Schedule', 'Review'];
   return (
     <>
-      <Link to="/campaigns" className="back-link">
-        <ArrowLeft /> Campaigns
-      </Link>
-      <PageHeader eyebrow="Outbound" title="New campaign" />
+      {!campaign.published_version && (
+        <div className="banner warn" style={{ margin: 0 }}>
+          <AlertTriangle />
+          <span className="grow">Calls use the campaign's published version: publish it before you start calling.</span>
+        </div>
+      )}
       <div className="steps">
         {STEPS.map((s, i) => (
           <span key={s} style={{ display: 'contents' }}>
@@ -304,17 +199,6 @@ export function CampaignWizard() {
         {error && <div className="alert-inline">{error}</div>}
         {step === 0 && (
           <div className="form-grid">
-            <Field label="Campaign name" className="full">
-              <Input autoFocus value={basics.name} onChange={(e) => setBasics({ ...basics, name: e.target.value })} placeholder="EMI reminders — November" />
-            </Field>
-            <Field label="Agent" hint="Calls use its published version.">
-              <Select
-                value={basics.agent_id}
-                options={agentOptions}
-                placeholder="Choose"
-                onChange={(e) => setBasics({ ...basics, agent_id: e.target.value })}
-              />
-            </Field>
             <Field label="Call from" hint="Optional — defaults to your first number">
               <Select
                 value={basics.from_number_id}
@@ -334,7 +218,7 @@ export function CampaignWizard() {
             )}
           </div>
         )}
-        {step === 1 && (
+        {step === 0 && (
           <>
             <SegmentTabs
               value={source}
@@ -422,7 +306,7 @@ export function CampaignWizard() {
                           </div>
                         ))}
                       <p className="muted small" style={{ marginBottom: 0 }}>
-                        Every column is saved on the number; mapped ones fill the agent's call variables.
+                        Every column is saved on the number; mapped ones fill the campaign's call variables.
                       </p>
                     </div>
                     <div className="table-wrap card">
@@ -453,7 +337,7 @@ export function CampaignWizard() {
             )}
           </>
         )}
-        {step === 2 && (
+        {step === 1 && (
           <>
             {report && (
               <div className="banner neutral" style={{ margin: 0 }}>
@@ -486,7 +370,7 @@ export function CampaignWizard() {
             <ScheduleForm value={settings} onChange={setSettings} />
           </>
         )}
-        {step === 3 && (
+        {step === 2 && (
           <>
             <div className="grid-3">
               <Stat label="Numbers to call" value={number(estimate?.pending_contacts ?? report?.will_add ?? 0)} />
@@ -521,9 +405,9 @@ export function CampaignWizard() {
             </div>
           </>
         )}
-        {step < 3 && (
+        {step < 2 && (
           <div className="row between">
-            <Button disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+            <Button disabled={step === 0 || (step === 1 && !!calling)} onClick={() => setStep((s) => s - 1)}>
               Back
             </Button>
             <Button variant="primary" icon={<ArrowRight />} loading={busy} onClick={next}>
@@ -632,17 +516,21 @@ export function ScheduleForm({ value: s, onChange }) {
 
 /* Detail (P-22) ------------------------------------------------------- */
 
-export function CampaignDetailPage() {
-  const { id = '' } = useParams();
+/**
+ * An outbound campaign's Calling tab: its calling (contacts, schedule, runs)
+ * from voice-outbound-be, or the setup when there is none yet.
+ */
+export function CallingTab({ campaign }) {
+  const id = campaign.id;
   const toast = useToast();
-  const navigate = useNavigate();
   const [poll, setPoll] = useState(0);
-  const camp = useGetCampaignQuery(id, { pollingInterval: poll });
+  const camp = useGetOutboundCampaignQuery(id, { pollingInterval: poll });
   useEffect(() => setPoll(['running', 'scheduled'].includes(camp.data?.status) ? 6000 : 0), [camp.data?.status]);
   const [campaignAction] = useCampaignActionMutation();
   const [tab, setTab] = useState('overview');
   const [cancelling, setCancelling] = useState(false);
-  const { agents } = useAgentOptions();
+
+  if (camp.error?.status === 404) return <CallingSetup campaign={campaign} />;
 
   const act = async (action, msg) => {
     try {
@@ -654,23 +542,20 @@ export function CampaignDetailPage() {
   };
 
   return (
-    <>
-      <Link to="/campaigns" className="back-link">
-        <ArrowLeft /> Campaigns
-      </Link>
+    <div className="stack">
       <Async state={camp} skeleton={<Skeleton h={60} w={400} />}>
         {(c) => (
           <>
-            <header className="agent-head">
+            <div className="card card-pad row between wrap">
               <div>
                 <div className="row" style={{ gap: 10 }}>
-                  <h1 className="text-detail-title">{c.name}</h1>
+                  <div className="card-title">Calling</div>
                   <StatusBadge status={statusTone(c.status)} label={titleCase(c.status)} />
                 </div>
-                <p className="muted" style={{ marginTop: 6 }}>
-                  {agents.find((a) => a.id === c.agent_id)?.name ?? 'Agent'} · from {c.from_number ?? '—'} ·{' '}
+                <div className="card-sub">
+                  From {c.from_number ?? '—'} ·{' '}
                   {c.started_at ? `started ${dateTime(c.started_at)}` : c.start_at ? `starts ${dateTime(c.start_at)}` : 'not started'}
-                </p>
+                </div>
               </div>
               <div className="row wrap">
                 {(c.status === 'draft' || c.status === 'scheduled') && (
@@ -689,27 +574,13 @@ export function CampaignDetailPage() {
                   </Button>
                 )}
                 <Button
-                  icon={<Copy />}
-                  onClick={async () => {
-                    try {
-                      const d = await campaignAction({ id, action: 'duplicate' }).unwrap();
-                      toast('Copied as a draft');
-                      navigate(`/campaigns/${d.id}`);
-                    } catch (e) {
-                      toast(errMsg(e), 'error');
-                    }
-                  }}
-                >
-                  Duplicate
-                </Button>
-                <Button
                   icon={<Download />}
                   onClick={() =>
                     downloadAuthed({
                       service: 'outbound',
                       url: `/customer/campaigns/${id}/results`,
                       params: { format: 'csv' },
-                      filename: `${c.name.replace(/\W+/g, '-')}-results.csv`,
+                      filename: `${campaign.name.replace(/\W+/g, '-')}-results.csv`,
                     }).catch((e) => toast(errMsg(e), 'error'))
                   }
                 >
@@ -721,7 +592,7 @@ export function CampaignDetailPage() {
                   </Button>
                 )}
               </div>
-            </header>
+            </div>
             {c.waiting_reason && ['running', 'scheduled'].includes(c.status) && (
               <div className={`banner ${c.waiting_reason === 'plan_limit_reached' ? 'warn' : 'info'}`}>
                 <AlertTriangle />
@@ -758,15 +629,15 @@ export function CampaignDetailPage() {
               open={cancelling}
               onClose={() => setCancelling(false)}
               danger
-              title="Cancel this campaign?"
+              title="Cancel this campaign's calling?"
               description="No more calls are placed. Results so far are kept."
-              confirmLabel="Cancel campaign"
+              confirmLabel="Cancel calling"
               onConfirm={() => campaignAction({ id, action: 'cancel' }).unwrap()}
             />
           </>
         )}
       </Async>
-    </>
+    </div>
   );
 }
 

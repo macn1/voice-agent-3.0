@@ -7,19 +7,19 @@ import {
   Brain,
   FlaskConical,
   GitBranch,
-  Globe2,
   History,
-  IdCard,
   ListChecks,
   MessageSquareText,
-  Mic,
+  Phone,
   PhoneCall,
+  PhoneOutgoing,
   Play,
   Rocket,
   Send,
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  UserRound,
   Variable as VariableIcon,
   Webhook,
   Wrench,
@@ -28,120 +28,74 @@ import {
 } from 'lucide-react';
 import {
   useChatTestMutation,
-  useGetAgentDiffQuery,
-  useGetAgentQuery,
+  useGetCampaignDiffQuery,
+  useGetCampaignQuery,
   useGetAgentSectionQuery,
   useListTestRunsQuery,
-  usePublishAgentMutation,
+  usePublishCampaignMutation,
   useValidateFlowMutation,
 } from '../../../store/api/flowApi';
 import { Async, Badge, Button, errMsg, Field, Input, Modal, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { Drawer } from '../../../components/forms';
 import { CallNumberDialog } from '../shared';
-import * as Tabs from './AgentTabs';
+import * as Tabs from './CampaignTabs';
+import { AgentTab, PhoneNumbersTab } from './CampaignSetup';
+import { CallingTab } from './OutboundCalling';
 import { PhoneTest, PublishedChat, VoiceTest } from './TestPanels';
 
+/** The Conversation tab, with which company facts the calls may use. */
+function ConversationTab({ campaign }) {
+  return (
+    <div className="stack">
+      <Tabs.ConversationTab campaign={campaign} />
+      <Tabs.CompanyFactsCard campaign={campaign} />
+    </div>
+  );
+}
+
+// The campaign editor. Who speaks is the campaign's agent (its own Identity
+// page); the rest is the campaign's, saved to its draft until published.
 const TABS = [
   {
-    group: 'Who it is',
+    group: 'The call',
     items: [
-      {
-        key: 'identity',
-        label: 'Identity',
-        icon: IdCard,
-        el: Tabs.IdentityTab,
-      },
-      { key: 'voice', label: 'Voice', icon: Mic, el: Tabs.VoiceTab },
-      {
-        key: 'conversation',
-        label: 'Conversation',
-        icon: GitBranch,
-        el: Tabs.ConversationTab,
-      },
-      {
-        key: 'variables',
-        label: 'Variables',
-        icon: VariableIcon,
-        el: Tabs.VariablesTab,
-      },
+      { key: 'agent', label: 'Agent', icon: UserRound, el: AgentTab },
+      { key: 'conversation', label: 'Conversation', icon: GitBranch, el: ConversationTab },
+      { key: 'variables', label: 'Variables', icon: VariableIcon, el: Tabs.VariablesTab },
       { key: 'rules', label: 'Rules', icon: ListChecks, el: Tabs.RulesTab },
-      {
-        key: 'behaviour',
-        label: 'Behaviour',
-        icon: SlidersHorizontal,
-        el: Tabs.BehaviourTab,
-      },
+      { key: 'behaviour', label: 'Behaviour', icon: SlidersHorizontal, el: Tabs.BehaviourTab },
     ],
   },
   {
-    group: 'Language',
+    group: 'Who it calls',
     items: [
-      {
-        key: 'languages',
-        label: 'Languages',
-        icon: Globe2,
-        el: Tabs.LanguagesTab,
-      },
+      { key: 'numbers', label: 'Phone numbers', icon: Phone, el: PhoneNumbersTab, only: 'inbound' },
+      { key: 'calling', label: 'Calling', icon: PhoneOutgoing, el: CallingTab, only: 'outbound' },
     ],
   },
   {
     group: 'Knowledge & actions',
     items: [
-      {
-        key: 'knowledge',
-        label: 'Knowledge',
-        icon: BookOpen,
-        el: Tabs.KnowledgeTab,
-      },
+      { key: 'knowledge', label: 'Knowledge', icon: BookOpen, el: Tabs.KnowledgeTab },
       { key: 'tools', label: 'Tools', icon: Wrench, el: Tabs.ToolsTab },
-      {
-        key: 'follow-ups',
-        label: 'Follow-ups',
-        icon: Send,
-        el: Tabs.FollowUpsTab,
-      },
+      { key: 'follow-ups', label: 'Follow-ups', icon: Send, el: Tabs.FollowUpsTab },
     ],
   },
   {
     group: 'Quality',
     items: [
       { key: 'analysis', label: 'Analysis', icon: Brain, el: Tabs.AnalysisTab },
-      {
-        key: 'compliance',
-        label: 'Compliance',
-        icon: ShieldCheck,
-        el: Tabs.ComplianceTab,
-      },
+      { key: 'compliance', label: 'Compliance', icon: ShieldCheck, el: Tabs.ComplianceTab },
       { key: 'tests', label: 'Tests', icon: FlaskConical, el: Tabs.TestsTab },
-      {
-        key: 'insights',
-        label: 'Insights',
-        icon: BarChart3,
-        el: Tabs.InsightsTab,
-      },
+      { key: 'insights', label: 'Insights', icon: BarChart3, el: Tabs.InsightsTab },
     ],
   },
   {
     group: 'Release',
     items: [
-      {
-        key: 'versions',
-        label: 'Versions',
-        icon: History,
-        el: Tabs.VersionsTab,
-      },
-      {
-        key: 'channels',
-        label: 'Web & chat',
-        icon: Webhook,
-        el: Tabs.ChannelsTab,
-      },
-      {
-        key: 'settings',
-        label: 'Settings',
-        icon: Settings2,
-        el: Tabs.SettingsTab,
-      },
+      { key: 'versions', label: 'Versions', icon: History, el: Tabs.VersionsTab },
+      { key: 'channels', label: 'Web & chat', icon: Webhook, el: Tabs.ChannelsTab },
+      { key: 'settings', label: 'Settings', icon: Settings2, el: Tabs.SettingsTab },
     ],
   },
 ];
@@ -166,10 +120,10 @@ class TabBoundary extends Component {
   }
 }
 
-/** P-09 Agent editor. Every tab saves to the draft; Publish makes it live. */
-export function AgentEditor() {
-  const { id = '', tab = 'identity' } = useParams();
-  const agent = useGetAgentQuery(id);
+/** Campaign editor. Every tab saves to the draft; Publish makes it live. */
+export function CampaignEditor() {
+  const { id = '', tab = 'agent' } = useParams();
+  const agent = useGetCampaignQuery(id);
   // Fit the sub-menu + editor to the viewport so each scrolls on its own and the page stays still.
   const gridRef = useRef(null);
   const hasAgent = Boolean(agent.data);
@@ -189,20 +143,22 @@ export function AgentEditor() {
     return () => window.removeEventListener('resize', fit);
   }, [hasAgent]);
   // The API has no "unpublished changes" flag: compare the draft with the live version.
-  const diffQ = useGetAgentDiffQuery(id, { skip: !agent.data?.published_version });
+  const diffQ = useGetCampaignDiffQuery(id, { skip: !agent.data?.published_version });
   const unpublished = !!diffQ.data?.changed_sections?.length;
   const [params] = useSearchParams();
   const [testing, setTesting] = useState(!!params.get('test'));
   const [calling, setCalling] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const all = TABS.flatMap((g) => g.items);
+  // Inbound campaigns have phone numbers; outbound ones their calling.
+  const groups = TABS.map((g) => ({ ...g, items: g.items.filter((t) => !t.only || t.only === agent.data?.direction) })).filter((g) => g.items.length);
+  const all = groups.flatMap((g) => g.items);
   const current = all.find((t) => t.key === tab) ?? all[0];
   const Tab = current.el;
 
   return (
     <>
-      <Link to="/agents" className="back-link">
-        <ArrowLeft /> Agents
+      <Link to="/campaigns" className="back-link">
+        <ArrowLeft /> Campaigns
       </Link>
       <Async state={agent} skeleton={<Skeleton h={70} w={420} style={{ marginBottom: 24 }} />}>
         {(a) => (
@@ -210,12 +166,23 @@ export function AgentEditor() {
             <div>
               <div className="row" style={{ gap: 10 }}>
                 <h1 className="text-detail-title">{a.name}</h1>
+                <Badge plain>{a.direction === 'outbound' ? 'Outbound' : 'Inbound'}</Badge>
                 <StatusBadge status={a.status} />
                 {(a.has_unpublished_changes || unpublished) && <Badge tone="orange">Unpublished changes</Badge>}
               </div>
               <p className="muted" style={{ marginTop: 6 }}>
-                {a.description || 'No description'} ·{' '}
-                {a.published_version ? `Live${typeof a.published_version === 'number' ? `: version ${a.published_version}` : ''}` : 'Never published'}
+                {a.agent_name ? (
+                  <>
+                    Spoken by{' '}
+                    <Link to={`/agents/${a.agent_id}`}>
+                      {a.agent_name}
+                      {a.agent_role ? `, ${a.agent_role}` : ''}
+                    </Link>
+                  </>
+                ) : (
+                  <span style={{ color: 'var(--red)' }}>No agent: pick one on the Agent tab</span>
+                )}{' '}
+                · {a.published_version ? `Live${typeof a.published_version === 'number' ? `: version ${a.published_version}` : ''}` : 'Never published'}
               </p>
             </div>
             <div className="row wrap">
@@ -239,12 +206,12 @@ export function AgentEditor() {
       </Async>
       {agent.data && (
         <div className="section-grid fit" ref={gridRef}>
-          <nav className="subnav" aria-label="Agent sections">
-            {TABS.map((g) => (
+          <nav className="subnav" aria-label="Campaign sections">
+            {groups.map((g) => (
               <div key={g.group} style={{ display: 'contents' }}>
                 <div className="group">{g.group}</div>
                 {g.items.map((t) => (
-                  <NavLink key={t.key} to={`/agents/${id}/${t.key}`} className={() => (t.key === current.key ? 'active' : '')}>
+                  <NavLink key={t.key} to={`/campaigns/${id}/${t.key}`} className={() => (t.key === current.key ? 'active' : '')}>
                     <t.icon />
                     {t.label}
                   </NavLink>
@@ -254,7 +221,7 @@ export function AgentEditor() {
           </nav>
           <div className="section-pane">
             <TabBoundary key={current.key}>
-              <Tab agent={agent.data} />
+              <Tab campaign={agent.data} />
             </TabBoundary>
           </div>
         </div>
@@ -262,7 +229,7 @@ export function AgentEditor() {
       {agent.data && (
         <>
           <TestPanel open={testing} onClose={() => setTesting(false)} agent={agent.data} initialMode={params.get('test') === 'voice' ? 'voice' : 'chat'} />
-          <CallNumberDialog open={calling} onClose={() => setCalling(false)} agentId={id} />
+          <CallNumberDialog open={calling} onClose={() => setCalling(false)} campaignId={id} />
           <PublishDialog open={publishing} onClose={() => setPublishing(false)} agent={agent.data} onPublished={agent.refetch} />
         </>
       )}
@@ -275,28 +242,27 @@ export function AgentEditor() {
 // Which tab fixes a problem the publish check found, by the draft section the
 // problem names (flow.system_prompt, variables[2].name, ...).
 const ISSUE_TABS = {
-  persona: ['identity', 'Identity'],
+  persona: ['agent', 'Agent'],
+  agent: ['agent', 'Agent'],
   flow: ['conversation', 'Conversation'],
   variables: ['variables', 'Variables'],
   guidelines: ['rules', 'Rules'],
   behaviour: ['behaviour', 'Behaviour'],
-  speech: ['voice', 'Voice'],
-  keywords: ['voice', 'Voice'],
-  languages: ['languages', 'Languages'],
+  vocabulary: ['behaviour', 'Behaviour'],
+  keywords: ['behaviour', 'Behaviour'],
   tools: ['tools', 'Tools'],
   follow_ups: ['follow-ups', 'Follow-ups'],
   analysis: ['analysis', 'Analysis'],
   outcomes: ['analysis', 'Analysis'],
   compliance: ['compliance', 'Compliance'],
   settings: ['settings', 'Settings'],
-  model: ['settings', 'Settings'],
   memory: ['settings', 'Settings'],
 };
 
 // Plain words for the checks people hit most; anything else shows the
 // server's message.
 const ISSUE_TEXT = {
-  'flow.system_prompt': 'The agent has no instructions yet. Write what it should do under Instructions.',
+  'flow.system_prompt': 'The campaign has no instructions yet. Write what the calls are for under Instructions.',
   'behaviour.transfer_number': 'The transfer number needs the country code, e.g. +918012345678.',
 };
 
@@ -313,8 +279,8 @@ export function describeIssue(issue) {
     };
   }
   const text = ISSUE_TEXT[field] ?? (message ? message[0].toUpperCase() + message.slice(1) + (/[.!?]$/.test(message) ? '' : '.') : field);
-  // The voice itself is chosen on the Identity tab.
-  if (field === 'speech.voice_id') return { text, tab: ['identity', 'Identity'] };
+  // The voice is the agent's: chosen on its Identity page, reached from the Agent tab.
+  if (field === 'agent.voice' || field === 'speech.voice_id') return { text, tab: ['agent', 'Agent'] };
   return { text, tab: ISSUE_TABS[field.split(/[.[]/)[0]] };
 }
 
@@ -326,7 +292,7 @@ function IssueList({ items, tone, agentId, onGo }) {
         <AlertTriangle />
         <span className="grow">{text}</span>
         {tab && (
-          <Link className="btn sm ghost" style={{ whiteSpace: 'nowrap' }} to={`/agents/${agentId}/${tab[0]}`} onClick={onGo}>
+          <Link className="btn sm ghost" style={{ whiteSpace: 'nowrap' }} to={`/campaigns/${agentId}/${tab[0]}`} onClick={onGo}>
             Fix in {tab[1]} →
           </Link>
         )}
@@ -340,9 +306,9 @@ function PublishDialog({ open, onClose, agent, onPublished }) {
   const navigate = useNavigate();
   const [note, setNote] = useState('');
   const [error, setError] = useState(null);
-  const [publish, { isLoading: busy }] = usePublishAgentMutation();
+  const [publish, { isLoading: busy }] = usePublishCampaignMutation();
   // Pre-publish checks: what changed, flow validation, last test run.
-  const diff = useGetAgentDiffQuery(agent.id, { skip: !open, refetchOnMountOrArgChange: true });
+  const diff = useGetCampaignDiffQuery(agent.id, { skip: !open, refetchOnMountOrArgChange: true });
   const runs = useListTestRunsQuery(agent.id, { skip: !open });
   const [validate, validation] = useValidateFlowMutation();
 
@@ -387,7 +353,7 @@ function PublishDialog({ open, onClose, agent, onPublished }) {
                 toast(`Version ${v.version} is live`);
                 onPublished();
                 onClose();
-                navigate(`/agents/${agent.id}/versions`);
+                navigate(`/campaigns/${agent.id}/versions`);
               } catch (e) {
                 setError(errMsg(e));
               }
@@ -511,9 +477,9 @@ function TestPanel({ open, onClose, agent, initialMode = 'chat' }) {
         </>
       }
     >
-      {mode === 'chat' && (target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} agent={agent} variables={values} />)}
-      {mode === 'voice' && <VoiceTest key={target} agent={agent} draft={target === 'draft'} variables={values} />}
-      {mode === 'phone' && <PhoneTest agent={agent} />}
+      {mode === 'chat' && (target === 'draft' ? <ChatTest agentId={agent.id} variables={values} /> : <PublishedChat key={agent.id} campaign={agent} variables={values} />)}
+      {mode === 'voice' && <VoiceTest key={target} campaign={agent} draft={target === 'draft'} variables={values} />}
+      {mode === 'phone' && <PhoneTest campaign={agent} />}
     </Drawer>
   );
 }
