@@ -48,7 +48,7 @@ export function rangeOf(range, fromDay, toDay) {
 }
 
 // The built-in dispositions every campaign has, and their colours.
-const BUILTIN = [
+export const BUILTIN = [
   ['not_connected', 'Not connected'],
   ['wrong_person', 'Wrong person'],
   ['appointment', 'Appointment'],
@@ -274,7 +274,7 @@ export function CallLog() {
                         <tr
                           key={c.id}
                           className="clickable"
-                          onClick={() => navigate(`/calls/${c.id}`, { state: { backTo: `/${location.search}`, backLabel: 'Calls' } })}
+                          onClick={() => navigate(`/calls/${c.id}`, { state: { logSearch: location.search } })}
                         >
                           <td className="muted" data-label="Time" style={{ whiteSpace: 'nowrap' }}>
                             {c.started_at ? istTime.format(new Date(c.started_at)) : '—'}

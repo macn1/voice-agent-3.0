@@ -36,14 +36,14 @@ import {
   useTakeOverCallMutation,
   useUpdateCallMutation,
 } from '../../../store/api/callsApi';
-import { LEGACY_DISPOSITIONS, useGetAgentSectionQuery } from '../../../store/api/flowApi';
+import { LEGACY_DISPOSITIONS, useGetAgentSectionQuery, useListCampaignsQuery } from '../../../store/api/flowApi';
 import { useGetLiveSessionQuery, useListLiveSessionsQuery } from '../../../store/api/orchestratorApi';
 import { dateTime, money, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
 import { duration, useAgentName, useCampaignName } from '../shared';
-import { DispositionBadge } from './CallLog';
+import { BUILTIN, DispositionBadge } from './CallLog';
 import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
 import { copyText } from '../../../lib/clipboard';
 
@@ -362,7 +362,10 @@ export function CallDetailPage() {
   const recording = useGetRecordingQuery(id, { skip: !call.data?.has_recording });
   const reviews = useListReviewsQuery(id);
   // Outcome labels come from the call's campaign (its agent's, for a call from before campaigns).
-  const outcomes = useGetAgentSectionQuery({ id: call.data?.campaign_id, section: 'outcomes' }, { skip: !call.data?.campaign_id });
+  // A call whose campaign was deleted keeps its name; its dispositions are then the built-in ones.
+  const campaigns = useListCampaignsQuery({ limit: 200 });
+  const campaignGone = !!call.data?.campaign_id && campaigns.isSuccess && !campaigns.data.items.some((x) => x.id === call.data.campaign_id);
+  const outcomes = useGetAgentSectionQuery({ id: call.data?.campaign_id, section: 'outcomes' }, { skip: !call.data?.campaign_id || !campaigns.isSuccess || campaignGone });
   const [updateCall] = useUpdateCallMutation();
   const [rerunAnalysis] = useRerunAnalysisMutation();
   const [pushToCrm] = usePushCallToCrmMutation();
@@ -391,8 +394,8 @@ export function CallDetailPage() {
 
   return (
     <>
-      <Link to={state?.backTo ?? '/#calls'} className="back-link">
-        <ArrowLeft /> {state?.backLabel ?? 'Calls'}
+      <Link to={`/${state?.logSearch ?? ''}#calls`} className="back-link">
+        <ArrowLeft /> Calls
       </Link>
       <Async state={call} skeleton={<Skeleton h={300} style={{ borderRadius: 14 }} />}>
         {(c) => (
@@ -408,7 +411,11 @@ export function CallDetailPage() {
                 </div>
                 <p className="muted" style={{ marginTop: 6 }}>
                   {c.campaign_id ? (
-                    <Link to={`/campaigns/${c.campaign_id}`}>{campaignName(c) ?? 'Campaign'}</Link>
+                    campaignGone ? (
+                      <span>{campaignName(c) ?? 'Campaign'} (deleted)</span>
+                    ) : (
+                      <Link to={`/campaigns/${c.campaign_id}`}>{campaignName(c) ?? 'Campaign'}</Link>
+                    )
                   ) : (
                     'No campaign'
                   )}{' '}
@@ -769,7 +776,7 @@ function OutcomeModal({ open, onClose, call, outcomes, onSaved }) {
         <Field label="Disposition" hint="How the call ended. Follow-up actions use it.">
           <Select
             value={outcome}
-            options={(outcomes?.outcomes ?? []).map((o) => ({
+            options={(outcomes?.outcomes ?? BUILTIN.map(([key, label]) => ({ key, label }))).map((o) => ({
               value: o.key,
               label: o.label,
             }))}
