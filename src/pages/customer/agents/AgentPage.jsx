@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Volume2 } from 'lucide-react';
+import { ArrowLeft, AudioLines, Plus, Trash2, Volume2 } from 'lucide-react';
 import {
   useDeleteAgentMutation,
   useGetAgentQuery,
@@ -392,6 +392,9 @@ export function AgentPage() {
                 </p>
               </div>
               <div className="row wrap">
+                <Link to={`/?agent_id=${a.id}#calls`} className="btn">
+                  <AudioLines size={16} /> Calls
+                </Link>
                 <Button variant="danger" icon={<Trash2 />} onClick={() => setDeleting(true)}>
                   Delete
                 </Button>

@@ -1,6 +1,6 @@
 import { useListStaffQuery } from '../../../store/api/customerApi';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   AudioLines,
@@ -9,12 +9,10 @@ import {
   Flag,
   Headphones,
   Pause,
-  PhoneCall,
   PhoneIncoming,
   PhoneOutgoing,
   Play,
   RefreshCw,
-  Search,
   Share2,
   Star,
   UserRound,
@@ -40,58 +38,16 @@ import {
 } from '../../../store/api/callsApi';
 import { LEGACY_DISPOSITIONS, useGetAgentSectionQuery } from '../../../store/api/flowApi';
 import { useGetLiveSessionQuery, useListLiveSessionsQuery } from '../../../store/api/orchestratorApi';
-import { useCreateExportMutation } from '../../../store/api/analyticsApi';
 import { dateTime, money, number, titleCase } from '../../../lib/format';
-import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, Pager, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
-import { PixelHero } from '../../../components/PixelHero';
+import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
-import { CallNumberDialog, duration, OUTCOME_TONE, useAgentName, useAgentOptions, useCampaignName } from '../shared';
+import { duration, useAgentName, useCampaignName } from '../shared';
+import { DispositionBadge } from './CallLog';
 import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
 import { copyText } from '../../../lib/clipboard';
 
-const PAGE = 25;
-
-export function CallFilters({ params, set, agentOptions }) {
-  return (
-    <div className="filters">
-      <div className="search">
-        <Search />
-        <Input placeholder="Phone number" value={params.get('phone') ?? ''} onChange={(e) => set('phone', e.target.value)} />
-      </div>
-      <Select
-        value={params.get('range') ?? '7d'}
-        options={[
-          { value: '1d', label: 'Today' },
-          { value: '7d', label: 'Last 7 days' },
-          { value: '30d', label: 'Last 30 days' },
-          { value: '90d', label: 'Last 90 days' },
-        ]}
-        onChange={(e) => set('range', e.target.value)}
-      />
-      <Select value={params.get('agent_id') ?? ''} options={agentOptions} placeholder="All agents" onChange={(e) => set('agent_id', e.target.value)} />
-      <Select
-        value={params.get('direction') ?? ''}
-        options={['inbound', 'outbound', 'web', 'test']}
-        placeholder="All directions"
-        onChange={(e) => set('direction', e.target.value)}
-      />
-      <Select
-        value={params.get('status') ?? ''}
-        options={['completed', 'no_answer', 'busy', 'voicemail', 'failed']}
-        placeholder="All results"
-        onChange={(e) => set('status', e.target.value)}
-      />
-      <Select
-        value={params.get('flagged') ?? ''}
-        options={[{ value: 'true', label: 'Flagged only' }]}
-        placeholder="Flagged or not"
-        onChange={(e) => set('flagged', e.target.value)}
-      />
-    </div>
-  );
-}
-
+/** A list of calls (the Review page's queue); Home has the full call log (CallLog.jsx). */
 export function CallsTable({ calls, onOpen }) {
   const agentName = useAgentName();
   const campaignName = useCampaignName();
@@ -105,7 +61,7 @@ export function CallsTable({ calls, onOpen }) {
             <th>Agent</th>
             <th className="num">Duration</th>
             <th>Result</th>
-            <th>Outcome</th>
+            <th>Disposition</th>
             <th>Sentiment</th>
           </tr>
         </thead>
@@ -134,12 +90,8 @@ export function CallsTable({ calls, onOpen }) {
                 <td data-label="Result">
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
                 </td>
-                <td data-label="Outcome">
-                  {c.disposition || c.outcome ? (
-                    <Badge tone={OUTCOME_TONE(c.is_success)}>{c.disposition_label ?? titleCase(c.disposition ?? c.outcome)}</Badge>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
+                <td data-label="Disposition">
+                  <DispositionBadge call={c} />
                 </td>
                 <td data-label="Sentiment">
                   {c.sentiment ? (
@@ -156,102 +108,6 @@ export function CallsTable({ calls, onOpen }) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** P-16 Calls (CALL-05). */
-export function CallsPage() {
-  const navigate = useNavigate();
-  const toast = useToast();
-  const [params, setParams] = useSearchParams();
-  const { options } = useAgentOptions();
-  const [calling, setCalling] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const offset = Number(params.get('offset') ?? 0);
-  const filters = Object.fromEntries([...params.entries()].filter(([k]) => k !== 'offset'));
-  const list = useListCallsQuery({ range: '7d', ...filters, limit: PAGE, offset });
-  const [createExport] = useCreateExportMutation();
-  const set = (k, v) => {
-    const p = new URLSearchParams(params);
-    if (v) p.set(k, v);
-    else p.delete(k);
-    p.delete('offset');
-    setParams(p, { replace: true });
-  };
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Monitor"
-        title="Call logs"
-        description="Every call with its recording, transcript, summary, extracted data and outcome."
-        actions={
-          <>
-            <Button icon={<Zap />} onClick={() => setSimulating(true)}>
-              Simulate call
-            </Button>
-            <Button
-              icon={<Download />}
-              onClick={async () => {
-                try {
-                  await createExport({ kind: 'calls', filters: { range: '7d', ...filters } }).unwrap();
-                  toast('Export started — find it in Settings → Exports');
-                } catch (e) {
-                  toast(errMsg(e), 'error');
-                }
-              }}
-            >
-              Export
-            </Button>
-            <Link to="/calls/live" className="btn">
-              <AudioLines size={16} /> Live calls
-            </Link>
-            <Button variant="primary" icon={<PhoneCall />} onClick={() => setCalling(true)}>
-              Call a number
-            </Button>
-          </>
-        }
-      />
-
-      <div className="card">
-        <div className="card-head">
-          <CallFilters params={params} set={set} agentOptions={options} />
-        </div>
-        <Async state={list}>
-          {(page) => (
-            <>
-              {page.items.length ? (
-                <CallsTable calls={page.items} onOpen={(c) => navigate(`/calls/${c.id}`)} />
-              ) : (
-                <EmptyState
-                  icon={<AudioLines />}
-                  title="No calls match"
-                  description="Try a wider date range or clear filters, or generate demo calls."
-                  action={
-                    <Button icon={<Zap />} onClick={() => setSimulating(true)}>
-                      Simulate a demo call
-                    </Button>
-                  }
-                />
-              )}
-              <Pager
-                offset={offset}
-                limit={PAGE}
-                count={page.items.length}
-                total={page.total}
-                onChange={(o) => {
-                  const p = new URLSearchParams(params);
-                  p.set('offset', String(o));
-                  setParams(p);
-                }}
-              />
-            </>
-          )}
-        </Async>
-      </div>
-      <CallNumberDialog open={calling} onClose={() => setCalling(false)} />
-      <DemoSimulatorModal open={simulating} onClose={() => setSimulating(false)} />
-    </>
   );
 }
 
@@ -365,8 +221,8 @@ export function LiveCallsPage({ embedded = false }) {
   if (embedded) return body;
   return (
     <>
-      <Link to="/calls" className="back-link">
-        <ArrowLeft /> Call logs
+      <Link to="/#calls" className="back-link">
+        <ArrowLeft /> Calls
       </Link>
       <PageHeader
         eyebrow="Monitor"
@@ -491,6 +347,8 @@ function LiveSessionModal({ session, onClose }) {
 /** P-17 Call detail (CALL-05, PCA-01..03, INT-F5). */
 export function CallDetailPage() {
   const { id = '' } = useParams();
+  // Back to the call log with the filters it was opened from.
+  const { state } = useLocation();
   const agentName = useAgentName();
   const campaignName = useCampaignName();
   const staff = useListStaffQuery();
@@ -533,8 +391,8 @@ export function CallDetailPage() {
 
   return (
     <>
-      <Link to="/calls" className="back-link">
-        <ArrowLeft /> Call logs
+      <Link to={state?.backTo ?? '/#calls'} className="back-link">
+        <ArrowLeft /> {state?.backLabel ?? 'Calls'}
       </Link>
       <Async state={call} skeleton={<Skeleton h={300} style={{ borderRadius: 14 }} />}>
         {(c) => (
@@ -544,12 +402,17 @@ export function CallDetailPage() {
                 <div className="row" style={{ gap: 10 }}>
                   <h1 className="text-detail-title">{c.contact_name ?? (c.direction === 'outbound' ? c.to_number : c.from_number)}</h1>
                   <StatusBadge status={c.status === 'completed' ? 'active' : c.status} label={titleCase(c.status)} />
-                  {(c.disposition || c.outcome) && <Badge tone={OUTCOME_TONE(c.is_success)}>{c.disposition_label ?? titleCase(c.disposition ?? c.outcome)}</Badge>}
+                  {(c.disposition || c.outcome) && <DispositionBadge call={c} />}
                   {c.flagged && <Badge tone="orange">Flagged</Badge>}
                   {c.is_simulated && <Badge>Simulated</Badge>}
                 </div>
                 <p className="muted" style={{ marginTop: 6 }}>
-                  {titleCase(c.direction)} · {dateTime(c.started_at)} · {duration(c.duration_seconds)} · {agentName(c)}
+                  {c.campaign_id ? (
+                    <Link to={`/campaigns/${c.campaign_id}`}>{campaignName(c) ?? 'Campaign'}</Link>
+                  ) : (
+                    'No campaign'
+                  )}{' '}
+                  · {titleCase(c.direction)} · {dateTime(c.started_at)} · {duration(c.duration_seconds)} · {agentName(c)}
                   {c.agent_version ? ` v${c.agent_version}` : ''} · {number(c.billable_minutes)} min
                   {c.cost_amount != null ? ` · ${money(c.cost_amount)}` : ''}
                 </p>
@@ -567,7 +430,7 @@ export function CallDetailPage() {
                   {c.flagged ? 'Unflag' : 'Flag'}
                 </Button>
                 <Button size="sm" onClick={() => setEditing(true)}>
-                  Outcome & tags
+                  Disposition & tags
                 </Button>
                 <Button size="sm" icon={<Star />} onClick={() => setReviewing(true)}>
                   Review
@@ -637,9 +500,9 @@ export function CallDetailPage() {
                     <p className="muted small">
                       {recording.isLoading
                         ? 'Loading…'
-                        : call.data?.has_recording
-                          ? "The recording couldn't be loaded. Try again in a minute."
-                          : "This call has no recording: calls aren't recorded yet. The transcript has everything that was said."}
+                        : !call.data?.has_recording || recording.error?.status === 404
+                          ? 'No recording for this call. The transcript below has everything that was said.'
+                          : "The recording couldn't be loaded. Try again in a minute."}
                     </p>
                   )}
                 </div>
@@ -1200,53 +1063,6 @@ export function ReviewPage() {
           </div>
         )}
       </Modal>
-    </>
-  );
-}
-
-/** Inbound calls: live calls + inbound log + number routing shortcuts. */
-export function InboundPage() {
-  const navigate = useNavigate();
-  const inbound = useListCallsQuery({ direction: 'inbound', range: '7d', limit: 15 });
-
-  if (inbound.data?.items.length === 0) {
-    return <PixelHero icon={PhoneIncoming} motion="ring" title="Answer inbound calls automatically" description="Create an agent to handle incoming calls." />;
-  }
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Deploy"
-        title="Inbound calls"
-        description="Calls coming in to your numbers right now and recently. Set who answers and when on Phone numbers."
-        actions={
-          <Link to="/numbers" className="btn">
-            <PhoneIncoming size={16} /> Numbers & routing
-          </Link>
-        }
-      />
-
-      <div className="stack">
-        {/* Calls coming in are handled by the call runtime: they show as live sessions. */}
-        <LiveSessionsCard />
-        <div className="card">
-          <div className="card-head">
-            <h2>Recent inbound calls</h2>
-            <Link to="/calls?direction=inbound" className="btn sm ghost">
-              All inbound calls
-            </Link>
-          </div>
-          <Async state={inbound}>
-            {(p) =>
-              p.items.length ? (
-                <CallsTable calls={p.items} onOpen={(c) => navigate(`/calls/${c.id}`)} />
-              ) : (
-                <EmptyState title="No inbound calls in the last 7 days" />
-              )
-            }
-          </Async>
-        </div>
-      </div>
     </>
   );
 }

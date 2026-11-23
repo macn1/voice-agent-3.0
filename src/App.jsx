@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { RequireAuth } from './components/Shell';
 import { ToastProvider } from './components/ui';
 import { RealmProvider } from './lib/auth';
@@ -17,7 +17,7 @@ import { ToolsPage } from './pages/customer/build/ToolsPage';
 import { WorkflowsPage } from './pages/customer/workflows/WorkflowsPage';
 import { KnowledgeDetailPage, KnowledgeListPage } from './pages/customer/knowledge/KnowledgePages';
 import { NumberRoutingPage, NumbersPage } from './pages/customer/numbers/NumbersPages';
-import { CallDetailPage, CallsPage, LiveCallsPage, ReviewPage } from './pages/customer/calls/CallsPages';
+import { CallDetailPage, LiveCallsPage, ReviewPage } from './pages/customer/calls/CallsPages';
 import { ContactDetailPage, ContactsPage } from './pages/customer/contacts/ContactsPages';
 import { DevelopersPage } from './pages/customer/developers/DevelopersPage';
 import { AnalyticsPage } from './pages/customer/analytics/AnalyticsPage';
@@ -47,6 +47,12 @@ import { AdminProfilePage, AdminRolesPage, AdminStaffPage } from './pages/admin/
 import { AdminAuditPage, NumberPoolPage } from './pages/admin/AdminExtraPages';
 import { AdminAgentsPage } from './pages/admin/AgentsPage';
 import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
+
+/** The call log is on Home now: old /calls links keep their filters. */
+function CallsToHome() {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: '/', search, hash: 'calls' }} replace />;
+}
 
 function Realm({ realm }) {
   return (
@@ -139,7 +145,7 @@ export function App() {
 
               {/* Monitor */}
               <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="calls" element={<CallsPage />} />
+              <Route path="calls" element={<CallsToHome />} />
               <Route path="calls/live" element={<LiveCallsPage />} />
               <Route path="calls/:id" element={<CallDetailPage />} />
               <Route path="review" element={<ReviewPage />} />

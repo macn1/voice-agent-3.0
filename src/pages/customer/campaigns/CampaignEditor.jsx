@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  AudioLines,
   BarChart3,
   BookOpen,
   Brain,
@@ -186,6 +187,9 @@ export function CampaignEditor() {
               </p>
             </div>
             <div className="row wrap">
+              <Link to={`/?campaign_id=${a.id}#calls`} className="btn">
+                <AudioLines size={16} /> Calls
+              </Link>
               <Button icon={<Play />} onClick={() => setTesting(true)}>
                 Test
               </Button>

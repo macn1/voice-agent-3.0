@@ -478,7 +478,7 @@ export function WelcomePage() {
       done: p?.call,
       title: 'Make a real call',
       text: 'Call your number, or have the campaign call you.',
-      to: '/calls',
+      to: '/#calls',
     },
   ];
   const done = steps.filter((s) => s.done).length;

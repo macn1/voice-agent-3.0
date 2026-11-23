@@ -2,7 +2,6 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
-  AudioLines,
   Inbox,
   MessageCircle,
   Plug,
@@ -68,7 +67,6 @@ const SECTIONS = [
     label: 'Monitor',
     items: [
       { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-      { to: '/calls', label: 'Call logs', icon: AudioLines },
       { to: '/review', label: 'Quality review', icon: Star },
     ],
   },

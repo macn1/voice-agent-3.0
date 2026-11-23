@@ -1,5 +1,6 @@
 import { baseApi } from './baseApi';
 import { C, P } from './services';
+import { fetchAuthed } from './baseQuery';
 
 // voice-telephony-be + voice-inbound-be (NUM-01/02, EXT-01), voice-outbound-be
 // (CALL-02/03/04/07/08/10/11, CON-01/03, CMP-03) and call records in
@@ -214,7 +215,36 @@ export const callsApi = baseApi.injectEndpoints({
       transformResponse: (res) => res?.turns ?? res ?? [],
     }),
     getCallAnalysis: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/analysis`) }),
-    getRecording: b.query({ query: (id) => C.analytics(`/customer/calls/${id}/recording`) }),
+    // The call's recording, as { url } the player can use: the API's signed URL
+    // ({ url } in JSON), or the audio itself (made into a local URL). Today the
+    // route answers 404 recording_not_available.
+    getRecording: b.query({
+      async queryFn(id) {
+        let res;
+        try {
+          res = await fetchAuthed({ service: 'analytics', url: `/customer/calls/${id}/recording` });
+        } catch {
+          return { error: { status: 0, code: 'network_error', message: 'Could not reach the server. Check your connection and try again.' } };
+        }
+        const type = res.headers.get('content-type') ?? '';
+        if (!res.ok || type.includes('application/json')) {
+          let body = null;
+          try {
+            body = await res.json();
+          } catch {
+            body = null;
+          }
+          if (!res.ok || body?.success === false) {
+            return { error: { status: res.status, code: body?.error?.code ?? `http_${res.status}`, message: body?.error?.message ?? `Request failed (${res.status})` } };
+          }
+          const d = body?.data ?? body ?? {};
+          const url = d.url ?? d.recording_url ?? d.signed_url;
+          return url ? { data: { url, expires_at: d.expires_at ?? null } } : { error: { status: 404, code: 'recording_not_available', message: 'No recording' } };
+        }
+        return { data: { url: URL.createObjectURL(await res.blob()), expires_at: null } };
+      },
+      keepUnusedDataFor: 300,
+    }),
     listLiveCalls: b.query({ query: () => C.outbound('/customer/calls/live'), providesTags: ['Call'] }),
     updateCall: b.mutation({ query: ({ id, ...body }) => C.analytics(`/customer/calls/${id}`, { method: 'PATCH', body }), invalidatesTags: ['Call'] }),
     rerunAnalysis: b.mutation({ query: (id) => C.analytics(`/customer/calls/${id}/analysis/rerun`, { method: 'POST', body: {} }), invalidatesTags: ['Call'] }),

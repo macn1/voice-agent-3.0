@@ -260,6 +260,22 @@ export async function postForBlob({ service, realm = 'customer', url, body }) {
 }
 
 /**
+ * GET a route with the realm's token (refreshing it once on 401) and hand back
+ * the raw Response, for routes that may answer with a file or with JSON.
+ */
+export async function fetchAuthed({ service, realm = 'customer', url, params }) {
+  const { store } = await import('../index');
+  const run = (token) =>
+    fetch(`${API_BASE}${PREFIX[service]}/api/v1${url}${qs(params)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  let res = await run(store.getState().auth[realm].tokens?.access_token);
+  if (res.status === 401) {
+    const next = await refreshTokens(realm, store);
+    if (next) res = await run(next.access_token);
+  }
+  return res;
+}
+
+/**
  * Fetch a non-JSON route (PDF / CSV) with the realm's token and save it as
  * `filename`. Returns the Blob; throws an Error carrying the API's message.
  */

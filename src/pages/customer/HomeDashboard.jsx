@@ -5,10 +5,9 @@ import { useGetAnalyticsQuery } from '../../store/api/analyticsApi';
 import { useListCallsQuery } from '../../store/api/callsApi';
 import { useListConversationsQuery } from '../../store/api/integrationApi';
 import { number } from '../../lib/format';
-import { Badge, StatusBadge } from '../../components/ui';
+import { StatusBadge } from '../../components/ui';
 import { Stat, TimeChart } from '../../components/charts';
 import { useBilling } from './billingContext';
-import { CallsTable } from './calls/CallsPages';
 
 /**
  * P-06 Dashboard (ANA-F1, CUS-08) under the hero. Renders nothing for a
@@ -19,7 +18,6 @@ export function HomeDashboard() {
   const { minutesRatio, usage, includedMinutes } = useBilling();
   const summary = useGetAnalyticsQuery({ report: 'summary', range: '365d' });
   const ts = useGetAnalyticsQuery({ report: 'timeseries', range: '14d' });
-  const recent = useListCallsQuery({ range: '7d', limit: 10 });
   const failedQ = useListCallsQuery({ range: '1d', status: 'failed', limit: 1 });
   const flaggedQ = useListCallsQuery({ range: '7d', flagged: true, limit: 1 });
   const waitingQ = useListConversationsQuery({ status: 'needs_human' });
@@ -29,7 +27,7 @@ export function HomeDashboard() {
   const waiting = { data: waitingQ.data?.length };
 
   // Render nothing until at least one of these services is deployed.
-  const allMissing = [summary, recent, campaigns].every((s) => s.error?.notAvailable);
+  const allMissing = [summary, campaigns].every((s) => s.error?.notAvailable);
   if (allMissing) return null;
 
   const attention = [
@@ -37,7 +35,7 @@ export function HomeDashboard() {
       ? {
           icon: PhoneOff,
           text: `${failed.data} failed calls today`,
-          to: '/calls?status=failed&range=1d',
+          to: '/?range=today&status=failed#calls',
         }
       : null,
     flagged.data
@@ -79,7 +77,14 @@ export function HomeDashboard() {
             marginBottom: 14,
           }}
         >
-          <Stat label="Total calls" hint="Last 12 months" value={number(summary.data.calls)} onClick={() => navigate('/calls')} />
+          <Stat
+            label="Total calls"
+            hint="Last 12 months"
+            value={number(summary.data.calls)}
+            onClick={() => {
+              document.getElementById('calls')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
           <Stat
             label="Minutes this period"
             value={number(usage?.callMinutes ?? summary.data.minutes)}
@@ -160,17 +165,6 @@ export function HomeDashboard() {
           </div>
         )}
       </div>
-      {recent.data && recent.data.items.length > 0 && (
-        <div className="card">
-          <div className="card-head">
-            <h2>Recent calls</h2>
-            <Link to="/calls" className="btn sm ghost">
-              Call logs <Badge plain>{number(recent.data.total)}</Badge>
-            </Link>
-          </div>
-          <CallsTable calls={recent.data.items} onOpen={(c) => navigate(`/calls/${c.id}`)} />
-        </div>
-      )}
     </section>
   );
 }

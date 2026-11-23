@@ -179,7 +179,7 @@ function Overview({ filters }) {
       <Async state={summary} skeleton={<Skeleton h={110} />}>
         {(s) => (
           <div className="grid-3" style={{ '--grid-cols': 'repeat(4, minmax(0, 1fr))' }}>
-            <Stat label="Calls" value={number(s.calls)} hint={delta(s.calls, s.prev?.calls)} onClick={() => navigate('/calls')} />
+            <Stat label="Calls" value={number(s.calls)} hint={delta(s.calls, s.prev?.calls)} onClick={() => navigate('/?range=30d#calls')} />
             <Stat label="Minutes" value={number(s.minutes)} hint={delta(s.minutes, s.prev?.minutes)} />
             <Stat label="Success rate" value={percent(s.success_rate)} hint={delta(s.success_rate, s.prev?.success_rate)} />
             <Stat
@@ -231,7 +231,7 @@ function Overview({ filters }) {
                   </thead>
                   <tbody>
                     {rows.map((r) => (
-                      <tr key={r.agent_id} className="clickable" onClick={() => navigate(`/calls?agent_id=${r.agent_id}`)}>
+                      <tr key={r.agent_id} className="clickable" onClick={() => navigate(`/?agent_id=${r.agent_id}`)}>
                         <td className="cell-main">{r.agent_name ?? agentName(r.agent_id)}</td>
                         <td className="num">{number(r.calls)}</td>
                         <td className="num">{number(r.minutes)}</td>
@@ -271,7 +271,7 @@ function Outcomes({ filters }) {
                     label: `${titleCase(r.outcome)}${r.is_success ? ' ✓' : ''}`,
                     value: r.count,
                   }))}
-                  onClick={(i) => navigate(`/calls?outcome=${rows[i].outcome}`)}
+                  onClick={(i) => navigate(`/?range=30d&outcome=${rows[i].outcome}#calls`)}
                 />
               ) : (
                 <EmptyState title="No outcomes yet" />

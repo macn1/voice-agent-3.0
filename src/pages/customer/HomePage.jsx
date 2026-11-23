@@ -5,6 +5,7 @@ import { useTheme } from '../../lib/theme';
 import { useLazyListCampaignsQuery } from '../../store/api/flowApi';
 import { AgentPromptBox, UseCaseGallery } from './AgentStarter';
 import { HomeDashboard } from './HomeDashboard';
+import { CallLog } from './calls/CallLog';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -32,6 +33,8 @@ export function HomePage() {
       <UseCaseGallery />
 
       <HomeDashboard />
+
+      <CallLog />
 
       <button
         className="fab"
