@@ -872,7 +872,6 @@ function OutcomeModal({ open, onClose, call, outcomes, onSaved }) {
   useEffect(() => {
     setOutcome(current());
     setTags(call.tags);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call, open]);
   return (
     <Modal
