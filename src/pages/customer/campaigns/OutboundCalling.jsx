@@ -76,9 +76,10 @@ const NAME_COLUMN = /^(full[_ ]?name|name|contact[_ ]?name)$/i;
 /**
  * An outbound campaign's calling, set up once: the number it calls from, who
  * to call (a CSV or a contact list) and when. It makes the campaign's calling
- * in voice-outbound-be (same id as the campaign).
+ * in voice-outbound-be (same id as the campaign) on its first step; onDone
+ * is called when it's started or scheduled (or left to finish later).
  */
-function CallingSetup({ campaign }) {
+function CallingSetup({ campaign, onDone }) {
   const toast = useToast();
   const [params] = useSearchParams();
   const { options: numberOptions } = useNumberOptions();
@@ -168,6 +169,7 @@ function CallingSetup({ campaign }) {
       }
       await campaignAction({ id: calling.id, action: 'start' }).unwrap();
       toast(now ? 'Calling started' : 'Calling scheduled');
+      onDone?.();
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -410,8 +412,22 @@ function CallingSetup({ campaign }) {
             <Button disabled={step === 0 || (step === 1 && !!calling)} onClick={() => setStep((s) => s - 1)}>
               Back
             </Button>
-            <Button variant="primary" icon={<ArrowRight />} loading={busy} onClick={next}>
-              Continue
+            <div className="row">
+              {calling && (
+                <Button variant="ghost" onClick={() => onDone?.()}>
+                  Finish later
+                </Button>
+              )}
+              <Button variant="primary" icon={<ArrowRight />} loading={busy} onClick={next}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        )}
+        {step === 2 && calling && (
+          <div>
+            <Button variant="ghost" onClick={() => onDone?.()}>
+              Finish later
             </Button>
           </div>
         )}
@@ -529,8 +545,14 @@ export function CallingTab({ campaign }) {
   const [campaignAction] = useCampaignActionMutation();
   const [tab, setTab] = useState('overview');
   const [cancelling, setCancelling] = useState(false);
+  // The setup stays on screen until it's finished: its first step makes the
+  // calling, and the refetch that follows mustn't skip schedule and review.
+  const [settingUp, setSettingUp] = useState(false);
+  useEffect(() => {
+    if (camp.error?.status === 404) setSettingUp(true);
+  }, [camp.error?.status]);
 
-  if (camp.error?.status === 404) return <CallingSetup campaign={campaign} />;
+  if (settingUp || camp.error?.status === 404) return <CallingSetup campaign={campaign} onDone={() => setSettingUp(false)} />;
 
   const act = async (action, msg) => {
     try {
