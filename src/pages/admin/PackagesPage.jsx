@@ -43,6 +43,7 @@ export function PackagesPage() {
                       <th className="num">Price</th>
                       <th className="num">Minutes</th>
                       <th className="num">Agents</th>
+                      <th className="num">Campaigns</th>
                       <th className="num">Concurrent</th>
                       <th className="num">Overage / min</th>
                       <th>Visibility</th>
@@ -66,6 +67,7 @@ export function PackagesPage() {
                         </td>
                         <td className="num">{number(p.included_call_minutes)}</td>
                         <td className="num">{number(p.included_agents)}</td>
+                        <td className="num">{Number(p.included_campaigns) > 0 ? number(p.included_campaigns) : 'No limit'}</td>
                         <td className="num">{number(p.max_concurrent_calls)}</td>
                         <td className="num">{money(p.overage_rate_per_minute, p.currency)}</td>
                         <td>{p.is_public ? <Badge tone="blue">Public</Badge> : <Badge>Admin only</Badge>}</td>
@@ -108,6 +110,7 @@ const EMPTY = {
   billing_cycle: 'monthly',
   included_call_minutes: '',
   included_agents: '',
+  included_campaigns: '',
   max_concurrent_calls: '',
   overage_rate_per_minute: '',
   llm_tier: 'standard',
@@ -123,6 +126,7 @@ const toForm = (p) => ({
   billing_cycle: p.billing_cycle,
   included_call_minutes: String(p.included_call_minutes),
   included_agents: String(p.included_agents),
+  included_campaigns: String(p.included_campaigns ?? 0),
   max_concurrent_calls: String(p.max_concurrent_calls),
   overage_rate_per_minute: String(p.overage_rate_per_minute),
   llm_tier: p.llm_tier ?? '',
@@ -153,7 +157,7 @@ function PackageModal({ value, onClose, onSaved }) {
   if (!f.code.trim()) errs.code = 'Required';
   if (!f.name.trim()) errs.name = 'Required';
   if (!/^[A-Z]{3}$/.test(f.currency)) errs.currency = '3-letter code, e.g. USD';
-  ['price_amount', 'included_call_minutes', 'included_agents', 'max_concurrent_calls', 'overage_rate_per_minute'].forEach((k) => {
+  ['price_amount', 'included_call_minutes', 'included_agents', 'included_campaigns', 'max_concurrent_calls', 'overage_rate_per_minute'].forEach((k) => {
     if (!isNum(f[k])) errs[k] = 'Enter a number ≥ 0';
   });
   const e = (k) => (touched ? errs[k] : undefined);
@@ -169,6 +173,7 @@ function PackageModal({ value, onClose, onSaved }) {
       billing_cycle: f.billing_cycle,
       included_call_minutes: Number(f.included_call_minutes),
       included_agents: Number(f.included_agents),
+      included_campaigns: Number(f.included_campaigns),
       max_concurrent_calls: Number(f.max_concurrent_calls),
       overage_rate_per_minute: Number(f.overage_rate_per_minute),
       llm_tier: f.llm_tier || undefined,
@@ -232,6 +237,9 @@ function PackageModal({ value, onClose, onSaved }) {
           </Field>
           <Field label="Included agents" error={e('included_agents')}>
             <Input inputMode="numeric" value={f.included_agents} onChange={(ev) => set('included_agents', ev.target.value)} placeholder="5" />
+          </Field>
+          <Field label="Campaigns allowed" hint="0 = no limit" error={e('included_campaigns')}>
+            <Input inputMode="numeric" value={f.included_campaigns} onChange={(ev) => set('included_campaigns', ev.target.value)} placeholder="5" />
           </Field>
           <Field label="Max concurrent calls" error={e('max_concurrent_calls')}>
             <Input inputMode="numeric" value={f.max_concurrent_calls} onChange={(ev) => set('max_concurrent_calls', ev.target.value)} placeholder="10" />

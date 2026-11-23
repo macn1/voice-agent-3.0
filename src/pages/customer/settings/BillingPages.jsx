@@ -34,6 +34,9 @@ export function PackageFeatures({ p }) {
         <Check /> {number(p.included_agents)} agents
       </li>
       <li>
+        <Check /> {Number(p.included_campaigns) > 0 ? `${number(p.included_campaigns)} campaigns` : 'Unlimited campaigns'}
+      </li>
+      <li>
         <Check /> {number(p.max_concurrent_calls)} concurrent calls
       </li>
       <li>
@@ -152,6 +155,9 @@ export function PlanPage() {
               </span>
               <span>
                 <b>{number(plan.included_agents)}</b> <span className="muted">agents</span>
+              </span>
+              <span>
+                <b>{Number(plan.included_campaigns) > 0 ? number(plan.included_campaigns) : 'Unlimited'}</b> <span className="muted">campaigns</span>
               </span>
               <span>
                 <b>{number(plan.max_concurrent_calls)}</b> <span className="muted">concurrent calls</span>
