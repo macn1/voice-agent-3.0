@@ -31,7 +31,7 @@ import {
 import { CopyField, Drawer, MappingEditor, Select } from '../../../components/forms';
 import { PixelHero } from '../../../components/PixelHero';
 import { useBilling } from '../billingContext';
-import { E164, useAgentOptions, useNumberOptions } from '../shared';
+import { E164, useAgentOptions, useNumberOptions, MESSAGE_STATUS } from '../shared';
 
 /** Workflows: call triggers (CALL-10, INT-F7), callbacks (CON-03), follow-up log (ACT-03.4). */
 export function WorkflowsPage() {
@@ -522,16 +522,6 @@ function ScheduledTab() {
 }
 
 // A follow-up waits "queued" until it is due, then goes out through the connected email or WhatsApp.
-const MESSAGE_STATUS = {
-  queued: ['pending', 'Queued'],
-  sending: ['pending', 'Sending'],
-  sent: ['active', 'Sent'],
-  delivered: ['active', 'Delivered'],
-  read: ['active', 'Read'],
-  failed: ['failed', 'Failed'],
-  simulated: ['draft', 'Simulated'],
-};
-
 function MessagesTab() {
   const list = useListMessagesQuery({ limit: 100 });
   return (

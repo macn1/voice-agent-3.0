@@ -215,3 +215,14 @@ export function duration(sec) {
 }
 
 export const OUTCOME_TONE = (success) => (success === true ? 'green' : success === false ? 'amber' : '');
+
+/** Follow-up message statuses: [StatusBadge status, label]. */
+export const MESSAGE_STATUS = {
+  queued: ['pending', 'Queued'],
+  sending: ['pending', 'Sending'],
+  sent: ['active', 'Sent'],
+  delivered: ['active', 'Delivered'],
+  read: ['active', 'Read'],
+  failed: ['failed', 'Failed'],
+  simulated: ['draft', 'Simulated'],
+};

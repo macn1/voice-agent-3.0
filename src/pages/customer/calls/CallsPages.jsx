@@ -42,7 +42,8 @@ import { dateTime, money, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, StatusBadge, useToast } from '../../../components/ui';
 import { ListEditor, Select, Textarea } from '../../../components/forms';
 import { useAuth } from '../../../lib/auth';
-import { duration, useAgentName, useCampaignName } from '../shared';
+import { duration, MESSAGE_STATUS, useAgentName, useCampaignName } from '../shared';
+import { useListMessagesQuery } from '../../../store/api/integrationApi';
 import { BUILTIN, DispositionBadge } from './CallLog';
 import { DemoSimulatorModal } from '../../../components/DemoSimulatorModal';
 import { copyText } from '../../../lib/clipboard';
@@ -649,6 +650,7 @@ export function CallDetailPage() {
                     </dd>
                   </dl>
                 </div>
+                <FollowUpsCard callId={id} />
                 <div className="card card-pad stack" style={{ gap: 10 }}>
                   <span className="card-title">Reviews</span>
                   {(reviews.data ?? []).length ? (
@@ -674,6 +676,43 @@ export function CallDetailPage() {
         )}
       </Async>
     </>
+  );
+}
+
+/** The messages this call's follow-up rules sent (or will send), with why one failed. Hidden when there are none. */
+function FollowUpsCard({ callId }) {
+  const list = useListMessagesQuery({ call_id: callId, limit: 20 });
+  const items = list.data?.items ?? [];
+  if (!items.length) return null;
+  return (
+    <div className="card card-pad stack" style={{ gap: 12 }}>
+      <span className="card-title">Follow-ups</span>
+      {items.map((m) => (
+        <div key={m.id} className="stack" style={{ gap: 4 }}>
+          <div className="row between wrap" style={{ gap: 8 }}>
+            <span className="small">
+              <b>{m.channel === 'sms' ? 'SMS' : titleCase(m.channel)}</b>
+              {m.to_address ? (
+                <>
+                  {' '}
+                  to <span className="mono">{m.to_address}</span>
+                </>
+              ) : null}
+            </span>
+            <StatusBadge status={MESSAGE_STATUS[m.status]?.[0] ?? 'pending'} label={MESSAGE_STATUS[m.status]?.[1] ?? titleCase(m.status)} />
+          </div>
+          <div className="muted small">{m.status === 'queued' ? `Goes out ${dateTime(m.created_at)}` : dateTime(m.created_at)}</div>
+          <div className="small" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            {m.body}
+          </div>
+          {m.status === 'failed' && m.error && (
+            <div className="small" style={{ color: 'var(--red)', overflowWrap: 'anywhere' }}>
+              Not sent: {m.error}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
