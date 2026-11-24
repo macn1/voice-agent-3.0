@@ -650,10 +650,10 @@ function ChatCampaignCard({ account, campaigns, loading, onSave }) {
   const [campaign, setCampaign] = useState(account.campaign_id ?? '');
   const [saving, setSaving] = useState(false);
   const current = campaigns.find((c) => c.id === account.campaign_id);
-  // Published campaigns first (chats are answered from the campaign as drafted, until a chat runtime exists).
+  // Published campaigns first: chats are answered from the published version, so a campaign never published stays silent.
   const options = [...campaigns]
     .sort((a, b) => (a.status === 'draft' ? 1 : 0) - (b.status === 'draft' ? 1 : 0) || a.name.localeCompare(b.name))
-    .map((c) => ({ value: c.id, label: `${c.name}${c.agent_name ? ` · ${c.agent_name}` : ''}${c.status === 'draft' ? ' (not published)' : ''}` }));
+    .map((c) => ({ value: c.id, label: `${c.name}${c.agent_name ? ` · ${c.agent_name}` : ''}${c.status === 'draft' ? " (not published: won't answer)" : ''}` }));
   if (account.campaign_id && !current && !loading) options.unshift({ value: account.campaign_id, label: 'Deleted campaign' });
   const changed = campaign !== (account.campaign_id ?? '');
   return (
@@ -670,6 +670,9 @@ function ChatCampaignCard({ account, campaigns, loading, onSave }) {
           <>
             Answered now by <b>{current ? current.name : 'a deleted campaign'}</b>
             {current?.agent_name ? ` (${current.agent_name})` : ''}.
+            {current?.status === 'draft' && (
+              <span style={{ color: 'var(--red)' }}> It isn't published yet, so it doesn't answer: publish it first.</span>
+            )}
           </>
         ) : (
           'No campaign answers chats on this number: staff reply in the Inbox.'
@@ -678,7 +681,7 @@ function ChatCampaignCard({ account, campaigns, loading, onSave }) {
       <div className="form-grid">
         <Field
           label="Campaign that answers chats"
-          hint="Its agent replies with the campaign's instructions, knowledge and tools, until a person takes the conversation over in the Inbox."
+          hint="Its agent replies from the campaign's published version (instructions, knowledge and tools), until a person takes the conversation over in the Inbox."
         >
           <Select value={campaign} options={options} placeholder="Nobody: staff answer in the Inbox" onChange={(e) => setCampaign(e.target.value)} />
         </Field>
