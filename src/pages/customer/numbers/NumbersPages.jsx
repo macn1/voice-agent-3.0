@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Activity,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -9,10 +8,11 @@ import {
   CalendarDays,
   Check,
   Clock,
-  Cloud,
   Link2,
   Phone,
   PhoneCall,
+  PhoneIncoming,
+  PhoneOff,
   Plus,
   Search,
   ShoppingCart,
@@ -20,23 +20,22 @@ import {
   Unlink,
 } from 'lucide-react';
 import {
-  useAddConnectionMutation,
   useAssignNumberCampaignMutation,
   useGetNumberQuery,
+  useGetNumberShopQuery,
   useGetRoutingQuery,
-  useDeleteConnectionMutation,
   useListConnectionsQuery,
-  useTestConnectionMutation,
   useListHolidaysQuery,
   useListNumbersQuery,
   usePurchaseNumberMutation,
   usePutHolidaysMutation,
   usePutRoutingMutation,
+  useRemoveOwnNumberMutation,
   useSearchAvailableNumbersQuery,
   useSimulateRoutingMutation,
   useUnassignNumberCampaignMutation,
 } from '../../../store/api/callsApi';
-import { date, dateTime, money, titleCase } from '../../../lib/format';
+import { date, money } from '../../../lib/format';
 import {
   Async,
   Badge,
@@ -49,48 +48,52 @@ import {
   Modal,
   PageHeader,
   SegmentTabs,
-  StatusBadge,
   Toggle,
   useToast,
 } from '../../../components/ui';
 import { SectionCard, Select, Textarea, useSection } from '../../../components/forms';
 import { useCampaignOptions } from '../shared';
 import { useGetAnalyticsQuery } from '../../../store/api/analyticsApi';
+import { CarrierAccounts, carrierName } from './CarrierAccounts';
 
-// Telephony providers shown on "Bring your own telephony". Each logo is read from
-// public/providers/<key>.png; if that file is missing the fallback icon is shown,
-// so adding an official logo later needs no code change.
-const PROVIDERS = [
-  { key: 'exotel', name: 'Exotel' },
-  { key: 'smartflo', name: 'Smartflo', fallback: Cloud },
-  { key: 'pulse', name: 'Pulse', fallback: Activity },
-  { key: 'intalk', name: 'InTalk' },
-  { key: 'vobiz', name: 'Vobiz' },
-  { key: 'twilio', name: 'Twilio' },
+// Carriers a company can connect its own account from (public/providers/<key>.png).
+const OWN_CARRIERS = [
   { key: 'plivo', name: 'Plivo' },
+  { key: 'twilio', name: 'Twilio' },
+  { key: 'exotel', name: 'Exotel' },
 ];
 
 function ProviderChip({ provider }) {
   const [missing, setMissing] = useState(false);
-  const Fallback = provider.fallback ?? Phone;
   return (
     <span className="provider-chip">
-      {missing ? <Fallback aria-hidden /> : <img src={`/providers/${provider.key}.png`} alt="" aria-hidden="true" onError={() => setMissing(true)} />}
+      {missing ? <Phone aria-hidden /> : <img src={`/providers/${provider.key}.png`} alt="" aria-hidden="true" onError={() => setMissing(true)} />}
       {provider.name}
     </span>
   );
 }
 
-/** P-14 Phone numbers (NUM-01, EXT-01). */
+const NUMBER_TYPES = ['local', 'mobile', 'toll_free'];
+const TYPE_LABEL = { local: 'Local', mobile: 'Mobile', toll_free: 'Toll-free' };
+const inr = (amount, currency) => money(amount, currency ?? 'INR');
+/** "₹500/mo" or "₹500/mo + ₹1,000 setup". */
+const priceText = (p) => `${inr(p.monthly_price, p.currency)}/mo${Number(p.setup_price) > 0 ? ` + ${inr(p.setup_price, p.currency)} setup` : ''}`;
+
+const TABS = ['numbers', 'carriers', 'holidays'];
+
+/** P-14 Phone numbers (NUM-01, EXT-01): rent from Aurlynn, the company's own carrier accounts, its numbers. */
 export function NumbersPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const list = useListNumbersQuery();
+  const shop = useGetNumberShopQuery();
+  const conns = useListConnectionsQuery();
   const usage = useGetAnalyticsQuery({ report: 'phone-numbers', range: '7d' });
   // The report is keyed by the number itself (E.164).
   const calls7d = Object.fromEntries((Array.isArray(usage.data) ? usage.data : []).map((r) => [r.number, r.calls]));
   const [assignCampaign] = useAssignNumberCampaignMutation();
   const [unassignCampaign] = useUnassignNumberCampaignMutation();
+  const [removeOwnNumber] = useRemoveOwnNumberMutation();
   const { campaigns } = useCampaignOptions();
   // Inbound campaigns first: they are the ones that answer numbers.
   const campaignOptions = [...campaigns]
@@ -99,8 +102,12 @@ export function NumbersPage() {
   const [assigning, setAssigning] = useState(null);
   const [campaignId, setCampaignId] = useState('');
   const [unassigning, setUnassigning] = useState(null);
+  const [takingOut, setTakingOut] = useState(null);
   const [buying, setBuying] = useState(false);
-  const [tab, setTab] = useState('numbers');
+  // The tab is in the address (?tab=carriers), so a reload or a link keeps it.
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.includes(params.get('tab')) ? params.get('tab') : 'numbers';
+  const setTab = (t) => setParams(t === 'numbers' ? {} : { tab: t }, { replace: true });
   const manageRef = useRef(null);
   // "Connect" opens the carrier tab, then scrolls once it has rendered (scrolling
   // first gets cancelled when the tab swap changes the page height).
@@ -110,6 +117,21 @@ export function NumbersPage() {
     manageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setScrollToManage(false);
   }, [scrollToManage, tab]);
+  const openCarriers = () => {
+    setTab('carriers');
+    setScrollToManage(true);
+  };
+
+  // The shop opens when our own Plivo account is connected; until then (or if the
+  // route isn't served yet) renting is "coming soon".
+  const canRent = shop.data?.available === true;
+  const prices = NUMBER_TYPES.map((t) => (shop.data?.prices ?? []).find((p) => p.number_type === t)).filter(Boolean);
+  const connections = conns.data ?? [];
+  const ownCarrier = (n) => {
+    if (!n.carrier_connection_id) return null;
+    const c = connections.find((x) => x.id === n.carrier_connection_id);
+    return { type: c?.type ?? n.provider, name: c?.name };
+  };
 
   return (
     <>
@@ -120,29 +142,46 @@ export function NumbersPage() {
             <span className="clay warm" aria-hidden>
               <PhoneCall />
             </span>
-            <h2>Rent from Aurlynn</h2>
-            <p>Aurlynn provisions and manages the phone numbers for you, end to end.</p>
+            <h2>
+              Rent from Aurlynn{' '}
+              {!canRent && !shop.isLoading && (
+                <span style={{ verticalAlign: 'middle' }}>
+                  <Badge tone="amber">Coming soon</Badge>
+                </span>
+              )}
+            </h2>
+            <p>Aurlynn rents Indian phone numbers for you and manages them end to end.</p>
             <ul className="check-list">
               <li>
-                <Check /> Add or release numbers anytime
+                <Check /> Local, mobile and toll-free numbers in India
               </li>
               <li>
-                <Check /> Search and buy numbers right here, in India and abroad
+                <Check /> Search and buy them right here
               </li>
               <li>
-                <Check /> Fully managed telephony — nothing to set up
+                <Check /> Fully managed: nothing to set up with a carrier
               </li>
             </ul>
             <p className="small muted option-meta">
-              Priced per number, per month ·{' '}
-              <Link to="/settings/plan" className="login-link">
-                View plans
-              </Link>
+              {prices.length ? prices.map((p) => `${TYPE_LABEL[p.number_type]} ${priceText(p)}`).join(' · ') : 'Priced per number, per month'}
             </p>
             <div className="option-foot">
-              <Button variant="primary" onClick={() => setBuying(true)}>
-                Get started <ArrowRight />
-              </Button>
+              {canRent ? (
+                <Button variant="primary" onClick={() => setBuying(true)}>
+                  Get a number <ArrowRight />
+                </Button>
+              ) : (
+                <div className="stack" style={{ gap: 8 }}>
+                  <div>
+                    <Button disabled>{shop.isLoading ? 'Get a number' : 'Coming soon'}</Button>
+                  </div>
+                  {!shop.isLoading && (
+                    <p className="small muted" style={{ margin: 0 }}>
+                      Renting numbers from Aurlynn opens soon. Until then, bring in numbers from your own carrier account.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </article>
 
@@ -150,32 +189,30 @@ export function NumbersPage() {
             <span className="clay" aria-hidden>
               <Cable />
             </span>
-            <h2>Bring your own telephony</h2>
-            <p>Connect a telephony provider you already use and import your phone numbers.</p>
+            <h2>Bring your own carrier</h2>
+            <p>Connect your Plivo, Twilio or Exotel account and bring in the numbers you already have.</p>
             <ul className="check-list">
               <li>
-                <Check /> Works with {PROVIDERS.length} leading providers
+                <Check /> Keep your numbers and your carrier’s rates
               </li>
               <li>
-                <Check /> Integrate your existing telephony instantly
+                <Check /> Plivo and Twilio numbers are pointed at Aurlynn for you
               </li>
               <li>
-                <Check /> Keep your current numbers and rates
+                <Check /> Exotel: add our Voicebot applet to your call flow
               </li>
             </ul>
             <div className="provider-chips">
-              {PROVIDERS.map((p) => (
+              {OWN_CARRIERS.map((p) => (
                 <ProviderChip key={p.key} provider={p} />
               ))}
+              <span className="provider-chip" title="SIP trunks are coming soon">
+                <Cable aria-hidden /> SIP trunk · Coming soon
+              </span>
             </div>
             <div className="option-foot">
-              <Button
-                onClick={() => {
-                  setTab('carrier');
-                  setScrollToManage(true);
-                }}
-              >
-                Connect <ArrowRight />
+              <Button onClick={openCarriers}>
+                {connections.length ? 'Your carrier accounts' : 'Connect'} <ArrowRight />
               </Button>
             </div>
           </article>
@@ -186,11 +223,13 @@ export function NumbersPage() {
         <div className="page-section-head">
           <div>
             <h2 className="text-subheading">Your numbers</h2>
-            <p className="muted small">Numbers allocated to your company, and the campaign that answers each one.</p>
+            <p className="muted small">Numbers your company uses, and the campaign that answers each one.</p>
           </div>
-          <Button icon={<ShoppingCart />} onClick={() => setBuying(true)}>
-            Get a number
-          </Button>
+          {canRent && (
+            <Button icon={<ShoppingCart />} onClick={() => setBuying(true)}>
+              Get a number
+            </Button>
+          )}
         </div>
 
         <SegmentTabs
@@ -198,8 +237,8 @@ export function NumbersPage() {
           onChange={setTab}
           items={[
             { value: 'numbers', label: 'Numbers' },
+            { value: 'carriers', label: 'Carrier accounts' },
             { value: 'holidays', label: 'Holidays' },
-            { value: 'carrier', label: 'Own carrier / SIP' },
           ]}
         />
 
@@ -222,6 +261,7 @@ export function NumbersPage() {
                       <tbody>
                         {nums.map((n) => {
                           const unpublished = n.campaign_id && n.campaign_published === false;
+                          const own = ownCarrier(n);
                           return (
                             <tr key={n.id}>
                               <td>
@@ -229,6 +269,11 @@ export function NumbersPage() {
                                 <div className="cell-sub">
                                   {n.country} · {[n.capabilities?.voice && 'Voice', n.capabilities?.sms && 'SMS'].filter(Boolean).join(' + ') || 'Voice'}
                                 </div>
+                                {own && (
+                                  <span title={own.name ? `From ${own.name}` : undefined}>
+                                    <Badge tone="blue">Your {carrierName(own.type)}</Badge>
+                                  </span>
+                                )}
                               </td>
                               <td>
                                 {n.campaign_id ? (
@@ -265,6 +310,11 @@ export function NumbersPage() {
                                   {n.campaign_id ? 'Change' : 'Assign'}
                                 </Button>
                                 {n.campaign_id && <Button size="sm" variant="ghost" icon={<Unlink />} title="Remove campaign" onClick={() => setUnassigning(n)} />}
+                                {own && (
+                                  <Button size="sm" variant="ghost" icon={<PhoneOff />} title="Take out of Aurlynn" onClick={() => setTakingOut({ ...n, own })}>
+                                    Take out
+                                  </Button>
+                                )}
                               </td>
                             </tr>
                           );
@@ -276,8 +326,23 @@ export function NumbersPage() {
                   <EmptyState
                     icon={<Phone />}
                     title="No numbers yet"
-                    description="Ask Aurlynn for a number, buy one, or connect your own carrier."
-                    action={<Button onClick={() => setBuying(true)}>Get a number</Button>}
+                    description={
+                      canRent
+                        ? 'Get a number from Aurlynn, or bring in the numbers you have from your own carrier account.'
+                        : 'Bring in the numbers you have from your own Plivo, Twilio or Exotel account. Renting numbers from Aurlynn is coming soon.'
+                    }
+                    action={
+                      <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}>
+                        <Button icon={<PhoneIncoming />} onClick={openCarriers}>
+                          Connect a carrier account
+                        </Button>
+                        {canRent && (
+                          <Button variant="primary" onClick={() => setBuying(true)}>
+                            Get a number
+                          </Button>
+                        )}
+                      </div>
+                    }
                   />
                 )
               }
@@ -285,7 +350,7 @@ export function NumbersPage() {
           </div>
         )}
         {tab === 'holidays' && <HolidaysCard />}
-        {tab === 'carrier' && <CarrierCard />}
+        {tab === 'carriers' && <CarrierAccounts />}
       </section>
 
       <Modal
@@ -328,25 +393,40 @@ export function NumbersPage() {
           await unassignCampaign(unassigning.id).unwrap();
         }}
       />
+      <ConfirmDialog
+        open={!!takingOut}
+        onClose={() => setTakingOut(null)}
+        danger
+        title={`Take ${takingOut?.e164} out of Aurlynn?`}
+        description={
+          takingOut
+            ? `${takingOut.campaign_id ? `${takingOut.campaign_name ?? 'Its campaign'} stops answering it. ` : ''}The number stays on your ${carrierName(
+                takingOut.own.type,
+              )} account: change where its calls go there, or callers won't be answered. You can bring it back in from Carrier accounts.`
+            : undefined
+        }
+        confirmLabel="Take out"
+        onConfirm={async () => {
+          await removeOwnNumber(takingOut.id).unwrap();
+          toast(`${takingOut.e164} taken out of Aurlynn`);
+        }}
+      />
 
-      <BuyNumberModal open={buying} onClose={() => setBuying(false)} onBought={() => {}} />
+      {canRent && <BuyNumberModal open={buying} onClose={() => setBuying(false)} shop={shop.data} />}
     </>
   );
 }
 
-const AREA_CODES = [
-  { value: '80', label: 'Bengaluru (80)' },
-  { value: '11', label: 'Delhi (11)' },
-  { value: '22', label: 'Mumbai (22)' },
-  { value: '20', label: 'Pune (20)' },
-  { value: '40', label: 'Hyderabad (40)' },
-  { value: '44', label: 'Chennai (44)' },
-  { value: '33', label: 'Kolkata (33)' },
-  { value: '79', label: 'Ahmedabad (79)' },
-];
+const CITY_ORDER = ['80', '11', '22', '20', '40', '44', '33', '79'];
 
-function BuyNumberModal({ open, onClose, onBought }) {
+/** Search the numbers Aurlynn rents and buy one, at the admins' price for its type. */
+function BuyNumberModal({ open, onClose, shop }) {
   const toast = useToast();
+  const prices = NUMBER_TYPES.map((t) => (shop?.prices ?? []).find((p) => p.number_type === t)).filter(Boolean);
+  const localities = shop?.localities ?? {};
+  const areas = Object.keys(localities)
+    .sort((a, b) => (CITY_ORDER.indexOf(a) + 1 || 99) - (CITY_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b))
+    .map((code) => ({ value: code, label: `${localities[code]} (${code})` }));
   const [type, setType] = useState('local');
   const [areaCode, setAreaCode] = useState('80');
   const [contains, setContains] = useState('');
@@ -356,23 +436,24 @@ function BuyNumberModal({ open, onClose, onBought }) {
   const [search, setSearch] = useState(null);
   const results = useSearchAvailableNumbersQuery(search ?? {}, { skip: !open || !search });
   const [purchaseNumber] = usePurchaseNumberMutation();
+  const area = areas.some((a) => a.value === areaCode) ? areaCode : (areas[0]?.value ?? '');
+  const price = (n) => ({ monthly_price: n.monthly_price, setup_price: n.setup_price, currency: n.currency });
   return (
-    <Modal open={open} onClose={onClose} wide title="Get a phone number" description="Search available numbers and buy one instantly.">
+    <Modal open={open} onClose={onClose} wide title="Get a phone number" description="Search the numbers Aurlynn rents and buy one instantly.">
       <div className="stack">
         <div className="row wrap">
           <Select
-            style={{ width: 160 }}
+            style={{ width: 220 }}
             value={type}
-            options={[
-              { value: 'local', label: 'Local' },
-              { value: 'mobile', label: 'Mobile' },
-              { value: 'toll_free', label: 'Toll-free' },
-            ]}
+            options={(prices.length ? prices : NUMBER_TYPES.map((t) => ({ number_type: t }))).map((p) => ({
+              value: p.number_type,
+              label: p.monthly_price !== undefined ? `${TYPE_LABEL[p.number_type]} · ${inr(p.monthly_price, p.currency)}/mo` : TYPE_LABEL[p.number_type],
+            }))}
             onChange={(e) => setType(e.target.value)}
           />
-          {type === 'local' && <Select style={{ width: 180 }} value={areaCode} options={AREA_CODES} onChange={(e) => setAreaCode(e.target.value)} />}
-          <Input style={{ flex: 1, minWidth: 160 }} placeholder="Contains digits (optional)" value={contains} onChange={(e) => setContains(e.target.value)} />
-          <Button icon={<Search />} onClick={() => setSearch({ type, area_code: type === 'local' ? areaCode : undefined, contains: contains || undefined, at: Date.now() })}>
+          {type === 'local' && areas.length > 0 && <Select style={{ width: 180 }} value={area} options={areas} onChange={(e) => setAreaCode(e.target.value)} />}
+          <Input style={{ flex: 1, minWidth: 160 }} placeholder="Contains digits (optional)" value={contains} onChange={(e) => setContains(e.target.value.replace(/\D/g, ''))} />
+          <Button icon={<Search />} onClick={() => setSearch({ type, area_code: type === 'local' ? area || undefined : undefined, contains: contains || undefined, at: Date.now() })}>
             Search
           </Button>
         </div>
@@ -387,12 +468,9 @@ function BuyNumberModal({ open, onClose, onBought }) {
                         <tr key={n.e164}>
                           <td className="mono cell-main">{n.e164}</td>
                           <td className="muted">{[n.locality, n.capabilities?.voice && 'Voice', n.capabilities?.sms && 'SMS'].filter(Boolean).join(' · ')}</td>
-                          <td className="num">
-                            {money(n.monthly_price, n.currency ?? 'INR')}
-                            /mo
-                          </td>
+                          <td className="num">{priceText(price(n))}</td>
                           <td className="actions">
-                            <Button size="sm" variant="primary" onClick={() => setPick(n)}>
+                            <Button size="sm" variant="primary" onClick={() => setPick({ ...n, type: n.type ?? search.type })}>
                               Buy
                             </Button>
                           </td>
@@ -414,18 +492,20 @@ function BuyNumberModal({ open, onClose, onBought }) {
         title={pick ? `Buy ${pick.e164}?` : 'Buy this number?'}
         description={
           pick
-            ? `It costs ${money(pick.monthly_price, pick.currency ?? 'INR')} a month until you release it. It is added to your account right away.`
+            ? `It costs ${inr(pick.monthly_price, pick.currency)} a month${
+                Number(pick.setup_price) > 0 ? `, plus ${inr(pick.setup_price, pick.currency)} once to set it up` : ''
+              }. It is added to your numbers right away.`
             : undefined
         }
-        confirmLabel={pick ? `Buy for ${money(pick.monthly_price, pick.currency ?? 'INR')}/mo` : 'Buy'}
+        confirmLabel={pick ? `Buy for ${inr(pick.monthly_price, pick.currency)}/mo` : 'Buy'}
         onConfirm={async () => {
+          let bought;
           try {
-            await purchaseNumber(pick.e164).unwrap();
+            bought = await purchaseNumber({ e164: pick.e164, type: pick.type }).unwrap();
           } catch (e) {
             throw e?.status === 409 ? 'Someone just took that number. Pick another one.' : e;
           }
-          toast(`${pick.e164} is yours`);
-          onBought();
+          toast(bought?.status === 'pending' ? `${pick.e164} is yours once the carrier finishes its checks` : `${pick.e164} is yours`);
           onClose();
         }}
       />
@@ -479,166 +559,6 @@ function HolidaysCard() {
         </>
       )}
     </SectionCard>
-  );
-}
-
-const CARRIERS = [
-  { value: 'sip_trunk', label: 'SIP trunk' },
-  { value: 'twilio', label: 'Twilio' },
-  { value: 'plivo', label: 'Plivo' },
-  { value: 'exotel', label: 'Exotel' },
-];
-
-function CarrierCard() {
-  const toast = useToast();
-  const conns = useListConnectionsQuery();
-  const [addConnection] = useAddConnectionMutation();
-  const [testConnection] = useTestConnectionMutation();
-  const [deleteConnection] = useDeleteConnectionMutation();
-  const [type, setType] = useState('sip_trunk');
-  const [fields, setFields] = useState({});
-  const [busy, setBusy] = useState(false);
-  const [removing, setRemoving] = useState(null);
-  const set = (k, v) => setFields((f) => ({ ...f, [k]: v }));
-  const sip = type === 'sip_trunk';
-  return (
-    <div className="stack">
-      <div className="card">
-        <div className="card-head">
-          <h2>Connections</h2>
-        </div>
-        <Async state={conns}>
-          {(list) =>
-            list.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <tbody>
-                    {list.map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <div className="cell-main">{c.name}</div>
-                          <div className="cell-sub">
-                            {c.type === 'sip_trunk' ? `SIP trunk · ${c.config?.host ?? ''}` : titleCase(c.type)}
-                            {c.config?.numbers?.length ? ` · ${c.config.numbers.length} number${c.config.numbers.length === 1 ? '' : 's'}` : ''}
-                          </div>
-                        </td>
-                        <td>
-                          <StatusBadge status={c.status} />
-                          {c.last_error && (
-                            <div className="cell-sub" style={{ color: 'var(--red)' }}>
-                              {c.last_error}
-                            </div>
-                          )}
-                        </td>
-                        <td className="muted">{c.last_checked_at ? `Checked ${dateTime(c.last_checked_at)}` : dateTime(c.created_at)}</td>
-                        <td className="actions">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              testConnection(c.id)
-                                .unwrap()
-                                .then((r) => toast(r.status === 'active' ? 'Connection works' : `Connection check: ${r.status}`, r.status === 'active' ? undefined : 'error'))
-                                .catch((e) => toast(errMsg(e), 'error'))
-                            }
-                          >
-                            Test
-                          </Button>
-                          <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(c)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState title="Using Aurlynn's carrier" description="Connect your own carrier account or SIP trunk to bring your numbers." />
-            )
-          }
-        </Async>
-      </div>
-      <div className="card card-pad stack">
-        <div className="card-title">Connect your own</div>
-        <SegmentTabs value={type} onChange={setType} items={CARRIERS} />
-
-        <div className="form-grid">
-          <Field label="Name" className="full">
-            <Input placeholder="Office PBX" value={fields.name ?? ''} onChange={(e) => set('name', e.target.value)} />
-          </Field>
-          {sip ? (
-            <>
-              <Field label="SIP host" hint="A public address">
-                <Input className="mono" placeholder="sip.example.com" value={fields.host ?? ''} onChange={(e) => set('host', e.target.value)} />
-              </Field>
-              <Field label="Port">
-                <Input type="number" placeholder="5060" value={fields.port ?? ''} onChange={(e) => set('port', e.target.value)} />
-              </Field>
-              <Field label="Username">
-                <Input value={fields.username ?? ''} onChange={(e) => set('username', e.target.value)} />
-              </Field>
-              <Field label="Password">
-                <Input type="password" value={fields.password ?? ''} onChange={(e) => set('password', e.target.value)} />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="Account SID / ID">
-                <Input value={fields.account_sid ?? ''} onChange={(e) => set('account_sid', e.target.value)} />
-              </Field>
-              <Field label="Auth token">
-                <Input type="password" value={fields.auth_token ?? ''} onChange={(e) => set('auth_token', e.target.value)} />
-              </Field>
-            </>
-          )}
-          <Field label="Numbers to bring" hint="Comma-separated, international format (optional)" className="full">
-            <Input className="mono" placeholder="+918044440000, +918044440001" value={fields.numbers ?? ''} onChange={(e) => set('numbers', e.target.value)} />
-          </Field>
-        </div>
-        <p className="muted small" style={{ margin: 0 }}>
-          Secrets are stored encrypted and never shown again. The connection check is simulated for now.
-        </p>
-        <div>
-          <Button
-            variant="primary"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                const body = sip
-                  ? { host: fields.host ?? '', ...(fields.port ? { port: Number(fields.port) } : {}), transport: 'udp', username: fields.username ?? '', password: fields.password ?? '' }
-                  : { account_sid: fields.account_sid ?? '', auth_token: fields.auth_token ?? '' };
-                await addConnection({
-                  name: fields.name?.trim() || CARRIERS.find((c) => c.value === type).label,
-                  type,
-                  ...body,
-                  numbers: (fields.numbers ?? '').split(/[,\s]+/).filter(Boolean),
-                }).unwrap();
-                toast('Connection added');
-                setFields({});
-              } catch (e) {
-                toast(errMsg(e), 'error');
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Connect
-          </Button>
-        </div>
-      </div>
-      <ConfirmDialog
-        open={!!removing}
-        onClose={() => setRemoving(null)}
-        danger
-        title={`Remove ${removing?.name ?? 'this connection'}?`}
-        description="Numbers that came with it stop working here."
-        confirmLabel="Remove"
-        onConfirm={async () => {
-          await deleteConnection(removing.id).unwrap();
-          toast('Connection removed');
-        }}
-      />
-    </div>
   );
 }
 

@@ -21,7 +21,7 @@ import {
   usePutIntegrationSettingMutation,
   useRunIntegrationSyncMutation,
 } from '../../../store/api/integrationApi';
-import { useListNumbersQuery } from '../../../store/api/callsApi';
+import { useListConnectionsQuery, useListNumbersQuery } from '../../../store/api/callsApi';
 import { dateTime, number, titleCase } from '../../../lib/format';
 import { asList } from '../../../lib/normalize';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, StatusBadge, Toggle, useToast } from '../../../components/ui';
@@ -105,10 +105,16 @@ export function IntegrationsPage() {
 /** One card per way of reaching people: phone numbers, WhatsApp and email (phase 5). */
 function ChannelCards() {
   const numbers = useListNumbersQuery();
+  const carriers = useListConnectionsQuery();
   const whatsapp = useListWhatsappAccountsQuery();
   const email = useGetEmailChannelQuery();
 
   const n = numbers.data?.length ?? 0;
+  // The company's own carrier accounts (Plivo, Twilio, Exotel); left out if they can't be loaded.
+  const k = Array.isArray(carriers.data) ? carriers.data.length : 0;
+  const phoneDetail = [n ? `${number(n)} ${n === 1 ? 'number' : 'numbers'}` : 'No numbers yet', k && `${number(k)} carrier ${k === 1 ? 'account' : 'accounts'}`]
+    .filter(Boolean)
+    .join(' · ');
   const accounts = asList(whatsapp.data);
   const real = accounts.filter((a) => !a.is_simulated);
   const demo = accounts.find((a) => a.is_simulated);
@@ -125,9 +131,9 @@ function ChannelCards() {
           icon={<Phone />}
           name="Phone"
           state={numbers}
-          badge={n ? <Badge tone="green">Connected</Badge> : <Badge plain>Not set up</Badge>}
-          detail={n ? `${number(n)} ${n === 1 ? 'number' : 'numbers'}` : 'No numbers yet'}
-          sub="Numbers your campaigns answer and call from."
+          badge={n || k ? <Badge tone="green">Connected</Badge> : <Badge plain>Not set up</Badge>}
+          detail={phoneDetail}
+          sub="Numbers your campaigns answer and call from, including ones from your own Plivo, Twilio or Exotel account."
         />
         <ChannelCard
           to="/channels/whatsapp"

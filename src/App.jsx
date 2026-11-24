@@ -46,6 +46,7 @@ import { CustomerDetailPage } from './pages/admin/CustomerDetailPage';
 import { PackagesPage } from './pages/admin/PackagesPage';
 import { AdminProfilePage, AdminRolesPage, AdminStaffPage } from './pages/admin/TeamPages';
 import { AdminAuditPage, NumberPoolPage } from './pages/admin/AdminExtraPages';
+import { NumberPricesPage } from './pages/admin/NumberPricesPage';
 import { AdminAgentsPage } from './pages/admin/AgentsPage';
 import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 
@@ -84,6 +85,7 @@ export function App() {
               <Route path="customers/:id" element={<CustomerDetailPage />} />
               <Route path="packages" element={<PackagesPage />} />
               <Route path="numbers" element={<NumberPoolPage />} />
+              <Route path="number-prices" element={<NumberPricesPage />} />
               <Route path="agents" element={<AdminAgentsPage />} />
               <Route path="staff" element={<AdminStaffPage />} />
               <Route path="roles" element={<AdminRolesPage />} />

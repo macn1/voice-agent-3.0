@@ -128,6 +128,14 @@ export const adminApi = baseApi.injectEndpoints({
       query: (numberId) => A.telephony(`/admin/phone-numbers/${numberId}/retire`, { method: 'POST' }),
       invalidatesTags: ['NumberPool'],
     }),
+    // What customers pay to rent a number from Aurlynn (INR):
+    // [{ number_type: local | mobile | toll_free, monthly_price, setup_price, currency, updated_at, updated_by_user_id }].
+    listNumberPrices: b.query({ query: () => A.telephony('/admin/number-prices'), providesTags: ['NumberPrice'] }),
+    // Takes [{ number_type, monthly_price, setup_price }] and answers the full list; 422 per field (the type's name for a bad price).
+    putNumberPrices: b.mutation({
+      query: (list) => A.telephony('/admin/number-prices', { method: 'PUT', body: list }),
+      invalidatesTags: ['NumberPrice'],
+    }),
 
     // Agents (AGT-01) ----------------------------------------------------
     // ?status=draft|live|paused, limit, offset. No server-side search or sort.
@@ -193,6 +201,8 @@ export const {
   useRentCarrierNumberMutation,
   useSyncCarrierAccountMutation,
   useRetireNumberMutation,
+  useListNumberPricesQuery,
+  usePutNumberPricesMutation,
   useGetPlatformOverviewQuery,
   useGetCustomerAnalyticsQuery,
   useListAdminAgentsQuery,

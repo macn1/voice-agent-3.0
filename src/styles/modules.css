@@ -2323,3 +2323,76 @@
     align-items: stretch;
   }
 }
+
+/* Phone numbers: a company's own carrier accounts (Plivo, Twilio, Exotel) */
+.carrier-logo {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.carrier-logo img {
+  width: 58%;
+  height: 58%;
+  object-fit: contain;
+}
+
+.carrier-logo svg {
+  width: 45%;
+  height: 45%;
+  color: var(--muted);
+}
+
+.chip .chip-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.chip.active .chip-logo {
+  padding: 1px;
+  background: #fff;
+}
+
+.carrier-numbers,
+.carrier-results {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carrier-numbers li,
+.carrier-results li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: var(--font-size-body-sm);
+}
+
+.carrier-numbers li.off {
+  background: var(--surface-2);
+}
+
+.carrier-numbers li.off .check {
+  cursor: default;
+}
+
+.carrier-numbers .check {
+  flex: 1;
+  min-width: 0;
+}
+
+.carrier-numbers .cell-sub {
+  display: block;
+}

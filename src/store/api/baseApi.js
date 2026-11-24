@@ -53,6 +53,8 @@ export const baseApi = createApi({
     'Routing',
     'Holiday',
     'Connection',
+    'TelephonySettings',
+    'NumberPrice',
     'Call',
     'Review',
     'Scorecard',

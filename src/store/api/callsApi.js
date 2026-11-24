@@ -168,23 +168,58 @@ export const callsApi = baseApi.injectEndpoints({
       query: (list) => C.inbound('/customer/routing/holidays', { method: 'PUT', body: { holidays: Array.isArray(list) ? list : (list?.holidays ?? []) } }),
       invalidatesTags: ['Holiday'],
     }),
-    // type: local | mobile | toll_free; area_code for local numbers. Returns { items[{ e164, type, locality, monthly_price, currency, capabilities }], localities }.
+    // Renting numbers from Aurlynn: { available, prices[{ number_type: local | mobile | toll_free, monthly_price, setup_price, currency }],
+    // localities { area code: city } }. available is false until our Plivo account is connected ("coming soon").
+    getNumberShop: b.query({ query: () => C.telephony('/customer/phone-numbers/shop'), providesTags: ['NumberPrice'] }),
+    // type: local | mobile | toll_free; area_code for local numbers. Returns { items[{ e164, type, locality, monthly_price, setup_price, currency, capabilities }], localities }.
+    // 503 shop_unavailable while the shop is closed.
     searchAvailableNumbers: b.query({
       query: ({ type, area_code, contains }) => C.telephony('/customer/phone-numbers/available', { params: { type, area_code, contains, limit: 20 } }),
     }),
     purchaseNumber: b.mutation({
-      query: (e164) => C.telephony('/customer/phone-numbers/purchase', { method: 'POST', body: { e164 } }),
+      query: ({ e164, type }) => C.telephony('/customer/phone-numbers/purchase', { method: 'POST', body: { e164, type } }),
       invalidatesTags: ['Number'],
     }),
+
+    // The company's own carrier accounts (Plivo, Twilio, Exotel) -------------
+    // [{ id, name, type, status: active | failed | unverified, last_error, last_checked_at, created_at, account_sid, account_name,
+    //    region, numbers (count brought in), answer_url (Plivo, Twilio), stream_url (Exotel: for its Voicebot applet; carries a key) }]
     listConnections: b.query({ query: () => C.telephony('/customer/telephony/connections'), providesTags: ['Connection'] }),
+    // { type, account_sid, auth_token, api_key (Exotel), region (Exotel: in | sg), name? }: checked with the carrier first.
+    // 422 per field (the carrier's refusal is auth_token's), 409 carrier_already_connected.
     addConnection: b.mutation({ query: (body) => C.telephony('/customer/telephony/connections', { method: 'POST', body }), invalidatesTags: ['Connection'] }),
+    // Checks the account with the carrier again; answers the connection (active, or failed with last_error).
     testConnection: b.mutation({
       query: (id) => C.telephony(`/customer/telephony/connections/${id}/test`, { method: 'POST', body: {} }),
-      invalidatesTags: ['Connection'],
+      invalidatesTags: ['Connection', 'TelephonySettings'],
     }),
+    // Disconnects: its numbers leave Aurlynn, and it stops placing outbound calls.
     deleteConnection: b.mutation({
       query: (id) => C.telephony(`/customer/telephony/connections/${id}`, { method: 'DELETE' }),
+      invalidatesTags: ['Connection', 'Number', 'TelephonySettings'],
+    }),
+    // The numbers on the carrier account: [{ e164, name, provider_id, voice, points_to_us, phone_number_id (null = not in Aurlynn) }].
+    // 409 carrier_not_active, 502 carrier_error (the carrier's own message).
+    listCarrierNumbers: b.query({
+      query: (id) => C.telephony(`/customer/telephony/connections/${id}/numbers`),
+      providesTags: ['Connection', 'Number'],
+      keepUnusedDataFor: 0,
+    }),
+    // Brings numbers in (at most 50 a request): [{ e164, phone_number_id?, error? }], one answer per number.
+    importCarrierNumbers: b.mutation({
+      query: ({ id, numbers }) => C.telephony(`/customer/telephony/connections/${id}/numbers`, { method: 'POST', body: { numbers } }),
       invalidatesTags: ['Connection', 'Number'],
+    }),
+    // Takes a brought-in number out of Aurlynn (its campaign goes too); it stays on the carrier account.
+    removeOwnNumber: b.mutation({
+      query: (numberId) => C.telephony(`/customer/telephony/numbers/${numberId}`, { method: 'DELETE' }),
+      invalidatesTags: ['Connection', 'Number', 'Campaign'],
+    }),
+    // { outbound_connection_id: uuid | null }: the carrier for outbound calls (null = Aurlynn). Only an active connection can be chosen.
+    getTelephonySettings: b.query({ query: () => C.telephony('/customer/telephony/settings'), providesTags: ['TelephonySettings'] }),
+    putTelephonySettings: b.mutation({
+      query: (body) => C.telephony('/customer/telephony/settings', { method: 'PUT', body }),
+      invalidatesTags: ['TelephonySettings'],
     }),
 
     // Single calls (CALL-02) -------------------------------------------------
@@ -485,12 +520,18 @@ export const {
   useSimulateRoutingMutation,
   useListHolidaysQuery,
   usePutHolidaysMutation,
+  useGetNumberShopQuery,
   useSearchAvailableNumbersQuery,
   usePurchaseNumberMutation,
   useListConnectionsQuery,
   useAddConnectionMutation,
   useTestConnectionMutation,
   useDeleteConnectionMutation,
+  useListCarrierNumbersQuery,
+  useImportCarrierNumbersMutation,
+  useRemoveOwnNumberMutation,
+  useGetTelephonySettingsQuery,
+  usePutTelephonySettingsMutation,
   useStartCallMutation,
   useGetCallStatusQuery,
   useHangupCallMutation,

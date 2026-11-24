@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { Activity, Bot, Building2, LayoutDashboard, Package as PackageIcon, Phone, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { Activity, Bot, Building2, IndianRupee, LayoutDashboard, Package as PackageIcon, Phone, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { AppShell, Sidebar, UserMenu } from '../../components/Shell';
 import { Badge } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
@@ -22,6 +22,7 @@ const SECTIONS = [
     label: 'Telephony & agents',
     items: [
       { to: '/admin/numbers', label: 'Number pool', icon: Phone },
+      { to: '/admin/number-prices', label: 'Number prices', icon: IndianRupee, permission: 'phone_number.manage' },
       {
         to: '/admin/agents',
         label: 'Agents',

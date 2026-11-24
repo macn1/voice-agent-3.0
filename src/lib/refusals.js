@@ -23,4 +23,8 @@ export const CODE_COPY = {
   change_agent_on_campaign: "To change who speaks, change the agent on the campaign's Agent tab.",
   duplicate_the_campaign: 'To copy this calling, duplicate the campaign itself (Settings, then Duplicate).',
   agent_has_no_campaign: "This agent isn't on any campaign yet. Create a campaign for it first.",
+  carrier_already_connected: 'This carrier account is already connected. Find it under Your carrier accounts.',
+  carrier_not_active: 'Your carrier refused this account at the last check. Check it again first.',
+  shop_unavailable: 'Renting numbers from Aurlynn is coming soon. Until then, bring in numbers from your own carrier account.',
+  number_not_available: 'Someone just took that number. Pick another one.',
 };
