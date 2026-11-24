@@ -8,8 +8,7 @@ import {
   useListCarrierNumbersQuery,
   useListConnectionsQuery,
   usePutTelephonySettingsMutation,
-  useTestConnectionMutation,
-} from '../../../store/api/callsApi';
+  useTestConnectionMutation, useUpdateConnectionMutation } from '../../../store/api/callsApi';
 import { dateTime, number } from '../../../lib/format';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, formErrors, Input, Modal, Skeleton, useToast } from '../../../components/ui';
 import { CopyField, Select } from '../../../components/forms';
@@ -235,6 +234,7 @@ function ConnectionCard({ conn: c, onBringIn, onDisconnect }) {
         </div>
       )}
       {c.type === 'exotel' && c.stream_url && <FinishInExotel url={c.stream_url} />}
+      {c.type === 'exotel' && active && <ExotelOutboundFlow conn={c} />}
       {(c.type === 'plivo' || c.type === 'twilio') && active && (
         <p className="muted small" style={{ margin: 0 }}>
           Numbers you bring in are pointed at Aurlynn in your {carrierName(c.type)} account for you: their calls come straight to your campaigns.
@@ -274,6 +274,54 @@ function FinishInExotel({ url }) {
           <b>Save</b> the flow, and make sure your numbers use it.
         </li>
       </ol>
+    </div>
+  );
+}
+
+/** Exotel places outbound calls only into a call flow: the one with our Voicebot applet. */
+function ExotelOutboundFlow({ conn }) {
+  const toast = useToast();
+  const [updateConnection] = useUpdateConnectionMutation();
+  const [flow, setFlow] = useState(conn.outbound_flow_id ?? '');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const saved = conn.outbound_flow_id ?? '';
+  return (
+    <div className="stack" style={{ gap: 10, borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
+      <div>
+        <div className="card-title">Outbound calls through Exotel</div>
+        <div className="card-sub">
+          Exotel places a call into one of your call flows. Give the ID of the flow with the Voicebot applet (App Bazaar shows it next to the flow’s name).
+        </div>
+      </div>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ minWidth: 220 }}>
+          <Field label="Call flow ID" error={error}>
+            <Input className="mono" inputMode="numeric" placeholder="e.g. 456789" value={flow} onChange={(e) => setFlow(e.target.value.trim())} />
+          </Field>
+        </div>
+        <Button
+          variant="primary"
+          loading={saving}
+          disabled={flow === saved}
+          onClick={async () => {
+            setSaving(true);
+            setError('');
+            try {
+              await updateConnection({ id: conn.id, outbound_flow_id: flow }).unwrap();
+              toast(flow ? 'Outbound call flow saved' : 'Outbound call flow cleared');
+            } catch (e) {
+              const { fields, general } = formErrors(e, ['outbound_flow_id']);
+              setError(fields.outbound_flow_id ?? general ?? errMsg(e));
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          Save
+        </Button>
+      </div>
+      {!saved && <span className="muted small">Without it, outbound calls can’t go through this Exotel account.</span>}
     </div>
   );
 }
@@ -597,7 +645,8 @@ function OutboundCarrierCard({ connections, settings }) {
               </div>
             )}
             <p className="muted small" style={{ margin: 0 }}>
-              Outbound calls are still simulated (demo mode); this choice is used once real outbound calling starts.
+              Calls go out for real through the account you pick, from one of its numbers. Through Aurlynn they are simulated until Aurlynn’s own
+              carrier is connected.
             </p>
             <div className="row" style={{ gap: 8 }}>
               <Button variant="primary" icon={<Check />} loading={saving} disabled={value === saved} onClick={save}>

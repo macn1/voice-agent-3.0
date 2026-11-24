@@ -193,6 +193,11 @@ export const callsApi = baseApi.injectEndpoints({
       query: (id) => C.telephony(`/customer/telephony/connections/${id}/test`, { method: 'POST', body: {} }),
       invalidatesTags: ['Connection', 'TelephonySettings'],
     }),
+    // { name?, outbound_flow_id? (Exotel: the call flow outbound calls are placed into) }; 422 per field.
+    updateConnection: b.mutation({
+      query: ({ id, ...body }) => C.telephony(`/customer/telephony/connections/${id}`, { method: 'PATCH', body }),
+      invalidatesTags: ['Connection'],
+    }),
     // Disconnects: its numbers leave Aurlynn, and it stops placing outbound calls.
     deleteConnection: b.mutation({
       query: (id) => C.telephony(`/customer/telephony/connections/${id}`, { method: 'DELETE' }),
@@ -527,6 +532,7 @@ export const {
   useAddConnectionMutation,
   useTestConnectionMutation,
   useDeleteConnectionMutation,
+  useUpdateConnectionMutation,
   useListCarrierNumbersQuery,
   useImportCarrierNumbersMutation,
   useRemoveOwnNumberMutation,
