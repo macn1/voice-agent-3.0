@@ -650,7 +650,7 @@ function ChatCampaignCard({ account, campaigns, loading, onSave }) {
   const [campaign, setCampaign] = useState(account.campaign_id ?? '');
   const [saving, setSaving] = useState(false);
   const current = campaigns.find((c) => c.id === account.campaign_id);
-  // Published campaigns first: a draft has nothing to answer with yet.
+  // Published campaigns first (chats are answered from the campaign as drafted, until a chat runtime exists).
   const options = [...campaigns]
     .sort((a, b) => (a.status === 'draft' ? 1 : 0) - (b.status === 'draft' ? 1 : 0) || a.name.localeCompare(b.name))
     .map((c) => ({ value: c.id, label: `${c.name}${c.agent_name ? ` · ${c.agent_name}` : ''}${c.status === 'draft' ? ' (not published)' : ''}` }));
