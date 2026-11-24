@@ -24,7 +24,7 @@ import {
   useStartTestRunMutation,
   useValidateFlowMutation,
 } from '../../../store/api/flowApi';
-import { useGetAgentDropoffQuery, useGetAgentLatencyQuery } from '../../../store/api/analyticsApi';
+import { useGetCampaignDropoffQuery, useGetCampaignLatencyQuery } from '../../../store/api/analyticsApi';
 import { date, dateTime, number, titleCase } from '../../../lib/format';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { CopyField, downloadText, LinesEditor, ListEditor, SectionCard, Select, Textarea, useSection } from '../../../components/forms';
@@ -1436,9 +1436,9 @@ function ScenarioModal({ open, onClose, onSave }) {
 /* Insights (ANA-F2) --------------------------------------------------- */
 
 export function InsightsTab({ campaign }) {
-  // Analytics keeps these per agent: they cover all of this agent's campaigns.
-  const drop = useGetAgentDropoffQuery(campaign.agent_id);
-  const lat = useGetAgentLatencyQuery(campaign.agent_id);
+  // This campaign's calls only (not the agent's other campaigns).
+  const drop = useGetCampaignDropoffQuery(campaign.id);
+  const lat = useGetCampaignLatencyQuery(campaign.id);
   return (
     <div className="stack">
       <div className="card">
@@ -1446,8 +1446,8 @@ export function InsightsTab({ campaign }) {
           <div>
             <h2>Where callers drop off</h2>
             <div className="card-sub">
-              Answered calls of this campaign's agent (all its campaigns) in the last 30 days, by how far the conversation got. Dropped: the caller left
-              there without a good outcome.
+              This campaign's answered calls in the last 30 days, by how far the conversation got. Dropped: the caller left there without a good
+              outcome.
             </div>
           </div>
         </div>
@@ -1473,7 +1473,7 @@ export function InsightsTab({ campaign }) {
         <div className="card-head">
           <div>
             <h2>Response time</h2>
-            <div className="card-sub">How long the agent takes to answer each time the caller speaks, last 30 days.</div>
+            <div className="card-sub">How long the agent takes to answer each time the caller speaks on this campaign's calls, last 30 days.</div>
           </div>
         </div>
         <div className="card-pad">

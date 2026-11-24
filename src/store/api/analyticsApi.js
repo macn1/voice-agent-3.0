@@ -118,15 +118,15 @@ export const analyticsApi = baseApi.injectEndpoints({
       query: () => C.analytics('/customer/demo/calls', { method: 'DELETE' }),
       invalidatesTags: ['Call', 'Analytics', 'Usage'],
     }),
-    // Last 30 days. Drop-off: [{ step, reached, dropped }] by how many times the caller spoke.
-    getAgentDropoff: b.query({
-      query: (id) => C.analytics(`/customer/analytics/agents/${id}/dropoff`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
+    // One campaign's calls, last 30 days. Drop-off: [{ step, reached, dropped }] by how many times the caller spoke.
+    getCampaignDropoff: b.query({
+      query: (id) => C.analytics(`/customer/analytics/campaigns/${id}/dropoff`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
       transformResponse: (d) => d?.items ?? d ?? [],
       providesTags: ['Analytics'],
     }),
-    // Last 30 days, per day: [{ day, p50, p95, replies }] in ms.
-    getAgentLatency: b.query({
-      query: (id) => C.analytics(`/customer/analytics/agents/${id}/latency`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
+    // One campaign's calls, last 30 days, per day: [{ day, p50, p95, replies }] in ms.
+    getCampaignLatency: b.query({
+      query: (id) => C.analytics(`/customer/analytics/campaigns/${id}/latency`, { params: { from: new Date(Date.now() - 30 * 86400000).toISOString() } }),
       transformResponse: (d) => d?.items ?? d ?? [],
       providesTags: ['Analytics'],
     }),
@@ -204,8 +204,8 @@ export const {
   useGenerateDemoHistoryMutation,
   useResetDemoCallsMutation,
   useDeleteSavedViewMutation,
-  useGetAgentDropoffQuery,
-  useGetAgentLatencyQuery,
+  useGetCampaignDropoffQuery,
+  useGetCampaignLatencyQuery,
   useListUnansweredQuestionsQuery,
   useListSavedViewsQuery,
   useSaveViewMutation,
