@@ -22,6 +22,7 @@ import { ContactDetailPage, ContactsPage } from './pages/customer/contacts/Conta
 import { DevelopersPage } from './pages/customer/developers/DevelopersPage';
 import { AnalyticsPage } from './pages/customer/analytics/AnalyticsPage';
 import { IntegrationDetailPage, IntegrationsPage } from './pages/customer/integrations/IntegrationsPages';
+import { EmailChannelPage } from './pages/customer/integrations/EmailPage';
 import { BroadcastsPage, InboxPage, WhatsAppPage } from './pages/customer/channels/ChannelsPages';
 import { SettingsLayout } from './pages/customer/settings/SettingsLayout';
 import { ProfilePage } from './pages/customer/settings/ProfilePage';
@@ -138,6 +139,8 @@ export function App() {
 
               {/* Connect */}
               <Route path="integrations" element={<IntegrationsPage />} />
+              {/* A static segment ranks above :provider, so this wins for /integrations/email. */}
+              <Route path="integrations/email" element={<EmailChannelPage />} />
               <Route path="integrations/:provider" element={<IntegrationDetailPage />} />
               <Route path="channels/whatsapp" element={<WhatsAppPage />} />
               <Route path="inbox" element={<InboxPage />} />

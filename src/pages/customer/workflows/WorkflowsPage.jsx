@@ -521,6 +521,17 @@ function ScheduledTab() {
   );
 }
 
+// A follow-up waits "queued" until it is due, then goes out through the connected email or WhatsApp.
+const MESSAGE_STATUS = {
+  queued: ['pending', 'Queued'],
+  sending: ['pending', 'Sending'],
+  sent: ['active', 'Sent'],
+  delivered: ['active', 'Delivered'],
+  read: ['active', 'Read'],
+  failed: ['failed', 'Failed'],
+  simulated: ['draft', 'Simulated'],
+};
+
 function MessagesTab() {
   const list = useListMessagesQuery({ limit: 100 });
   return (
@@ -528,7 +539,10 @@ function MessagesTab() {
       <div className="card-head">
         <div>
           <h2>Follow-up messages</h2>
-          <div className="card-sub">Messages sent because of a call. Set up rules on an agent's Follow-ups tab. They stay “Queued” until an SMS or email provider is connected.</div>
+          <div className="card-sub">
+            Messages sent because of a call. Set up rules on a campaign's Follow-ups tab. Emails go out from your <Link to="/integrations/email">connected mailbox</Link>, WhatsApp
+            messages from your <Link to="/channels/whatsapp">WhatsApp number</Link>. SMS isn't available yet.
+          </div>
         </div>
       </div>
       <Async state={list}>
@@ -571,10 +585,12 @@ function MessagesTab() {
                         )}
                       </td>
                       <td>
-                        <StatusBadge
-                          status={['delivered', 'read', 'sent'].includes(m.status) ? 'active' : m.status === 'failed' ? 'failed' : 'pending'}
-                          label={titleCase(m.status)}
-                        />
+                        <StatusBadge status={MESSAGE_STATUS[m.status]?.[0] ?? 'pending'} label={MESSAGE_STATUS[m.status]?.[1] ?? titleCase(m.status)} />
+                        {m.status === 'failed' && m.error && (
+                          <div className="cell-sub" style={{ color: 'var(--red)', maxWidth: 320, whiteSpace: 'normal' }}>
+                            {m.error}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

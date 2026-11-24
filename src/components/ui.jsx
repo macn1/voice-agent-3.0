@@ -374,3 +374,20 @@ export const errMsg = (e) =>
     : e?.fields?.length
       ? e.fields.map((f) => (f.field_id ? `${f.field_id}: ${f.message}` : f.message)).join('; ')
       : (CODE_COPY[e?.code] ?? e?.message ?? REFUSAL_COPY[e?.code] ?? (typeof e === 'string' ? e : 'Something went wrong.'));
+
+const sentence = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/**
+ * A failed save, split for a form: `fields` holds the 422 messages of the form's own
+ * fields ({ host: 'The mail server's name…' }) for <Field error>, `general` the rest as one line.
+ */
+export function formErrors(e, known) {
+  const fields = {};
+  const rest = [];
+  for (const f of e?.fields ?? []) {
+    if (known.includes(f.field_id)) fields[f.field_id] = sentence(f.message);
+    else rest.push(f);
+  }
+  const general = e?.fields?.length ? (rest.length ? errMsg({ fields: rest }) : null) : sentence(errMsg(e));
+  return { fields, general };
+}

@@ -114,21 +114,39 @@ export const integrationApi = baseApi.injectEndpoints({
       invalidatesTags: ['NotificationSettings'],
     }),
 
+    // Email: the company's own mail server (SMTP); Aurlynn sends no email itself.
+    // { connected: false } or { connected: true, host, port, security, username, from_email, from_name,
+    // status connected|error, last_error, verified_at, has_password } (never the password).
+    getEmailChannel: b.query({ query: () => C.integration('/customer/channels/email'), providesTags: ['EmailChannel'] }),
+    // { host, port, security starttls|tls|none, username, password, from_email, from_name }. The login is
+    // checked with the server first (a few seconds); 422 per field. A blank password keeps the stored one.
+    connectEmail: b.mutation({ query: (body) => C.integration('/customer/channels/email', { method: 'PUT', body }), invalidatesTags: ['EmailChannel'] }),
+    disconnectEmail: b.mutation({ query: () => C.integration('/customer/channels/email', { method: 'DELETE' }), invalidatesTags: ['EmailChannel'] }),
+    // { to } -> { sent: true }, or 502 email_failed with the server's words (also kept as last_error).
+    testEmail: b.mutation({
+      query: (to) => C.integration('/customer/channels/email/test', { method: 'POST', body: { to } }),
+      invalidatesTags: ['EmailChannel'],
+    }),
+
     // Channels (WA-01..03, WA-06) --------------------------------------------
+    // [{ id, phone, display_name, phone_number_id, campaign_id, agent_id, status, is_simulated, created_at,
+    //    webhook_url, verify_token }]: the last two only for a real number (to enter in the Meta app).
     listWhatsappAccounts: b.query({ query: () => C.integration('/customer/channels/whatsapp'), providesTags: ['Channel'] }),
-    // { phone, display_name }. Without Meta credentials this is a demo number (is_simulated); with
-    // embedded signup add phone_number_id, access_token, waba_id.
+    // A real number from the company's Meta app: { phone_number_id, waba_id, access_token, app_secret }.
+    // Phone and display name come from Meta; 422 per field carries Meta's own words; 409 number_already_connected.
     connectWhatsapp: b.mutation({
-      query: ({ business_id, ...body }) => C.integration('/customer/channels/whatsapp/connect', { method: 'POST', body: { ...body, ...(business_id ? { waba_id: business_id } : {}) } }),
+      query: ({ phone_number_id, waba_id, access_token, app_secret }) =>
+        C.integration('/customer/channels/whatsapp/connect', { method: 'POST', body: { phone_number_id, waba_id, access_token, app_secret } }),
       invalidatesTags: ['Channel'],
     }),
     disconnectWhatsapp: b.mutation({ query: (id) => C.integration(`/customer/channels/whatsapp/${id}`, { method: 'DELETE' }), invalidatesTags: ['Channel'] }),
-    // agent_id null = staff only. The agent replies until a person takes the conversation over.
-    setWhatsappAgent: b.mutation({
-      query: ({ id, agent_id }) => C.integration(`/customer/channels/whatsapp/${id}/agent`, { method: 'PUT', body: { agent_id } }),
+    // The campaign that answers chats on the number; campaign_id null = staff only. It replies until a person takes over.
+    setWhatsappCampaign: b.mutation({
+      query: ({ id, campaign_id }) => C.integration(`/customer/channels/whatsapp/${id}/campaign`, { method: 'PUT', body: { campaign_id } }),
       invalidatesTags: ['Channel'],
     }),
-    // Review is simulated (~10 s): pending -> approved, or rejected with reject_reason.
+    // status pending | approved | rejected | paused | disabled (reject_reason). With a real number Meta reviews
+    // each new template (minutes to hours); a company with only a demo number gets a simulated review (~10 s).
     listMessageTemplates: b.query({
       query: () => C.integration('/customer/channels/whatsapp/templates'),
       transformResponse: (d) => (d?.items ?? d ?? []).map((t) => ({ ...t, channel: 'whatsapp', variables: t.examples ?? [] })),
@@ -213,10 +231,14 @@ export const {
   useMarkAllNotificationsReadMutation,
   useGetNotificationSettingsQuery,
   usePutNotificationSettingsMutation,
+  useGetEmailChannelQuery,
+  useConnectEmailMutation,
+  useDisconnectEmailMutation,
+  useTestEmailMutation,
   useListWhatsappAccountsQuery,
   useConnectWhatsappMutation,
   useDisconnectWhatsappMutation,
-  useSetWhatsappAgentMutation,
+  useSetWhatsappCampaignMutation,
   useListMessageTemplatesQuery,
   useCreateMessageTemplateMutation,
   useDeleteMessageTemplateMutation,

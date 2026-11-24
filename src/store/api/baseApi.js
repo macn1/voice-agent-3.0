@@ -77,6 +77,7 @@ export const baseApi = createApi({
     'Notification',
     'NotificationSettings',
     'Channel',
+    'EmailChannel',
     'MessageTemplate',
     'Conversation',
     'Broadcast',

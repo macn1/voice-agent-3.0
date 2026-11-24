@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookOpen, Plug, RefreshCw, Unplug } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mail, MessageCircle, Phone, Plug, RefreshCw, Unplug } from 'lucide-react';
 import {
   useConnectCalendarMutation,
   useConnectIntegrationMutation,
   useDisconnectIntegrationMutation,
   useGetBookingSettingsQuery,
+  useGetEmailChannelQuery,
   useGetIntegrationSettingQuery,
   useGetIntegrationStatusQuery,
   useListAppointmentsQuery,
@@ -13,14 +14,16 @@ import {
   useListIntegrationEventsQuery,
   useListIntegrationFieldsQuery,
   useListSyncLogQuery,
+  useListWhatsappAccountsQuery,
   useLookupTestMutation,
   usePutBookingSettingsMutation,
   usePutIntegrationMappingMutation,
   usePutIntegrationSettingMutation,
   useRunIntegrationSyncMutation,
 } from '../../../store/api/integrationApi';
+import { useListNumbersQuery } from '../../../store/api/callsApi';
 import { dateTime, number, titleCase } from '../../../lib/format';
-import { PixelHero } from '../../../components/PixelHero';
+import { asList } from '../../../lib/normalize';
 import { Async, Badge, Button, ConfirmDialog, EmptyState, errMsg, Field, Input, Modal, PageHeader, SegmentTabs, Skeleton, StatusBadge, Toggle, useToast } from '../../../components/ui';
 import { CopyField, MappingEditor, SectionCard, Select, useSection, WeekdayPicker } from '../../../components/forms';
 
@@ -48,72 +51,148 @@ export function IntegrationsPage() {
     navigate(`/integrations/${provider}`, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (catalog.isError && !catalog.data) {
-    return (
-      <PixelHero
-        icon={Plug}
-        motion="nudge"
-        title="Connect the tools your team already uses"
-        description="Link your CRM, calendar and automation tools so agents can look things up, book meetings and log every call."
-        actions={
-          <>
-            <Link to="/docs" className="btn">
-              <BookOpen /> Read docs
-            </Link>
-            <Link to="/developers" className="btn primary">
-              Build with API <ArrowRight />
-            </Link>
-          </>
-        }
-      />
-    );
-  }
-
   const groups = ['crm', 'calendar', 'automation'].map((c) => [c, items.filter((i) => i.category === c)]).filter(([, list]) => list.length);
   return (
     <>
       <PageHeader
         eyebrow="Connect"
         title="Integrations"
-        description="Link your CRM, calendar and automation tools so agents can look things up, book meetings and log every call."
+        description="The channels your agents reach people on, and the CRM, calendar and automation tools they look things up in, book meetings with and log every call to."
         actions={
           <Link to="/developers" className="btn">
             Build with API <ArrowRight />
           </Link>
         }
       />
-      <Async state={catalog} skeleton={<Skeleton h={220} />}>
-        {() => (
-          <div className="stack" style={{ gap: 28 }}>
-            {groups.map(([cat, list]) => (
-              <section key={cat}>
-                <h2 className="text-subheading" style={{ marginBottom: 12 }}>
-                  {CATEGORY_LABEL[cat] ?? titleCase(cat)}
-                </h2>
-                <div className="grid-3">
-                  {list.map((i) => (
-                    <Link key={i.key} to={`/integrations/${i.key}`} className="card card-pad stack" style={{ gap: 10, textDecoration: 'none', color: 'inherit' }}>
-                      <div className="row between">
-                        <span className="clay fw-bold" style={{ width: 44, height: 44, borderRadius: 12 }}>
-                          {i.name[0]}
-                        </span>
-                        {i.connected ? <Badge tone="green">Connected</Badge> : <Badge plain>{i.auth_type === 'oauth' ? 'Sign in' : 'API key'}</Badge>}
-                      </div>
-                      <div>
-                        <div className="card-title">{i.name}</div>
-                        <p className="muted small" style={{ margin: '4px 0 0' }}>
-                          {i.description}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ))}
+      <div className="stack" style={{ gap: 28 }}>
+        <ChannelCards />
+        <Async state={catalog} skeleton={<Skeleton h={220} />}>
+          {() => (
+            <>
+              {groups.map(([cat, list]) => (
+                <section key={cat}>
+                  <h2 className="text-subheading" style={{ marginBottom: 12 }}>
+                    {CATEGORY_LABEL[cat] ?? titleCase(cat)}
+                  </h2>
+                  <div className="grid-3">
+                    {list.map((i) => (
+                      <Link key={i.key} to={`/integrations/${i.key}`} className="card card-pad stack" style={{ gap: 10, textDecoration: 'none', color: 'inherit' }}>
+                        <div className="row between">
+                          <span className="clay fw-bold" style={{ width: 44, height: 44, borderRadius: 12 }}>
+                            {i.name[0]}
+                          </span>
+                          {i.connected ? <Badge tone="green">Connected</Badge> : <Badge plain>{i.auth_type === 'oauth' ? 'Sign in' : 'API key'}</Badge>}
+                        </div>
+                        <div>
+                          <div className="card-title">{i.name}</div>
+                          <p className="muted small" style={{ margin: '4px 0 0' }}>
+                            {i.description}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </>
+          )}
+        </Async>
+      </div>
+    </>
+  );
+}
+
+/** One card per way of reaching people: phone numbers, WhatsApp and email (phase 5). */
+function ChannelCards() {
+  const numbers = useListNumbersQuery();
+  const whatsapp = useListWhatsappAccountsQuery();
+  const email = useGetEmailChannelQuery();
+
+  const n = numbers.data?.length ?? 0;
+  const accounts = asList(whatsapp.data);
+  const real = accounts.filter((a) => !a.is_simulated);
+  const demo = accounts.find((a) => a.is_simulated);
+  const mail = email.data;
+
+  return (
+    <section>
+      <h2 className="text-subheading" style={{ marginBottom: 12 }}>
+        Channels
+      </h2>
+      <div className="grid-3">
+        <ChannelCard
+          to="/numbers"
+          icon={<Phone />}
+          name="Phone"
+          state={numbers}
+          badge={n ? <Badge tone="green">Connected</Badge> : <Badge plain>Not set up</Badge>}
+          detail={n ? `${number(n)} ${n === 1 ? 'number' : 'numbers'}` : 'No numbers yet'}
+          sub="Numbers your campaigns answer and call from."
+        />
+        <ChannelCard
+          to="/channels/whatsapp"
+          icon={<MessageCircle />}
+          name="WhatsApp"
+          state={whatsapp}
+          badge={real.length ? <Badge tone="green">Connected</Badge> : demo ? <Badge tone="amber">Demo</Badge> : <Badge plain>Not connected</Badge>}
+          detail={
+            real.length
+              ? `${real[0].phone ?? real[0].display_name}${real.length > 1 ? ` and ${real.length - 1} more` : ''}`
+              : demo
+                ? 'Demo number – not connected to Meta'
+                : 'Not connected'
+          }
+          sub="Follow-ups, broadcasts and chats from your WhatsApp Business number."
+        />
+        <ChannelCard
+          to="/integrations/email"
+          icon={<Mail />}
+          name="Email"
+          state={email}
+          badge={
+            mail?.connected ? (
+              mail.status === 'error' ? (
+                <Badge tone="red">Error</Badge>
+              ) : (
+                <Badge tone="green">Connected</Badge>
+              )
+            ) : (
+              <Badge plain>Not connected</Badge>
+            )
+          }
+          detail={mail?.connected ? mail.from_email : 'Not connected'}
+          sub="Follow-up emails from your own mailbox."
+        />
+      </div>
+    </section>
+  );
+}
+
+function ChannelCard({ to, icon, name, state, badge, detail, sub }) {
+  const failed = state.isError && state.data === undefined;
+  const loading = !failed && state.data === undefined;
+  return (
+    <Link to={to} className="card card-pad stack" style={{ gap: 10, textDecoration: 'none', color: 'inherit' }}>
+      <div className="row between">
+        <span className="clay" style={{ width: 44, height: 44, borderRadius: 12 }}>
+          {icon}
+        </span>
+        {!loading && !failed && badge}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div className="card-title">{name}</div>
+        {loading ? (
+          <Skeleton h={14} w="60%" style={{ marginTop: 6 }} />
+        ) : (
+          <div className="fw-medium small" style={{ marginTop: 4, overflowWrap: 'anywhere' }}>
+            {failed ? "Couldn't load the status" : detail}
           </div>
         )}
-      </Async>
-    </>
+        <p className="muted small" style={{ margin: '4px 0 0' }}>
+          {sub}
+        </p>
+      </div>
+    </Link>
   );
 }
 

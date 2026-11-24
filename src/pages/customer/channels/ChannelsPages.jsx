@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Trash2, Undo2, Unplug } from 'lucide-react';
+import { BookOpen, ExternalLink, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Trash2, Undo2, Unplug } from 'lucide-react';
 import {
   useConnectWhatsappMutation,
   useConversationHandoffMutation,
@@ -14,7 +14,7 @@ import {
   useListMessageTemplatesQuery,
   useListWhatsappAccountsQuery,
   useReplyToConversationMutation,
-  useSetWhatsappAgentMutation,
+  useSetWhatsappCampaignMutation,
 } from '../../../store/api/integrationApi';
 import { useListContactListsQuery } from '../../../store/api/callsApi';
 import { dateTime, number, titleCase } from '../../../lib/format';
@@ -26,6 +26,7 @@ import {
   EmptyState,
   errMsg,
   Field,
+  formErrors,
   Input,
   Modal,
   PageHeader,
@@ -33,11 +34,11 @@ import {
   StatusBadge,
   useToast,
 } from '../../../components/ui';
-import { Select, Textarea } from '../../../components/forms';
+import { CopyField, Select, Textarea } from '../../../components/forms';
 import { ShareBar, SERIES } from '../../../components/charts';
 import { PixelHero } from '../../../components/PixelHero';
 import { asList } from '../../../lib/normalize';
-import { useAgentOptions } from '../shared';
+import { useCampaignOptions } from '../shared';
 
 /** P-26 WhatsApp setup (WA-01, WA-02, WA-03, WA-06.1). */
 export function WhatsAppPage() {
@@ -92,49 +93,47 @@ export function WhatsAppPage() {
         items={[
           { value: 'connection', label: 'Connection' },
           { value: 'templates', label: 'Templates' },
-          { value: 'agent', label: 'Chat agent' },
+          { value: 'chats', label: 'Chats' },
         ]}
       />
 
       {tab === 'connection' && <ConnectionTab accounts={accounts} />}
-      {tab === 'templates' && <TemplatesTab />}
-      {tab === 'agent' && <ChatAgentTab accounts={accounts} />}
+      {tab === 'templates' && <TemplatesTab accounts={accounts} />}
+      {tab === 'chats' && <ChatsTab accounts={accounts} />}
     </>
   );
 }
 
 function ConnectionTab({ accounts }) {
-  const toast = useToast();
-  const [connectWhatsapp] = useConnectWhatsappMutation();
   const [disconnectWhatsapp] = useDisconnectWhatsappMutation();
-  const [f, setF] = useState({ display_name: '', phone: '', business_id: '' });
-  const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [justConnected, setJustConnected] = useState(null);
   return (
     <Async state={accounts}>
-      {(list) =>
-        list.length ? (
+      {(data) => {
+        const list = asList(data);
+        const hasReal = list.some((a) => !a.is_simulated);
+        return (
           <div className="stack">
             {list.map((a) => (
-              <div key={a.id} className="card card-pad row between wrap">
-                <div className="row" style={{ gap: 16 }}>
-                  <span className="clay" style={{ width: 52, height: 52, borderRadius: 14 }}>
-                    <MessageCircle />
-                  </span>
-                  <div>
-                    <div className="row" style={{ gap: 8 }}>
-                      <span className="card-title">{a.display_name}</span>
-                      <StatusBadge status={a.status === 'connected' ? 'active' : a.status} label={titleCase(a.status)} />
-                    </div>
-                    <div className="muted mono small">{a.phone}</div>
-                    <div className="muted small">Connected {dateTime(a.created_at)}</div>
-                  </div>
-                </div>
-                <Button variant="danger" icon={<Unplug />} onClick={() => setRemoving(a)}>
-                  Disconnect
+              <AccountCard key={a.id} account={a} highlight={a.id === justConnected} onDisconnect={() => setRemoving(a)} />
+            ))}
+            {!hasReal || adding ? (
+              <ConnectForm
+                onCancel={hasReal ? () => setAdding(false) : undefined}
+                onConnected={(a) => {
+                  setAdding(false);
+                  setJustConnected(a?.id ?? null);
+                }}
+              />
+            ) : (
+              <div>
+                <Button icon={<Plus />} onClick={() => setAdding(true)}>
+                  Connect another number
                 </Button>
               </div>
-            ))}
+            )}
             <ConfirmDialog
               open={!!removing}
               onClose={() => setRemoving(null)}
@@ -147,49 +146,198 @@ function ConnectionTab({ accounts }) {
               }}
             />
           </div>
-        ) : (
-          <div className="card card-pad stack">
-            <div className="card-title">Connect your WhatsApp Business number</div>
-            <p className="muted small">You'll need a WhatsApp Business Account in Meta Business Manager and a number not already used in the WhatsApp app.</p>
-            <div className="form-grid">
-              <Field label="Display name">
-                <Input value={f.display_name} onChange={(e) => setF({ ...f, display_name: e.target.value })} />
-              </Field>
-              <Field label="Phone number">
-                <Input className="mono" placeholder="+919845012345" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
-              </Field>
-              <Field label="WhatsApp Business Account ID" className="full">
-                <Input className="mono" value={f.business_id} onChange={(e) => setF({ ...f, business_id: e.target.value })} />
-              </Field>
-            </div>
-            <div>
-              <Button
-                variant="primary"
-                loading={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await connectWhatsapp(f).unwrap();
-                    toast('WhatsApp connected');
-                  } catch (e) {
-                    toast(errMsg(e), 'error');
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Connect
-              </Button>
-            </div>
-          </div>
-        )
-      }
+        );
+      }}
     </Async>
   );
 }
 
-function TemplatesTab() {
+function AccountCard({ account: a, highlight, onDisconnect }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (highlight) {
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [highlight]);
+  return (
+    <div ref={ref} className="card card-pad stack">
+      <div className="row between wrap">
+        <div className="row" style={{ gap: 16, minWidth: 0 }}>
+          <span className="clay" style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0 }}>
+            <MessageCircle />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <span className="card-title">{a.display_name ?? a.phone}</span>
+              <StatusBadge status={a.status === 'connected' ? 'active' : a.status} label={titleCase(a.status)} />
+              {a.is_simulated && <Badge tone="amber">Demo number – not connected to Meta</Badge>}
+            </div>
+            <div className="muted mono small">{a.phone}</div>
+            <div className="muted small">
+              {!a.is_simulated && a.phone_number_id ? `Phone number ID ${a.phone_number_id} · ` : ''}Connected {dateTime(a.created_at)}
+            </div>
+          </div>
+        </div>
+        <Button variant="danger" icon={<Unplug />} onClick={onDisconnect}>
+          Disconnect
+        </Button>
+      </div>
+      {a.is_simulated && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Messages on a demo number are simulated: nothing reaches WhatsApp. Disconnect it, and connect your real number from Meta.
+        </p>
+      )}
+      {!a.is_simulated && a.webhook_url && <FinishInMeta account={a} />}
+    </div>
+  );
+}
+
+/** What to enter in the Meta app so customers' messages and template reviews reach Aurlynn. */
+function FinishInMeta({ account }) {
+  return (
+    <div className="stack" style={{ gap: 12, borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
+      <div>
+        <div className="card-title">Finish in Meta</div>
+        <div className="card-sub">Do this once, so customers' messages and template reviews reach Aurlynn.</div>
+      </div>
+      <div className="form-grid">
+        <Field label="Callback URL" className="full">
+          <CopyField value={account.webhook_url} />
+        </Field>
+        <Field label="Verify token" className="full">
+          <CopyField value={account.verify_token ?? ''} />
+        </Field>
+      </div>
+      <ol className="small lh-spacious" style={{ margin: 0, paddingLeft: 20 }}>
+        <li>
+          In your app on{' '}
+          <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">
+            Meta for Developers <ExternalLink size={12} />
+          </a>
+          , open <b>WhatsApp › Configuration</b>, and under <b>Webhook</b> click <b>Edit</b>.
+        </li>
+        <li>
+          Paste the Callback URL and the Verify token above, then click <b>Verify and save</b>.
+        </li>
+        <li>
+          Under <b>Webhook fields</b>, subscribe to <span className="mono">messages</span> and <span className="mono">message_template_status_update</span>.
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+const WA_FIELDS = ['phone_number_id', 'waba_id', 'access_token', 'app_secret'];
+
+/** Connect a real number from the company's own Meta app (WhatsApp Cloud API). */
+function ConnectForm({ onConnected, onCancel }) {
   const toast = useToast();
+  const [connectWhatsapp] = useConnectWhatsappMutation();
+  const blank = { phone_number_id: '', waba_id: '', access_token: '', app_secret: '' };
+  const [f, setF] = useState(blank);
+  const [errors, setErrors] = useState({});
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => {
+    setF({ ...f, [k]: e.target.value });
+    if (errors[k]) setErrors({ ...errors, [k]: undefined });
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(WA_FIELDS.map((k) => [k, f[k].trim()]));
+    // All four are needed: the API turns an empty request into a demo number.
+    const missing = Object.fromEntries(WA_FIELDS.filter((k) => !body[k]).map((k) => [k, 'Required']));
+    setError(null);
+    setErrors(missing);
+    if (Object.keys(missing).length) return;
+    setBusy(true);
+    try {
+      const a = await connectWhatsapp(body).unwrap();
+      setF(blank);
+      toast('WhatsApp connected. Now finish the webhook setup in Meta.');
+      onConnected?.(a);
+    } catch (err) {
+      const r = formErrors(err, WA_FIELDS);
+      setErrors(r.fields);
+      setError(r.general);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="card card-pad stack" onSubmit={submit} noValidate>
+      <div>
+        <div className="card-title">Connect your WhatsApp Business number</div>
+        <div className="card-sub">
+          Through Meta's WhatsApp Cloud API, from your own Meta app. You need a Meta Business account and a number that isn't used in the WhatsApp app.
+        </div>
+      </div>
+      <ol className="small lh-spacious" style={{ margin: 0, paddingLeft: 20 }}>
+        <li>
+          In{' '}
+          <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">
+            Meta for Developers <ExternalLink size={12} />
+          </a>
+          , create a <b>Business</b> app and add the <b>WhatsApp</b> product.
+        </li>
+        <li>
+          In <b>WhatsApp › API setup</b>, copy the <b>Phone number ID</b> and the <b>WhatsApp Business Account ID</b>.
+        </li>
+        <li>
+          In{' '}
+          <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noreferrer">
+            Business settings › System users <ExternalLink size={12} />
+          </a>
+          , add an <b>admin</b> system user, give it the app and the WhatsApp account, and generate a <b>permanent token</b> with{' '}
+          <span className="mono">whatsapp_business_messaging</span> and <span className="mono">whatsapp_business_management</span>.
+        </li>
+        <li>
+          In <b>App settings › Basic</b>, copy the <b>App secret</b>.
+        </li>
+      </ol>
+      <div className="form-grid">
+        <Field label="Phone number ID" error={errors.phone_number_id}>
+          <Input className="mono" inputMode="numeric" value={f.phone_number_id} invalid={!!errors.phone_number_id} onChange={set('phone_number_id')} autoComplete="off" />
+        </Field>
+        <Field label="WhatsApp Business Account ID" error={errors.waba_id}>
+          <Input className="mono" inputMode="numeric" value={f.waba_id} invalid={!!errors.waba_id} onChange={set('waba_id')} autoComplete="off" />
+        </Field>
+        <Field label="Access token" hint="The system user's permanent token. Stored encrypted." error={errors.access_token}>
+          <Input type="password" className="mono" value={f.access_token} invalid={!!errors.access_token} onChange={set('access_token')} autoComplete="new-password" />
+        </Field>
+        <Field label="App secret" hint="Checks that incoming messages really come from Meta. Stored encrypted." error={errors.app_secret}>
+          <Input type="password" className="mono" value={f.app_secret} invalid={!!errors.app_secret} onChange={set('app_secret')} autoComplete="new-password" />
+        </Field>
+      </div>
+      {error && <div className="alert-inline">{error}</div>}
+      <div className="row wrap" style={{ gap: 8 }}>
+        <Button variant="primary" type="submit" loading={busy}>
+          {busy ? 'Checking with Meta…' : 'Connect'}
+        </Button>
+        {onCancel && (
+          <Button onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+// Template review states (Meta's, for a real number).
+const TEMPLATE_STATUS = {
+  pending: ['pending', 'In review'],
+  approved: ['active', 'Approved'],
+  rejected: ['failed', 'Rejected'],
+  paused: ['expired', 'Paused'],
+  disabled: ['disabled', 'Disabled'],
+};
+
+function TemplatesTab({ accounts }) {
+  const toast = useToast();
+  const real = asList(accounts.data).some((a) => !a.is_simulated);
   const [poll, setPoll] = useState(0);
   const list = useListMessageTemplatesQuery(undefined, { pollingInterval: poll });
   const [deleteTemplate] = useDeleteMessageTemplateMutation();
@@ -201,7 +349,10 @@ function TemplatesTab() {
       <div className="card-head">
         <div>
           <h2>Message templates</h2>
-          <div className="card-sub">WhatsApp requires approved templates to message someone outside a 24-hour reply window.</div>
+          <div className="card-sub">
+            WhatsApp requires approved templates to message someone outside a 24-hour reply window.
+            {real && ' Meta reviews each new template; that can take from a few minutes to a few hours.'}
+          </div>
         </div>
         <Button variant="primary" icon={<Plus />} onClick={() => setEditing(true)}>
           New template
@@ -243,7 +394,7 @@ function TemplatesTab() {
                       </td>
                       <td>{titleCase(t.category)}</td>
                       <td>
-                        <StatusBadge status={t.status === 'approved' ? 'active' : t.status === 'rejected' ? 'failed' : 'pending'} label={titleCase(t.status)} />
+                        <StatusBadge status={TEMPLATE_STATUS[t.status]?.[0] ?? 'pending'} label={TEMPLATE_STATUS[t.status]?.[1] ?? titleCase(t.status)} />
                         {t.reject_reason && (
                           <div className="cell-sub" style={{ color: 'var(--red)' }}>
                             {t.reject_reason}
@@ -263,7 +414,7 @@ function TemplatesTab() {
           )
         }
       </Async>
-      <TemplateEditor open={editing} onClose={() => setEditing(false)} onSaved={() => toast('Submitted for approval')} />
+      <TemplateEditor open={editing} onClose={() => setEditing(false)} onSaved={() => toast(real ? 'Sent to Meta for review' : 'Submitted for approval')} />
 
       <ConfirmDialog
         open={!!removing}
@@ -460,24 +611,26 @@ function TemplateEditor({ open, onClose, onSaved }) {
   );
 }
 
-function ChatAgentTab({ accounts }) {
+function ChatsTab({ accounts }) {
   const toast = useToast();
-  const [setWhatsappAgent] = useSetWhatsappAgentMutation();
-  const { options } = useAgentOptions();
+  const [setWhatsappCampaign] = useSetWhatsappCampaignMutation();
+  const { campaigns, loading } = useCampaignOptions();
   return (
     <Async state={accounts}>
-      {(list) =>
-        list.length ? (
+      {(data) => {
+        const list = asList(data);
+        return list.length ? (
           <div className="stack">
             {list.map((a) => (
-              <ChatAgentCard
-                key={a.id}
+              <ChatCampaignCard
+                key={`${a.id}:${a.campaign_id ?? ''}`}
                 account={a}
-                options={options}
-                onSave={(agent_id) =>
-                  setWhatsappAgent({ id: a.id, agent_id })
+                campaigns={campaigns}
+                loading={loading}
+                onSave={(campaign_id) =>
+                  setWhatsappCampaign({ id: a.id, campaign_id })
                     .unwrap()
-                    .then(() => toast('Saved'))
+                    .then(() => toast(campaign_id ? 'Saved: the campaign answers chats on this number' : 'Saved: staff answer chats in the Inbox'))
                     .catch((e) => toast(errMsg(e), 'error'))
                 }
               />
@@ -487,28 +640,67 @@ function ChatAgentTab({ accounts }) {
           <div className="card">
             <EmptyState title="Connect WhatsApp first" />
           </div>
-        )
-      }
+        );
+      }}
     </Async>
   );
 }
 
-function ChatAgentCard({ account, options, onSave }) {
-  const [agent, setAgent] = useState(account.agent_id ?? '');
+function ChatCampaignCard({ account, campaigns, loading, onSave }) {
+  const [campaign, setCampaign] = useState(account.campaign_id ?? '');
+  const [saving, setSaving] = useState(false);
+  const current = campaigns.find((c) => c.id === account.campaign_id);
+  // Published campaigns first: a draft has nothing to answer with yet.
+  const options = [...campaigns]
+    .sort((a, b) => (a.status === 'draft' ? 1 : 0) - (b.status === 'draft' ? 1 : 0) || a.name.localeCompare(b.name))
+    .map((c) => ({ value: c.id, label: `${c.name}${c.agent_name ? ` · ${c.agent_name}` : ''}${c.status === 'draft' ? ' (not published)' : ''}` }));
+  if (account.campaign_id && !current && !loading) options.unshift({ value: account.campaign_id, label: 'Deleted campaign' });
+  const changed = campaign !== (account.campaign_id ?? '');
   return (
     <div className="card card-pad stack">
-      <div className="card-title">{account.display_name}</div>
+      <div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <span className="card-title">{account.display_name ?? account.phone}</span>
+          {account.is_simulated && <Badge tone="amber">Demo number – not connected to Meta</Badge>}
+        </div>
+        <div className="muted mono small">{account.phone}</div>
+      </div>
+      <p className="small" style={{ margin: 0 }}>
+        {account.campaign_id ? (
+          <>
+            Answered now by <b>{current ? current.name : 'a deleted campaign'}</b>
+            {current?.agent_name ? ` (${current.agent_name})` : ''}.
+          </>
+        ) : (
+          'No campaign answers chats on this number: staff reply in the Inbox.'
+        )}
+      </p>
       <div className="form-grid">
-        <Field label="Agent that answers chats" hint="Uses the same persona, company profile, rules, knowledge and tools. It replies until a person takes the conversation over.">
-          <Select value={agent} options={options} placeholder="Nobody — humans answer in the Inbox" onChange={(e) => setAgent(e.target.value)} />
+        <Field
+          label="Campaign that answers chats"
+          hint="Its agent replies with the campaign's instructions, knowledge and tools, until a person takes the conversation over in the Inbox."
+        >
+          <Select value={campaign} options={options} placeholder="Nobody: staff answer in the Inbox" onChange={(e) => setCampaign(e.target.value)} />
         </Field>
       </div>
-      <div>
-        <Button variant="primary" onClick={() => onSave(agent || null)}>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <Button
+          variant="primary"
+          loading={saving}
+          disabled={!changed}
+          onClick={async () => {
+            setSaving(true);
+            try {
+              await onSave(campaign || null);
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
           Save
         </Button>
-        {agent && (
-          <Link to={`/agents/${agent}/channels`} className="btn ghost" style={{ marginLeft: 8 }}>
+        {campaigns.some((c) => c.id === campaign) && (
+          <Link to={`/campaigns/${campaign}/channels`} className="btn ghost">
             Reply style, hours & hand-over keywords
           </Link>
         )}
@@ -516,7 +708,6 @@ function ChatAgentCard({ account, options, onSave }) {
     </div>
   );
 }
-
 
 /** P-27 Inbox with human takeover (WA-04). */
 export function InboxPage() {
@@ -675,6 +866,11 @@ export function InboxPage() {
                               {m.direction === 'out' ? `${titleCase(m.sender)} · ` : ''}
                               {dateTime(m.created_at)}
                             </div>
+                            {m.status === 'failed' && (
+                              <div className="meta" style={{ color: 'var(--red)' }}>
+                                Not sent{m.error ? `: ${m.error}` : ''}
+                              </div>
+                            )}
                           </div>
                         ))}
                         <div ref={end} />
@@ -901,7 +1097,9 @@ export function BroadcastsPage() {
                 disabled={!f.name.trim()}
                 onClick={async () => {
                   try {
-                    const account = accounts.data?.[0];
+                    // A real number first: a demo number's messages are only simulated.
+                    const list = asList(accounts.data);
+                    const account = list.find((a) => !a.is_simulated && a.status === 'connected') ?? list[0];
                     if (!account) throw new Error('Connect a WhatsApp number first');
                     await createBroadcast({
                       name: f.name.trim(),
