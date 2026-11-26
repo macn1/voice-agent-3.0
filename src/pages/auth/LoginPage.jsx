@@ -108,7 +108,7 @@ export function LoginPage() {
   return (
     <BrandAuthLayout title="Welcome" soft="back." lead="Sign in to continue building and managing your voice agents.">
       <form className="login-card" onSubmit={submit} noValidate>
-        <h2>Sign in to Aurlynn</h2>
+        <h2 className="login-title">Sign in to Aurlynn</h2>
         <p className="muted">Use your work email and password.</p>
 
         <div className="stack" style={{ marginTop: 28 }}>
