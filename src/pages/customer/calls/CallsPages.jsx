@@ -952,6 +952,14 @@ export function ReviewPage() {
 
   return (
     <>
+      <button
+        type="button"
+        className="back-link"
+        style={{ background: 'none', border: 0, cursor: 'pointer', font: 'inherit' }}
+        onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
+      >
+        <ArrowLeft /> Back
+      </button>
       <PageHeader
         eyebrow="Monitor"
         title="Quality review"

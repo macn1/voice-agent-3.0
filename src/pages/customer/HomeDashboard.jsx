@@ -1,12 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Flag, MessageSquare, PhoneOff } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock, Phone, Timer } from 'lucide-react';
 import { useListCampaignsQuery } from '../../store/api/flowApi';
 import { useGetAnalyticsQuery } from '../../store/api/analyticsApi';
 import { useListCallsQuery } from '../../store/api/callsApi';
 import { useListConversationsQuery } from '../../store/api/integrationApi';
 import { number } from '../../lib/format';
 import { StatusBadge } from '../../components/ui';
-import { Stat, TimeChart } from '../../components/charts';
+import { AreaChart, Sparkline } from '../../components/charts';
 import { useBilling } from './billingContext';
 
 /**
@@ -31,104 +31,151 @@ export function HomeDashboard() {
   if (allMissing) return null;
 
   const attention = [
-    failed.data
-      ? {
-          icon: PhoneOff,
-          text: `${failed.data} failed calls today`,
-          to: '/?range=today&status=failed#calls',
-        }
-      : null,
-    flagged.data
-      ? {
-          icon: Flag,
-          text: `${flagged.data} calls flagged for review`,
-          to: '/review',
-        }
-      : null,
-    waiting.data
-      ? {
-          icon: MessageSquare,
-          text: `${waiting.data} chats waiting for a human`,
-          to: '/inbox',
-        }
-      : null,
+    failed.data ? { count: failed.data, label: failed.data === 1 ? 'failed call today' : 'failed calls today', to: '/?range=today&status=failed#calls' } : null,
+    flagged.data ? { count: flagged.data, label: flagged.data === 1 ? 'call to review' : 'calls to review', to: '/review' } : null,
+    waiting.data ? { count: waiting.data, label: waiting.data === 1 ? 'chat needs a human' : 'chats need a human', to: '/inbox' } : null,
     minutesRatio !== undefined && minutesRatio >= 0.8
-      ? {
-          icon: AlertTriangle,
-          text: `${Math.round(minutesRatio * 100)}% of plan minutes used`,
-          to: '/settings/usage',
-        }
+      ? { count: `${Math.round(minutesRatio * 100)}%`, label: 'of plan minutes used', to: '/settings/usage' }
       : null,
   ].filter(Boolean);
 
+  const d = summary.data;
+  const series = ts.data ?? [];
+  const spark = (k) => series.map((r) => Number(r[k] ?? 0));
+  const periodCalls = series.reduce((a, r) => a + Number(r.calls ?? 0), 0);
+  const periodOk = series.reduce((a, r) => a + Number(r.successful ?? 0), 0);
+  const avg = d ? `${Math.floor(d.avg_duration / 60)}:${String(Math.round(d.avg_duration % 60)).padStart(2, '0')}` : '';
+  const rate = d ? Math.round(d.success_rate * 100) : 0;
+  const minutesUsed = usage?.callMinutes ?? d?.minutes ?? 0;
+
+  const kpis = d
+    ? [
+        {
+          icon: Phone,
+          tone: 'blue',
+          label: 'Total calls',
+          value: number(d.calls),
+          hint: 'Last 12 months',
+          spark: spark('calls'),
+          onClick: () => document.getElementById('calls')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        },
+        {
+          icon: Timer,
+          tone: 'orange',
+          label: 'Minutes used',
+          value: number(minutesUsed),
+          hint: includedMinutes ? `of ${number(includedMinutes)} in your plan` : 'This billing period',
+          meter: includedMinutes ? Math.min(1, minutesUsed / includedMinutes) : undefined,
+          onClick: () => navigate('/settings/usage'),
+        },
+        {
+          icon: CheckCircle2,
+          tone: 'green',
+          label: 'Success rate',
+          value: `${rate}%`,
+          hint: rate >= 60 ? 'Healthy' : rate >= 30 ? 'Room to improve' : 'Needs attention',
+          spark: spark('successful'),
+        },
+        { icon: Clock, tone: 'amber', label: 'Avg call duration', value: avg, hint: 'minutes : seconds' },
+      ]
+    : [];
+
   return (
-    <section style={{ marginTop: 48, position: 'relative', zIndex: 1 }}>
-      <div className="row between" style={{ marginBottom: 16 }}>
-        <div className="eyebrow">Overall at a glance</div>
-        <Link to="/analytics" className="small row" style={{ gap: 4 }}>
-          Analytics <ArrowRight size={14} />
+    <section className="dash">
+      <div className="dash-head">
+        <div>
+          <div className="eyebrow">Overall at a glance</div>
+          <h2 className="dash-title">Performance overview</h2>
+        </div>
+        <Link to="/analytics" className="btn sm ghost">
+          Full analytics <ArrowRight size={14} />
         </Link>
       </div>
-      {summary.data && (
-        <div
-          className="grid-3"
-          style={{
-            '--grid-cols': 'repeat(4, minmax(0, 1fr))',
-            marginBottom: 14,
-          }}
-        >
-          <Stat
-            label="Total calls"
-            hint="Last 12 months"
-            value={number(summary.data.calls)}
-            onClick={() => {
-              document.getElementById('calls')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-          />
-          <Stat
-            label="Minutes this period"
-            value={number(usage?.callMinutes ?? summary.data.minutes)}
-            hint={includedMinutes ? `of ${number(includedMinutes)} in your plan` : undefined}
-            onClick={() => navigate('/settings/usage')}
-          />
-          <Stat label="Success rate" value={`${Math.round(summary.data.success_rate * 100)}%`} />
-          <Stat
-            label="Avg duration"
-            value={`${Math.floor(summary.data.avg_duration / 60)}:${String(Math.round(summary.data.avg_duration % 60)).padStart(2, '0')}`}
-          />
-        </div>
-      )}
+
       {attention.length > 0 && (
-        <div className="card card-pad" style={{ marginBottom: 14 }}>
-          <div className="card-title" style={{ marginBottom: 10 }}>
-            Needs attention
-          </div>
-          <div className="row wrap" style={{ gap: 8 }}>
+        <div className="attn" role="status" aria-label="Needs attention">
+          <span className="attn-title">
+            <i className="attn-dot" /> Needs attention
+          </span>
+          <div className="attn-items">
             {attention.map((a) => (
-              <Link key={a.to} to={a.to} className="chip">
-                <a.icon size={15} /> {a.text}
+              <Link
+                key={a.to}
+                to={a.to}
+                className="attn-item"
+                onClick={() => sessionStorage.setItem('homeScrollY', String(window.scrollY))}
+              >
+                <b>{a.count}</b>
+                <span>{a.label}</span>
+                <ArrowRight size={14} />
               </Link>
             ))}
           </div>
         </div>
       )}
-      <div
-        className="grid-2"
-        style={{
-          '--grid-cols': 'minmax(0, 1.5fr) minmax(0, 1fr)',
-          alignItems: 'start',
-          marginBottom: 14,
-        }}
-      >
-        {ts.data && ts.data.length > 0 && (
-          <div className="card card-pad">
-            <div className="card-title" style={{ marginBottom: 10 }}>
-              Calls per day
+
+      {d && (
+        <div className="dash-kpis">
+          {kpis.map((k) => (
+            <div key={k.label} className={`card dash-kpi tone-${k.tone}${k.onClick ? ' clickable' : ''}`} onClick={k.onClick}>
+              <div className="dash-kpi-top">
+                <span className="dash-kpi-icon">
+                  <k.icon size={18} />
+                </span>
+                <span className="dash-kpi-label">{k.label}</span>
+              </div>
+              <div className="dash-kpi-value">{k.value}</div>
+              <div className="dash-kpi-foot">
+                <span className="dash-kpi-hint">{k.hint}</span>
+                {k.spark && <Sparkline values={k.spark} color={`var(--tone-${k.tone})`} />}
+              </div>
+              {k.meter !== undefined && (
+                <div className="bar dash-kpi-meter">
+                  <span style={{ width: `${Math.max(2, k.meter * 100)}%` }} />
+                </div>
+              )}
             </div>
-            <TimeChart
-              data={ts.data}
+          ))}
+        </div>
+      )}
+
+      <div className="dash-main">
+        {series.length > 0 && (
+          <div className="card dash-panel">
+            <div className="dash-panel-head">
+              <div>
+                <div className="card-title">Calls per day</div>
+                <div className="card-sub">Last 14 days · hover for daily detail</div>
+              </div>
+              <div className="dash-chart-stats">
+                <div>
+                  <b>{number(periodCalls)}</b>
+                  <span>calls</span>
+                </div>
+                <div>
+                  <b>{number(periodOk)}</b>
+                  <span>successful</span>
+                </div>
+                <div>
+                  <b>{periodCalls ? Math.round((periodOk / periodCalls) * 100) : 0}%</b>
+                  <span>success rate</span>
+                </div>
+              </div>
+            </div>
+            <div className="legend dash-legend">
+              <span>
+                <i style={{ background: 'var(--series-1)' }} />
+                All calls
+              </span>
+              <span>
+                <i style={{ background: 'var(--series-3)' }} />
+                Successful
+              </span>
+            </div>
+            <AreaChart
+              data={series}
               x="day"
-              height={180}
+              height={250}
               series={[
                 { key: 'calls', label: 'Calls' },
                 { key: 'successful', label: 'Successful' },
@@ -137,31 +184,29 @@ export function HomeDashboard() {
           </div>
         )}
         {campaigns.data && campaigns.data.items.length > 0 && (
-          <div className="card">
-            <div className="card-head">
-              <h2>Campaigns</h2>
+          <div className="card dash-panel">
+            <div className="dash-panel-head">
+              <div>
+                <div className="card-title">Campaigns</div>
+                <div className="card-sub">{campaigns.data.items.length} most recent</div>
+              </div>
               <Link to="/campaigns" className="btn sm ghost">
-                All
+                View all
               </Link>
             </div>
-            <div className="table-wrap">
-              <table className="table">
-                <tbody>
-                  {campaigns.data.items.map((c) => (
-                    <tr key={c.id} className="clickable" onClick={() => navigate(`/campaigns/${c.id}`)}>
-                      <td>
-                        <div className="cell-main">{c.name}</div>
-                        <div className="cell-sub">{c.agent_name ?? 'No agent'}</div>
-                      </td>
-                      <td className="muted">{c.direction === 'outbound' ? 'Outbound' : 'Inbound'}</td>
-                      <td>
-                        <StatusBadge status={c.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="dash-camp-list">
+              {campaigns.data.items.map((c) => (
+                <li key={c.id} className="dash-camp" onClick={() => navigate(`/campaigns/${c.id}`)}>
+                  <div className="dash-camp-main">
+                    <div className="cell-main">{c.name}</div>
+                    <div className="cell-sub">
+                      {c.agent_name ?? 'No agent'} · {c.direction === 'outbound' ? 'Outbound' : 'Inbound'}
+                    </div>
+                  </div>
+                  <StatusBadge status={c.status} />
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

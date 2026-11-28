@@ -199,11 +199,10 @@ export function CallLog() {
               ]}
             />
             {range === 'custom' && (
-              <>
+              <div className="date-range">
                 <input
                   type="date"
                   className="input"
-                  style={{ width: 160 }}
                   aria-label="From"
                   value={params.get('from') ?? ''}
                   max={params.get('to') || istDay()}
@@ -213,14 +212,13 @@ export function CallLog() {
                 <input
                   type="date"
                   className="input"
-                  style={{ width: 160 }}
                   aria-label="To"
                   value={params.get('to') ?? ''}
                   min={params.get('from') || undefined}
                   max={istDay()}
                   onChange={(e) => set({ to: e.target.value })}
                 />
-              </>
+              </div>
             )}
           </div>
           <div className="filters">

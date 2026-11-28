@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AudioLines } from 'lucide-react';
 import { errMsg, useToast } from '../../components/ui';
@@ -12,6 +13,15 @@ export function HomePage() {
   const toast = useToast();
   const [loadLiveCampaigns] = useLazyListCampaignsQuery();
   const { theme } = useTheme();
+
+  // Coming back from /review (or any dashboard link): return to the same spot.
+  useEffect(() => {
+    const y = Number(sessionStorage.getItem('homeScrollY'));
+    if (!y) return;
+    sessionStorage.removeItem('homeScrollY');
+    const t = setTimeout(() => window.scrollTo({ top: y }), 150);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <>

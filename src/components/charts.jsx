@@ -314,3 +314,157 @@ export function delta(cur, prev) {
   const d = ((cur - prev) / prev) * 100;
   return `${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(0)}% vs previous period`;
 }
+
+/** Smooth monotone-ish cubic path through points. */
+function smoothPath(pts) {
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]},${pts[0][1]}` : '';
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const cx = (x0 + x1) / 2;
+    d += `C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+  }
+  return d;
+}
+
+/**
+ * Futuristic area chart: smooth glowing lines over soft gradient fills, with a
+ * crosshair + tooltip. Series 0 is the "total", series 1 the "good" subset.
+ */
+export function AreaChart({ data, x, series, height = 240, format = (v) => fmtNum(v) }) {
+  const ref = useRef(null);
+  const [hover, setHover] = useState(null);
+  const [W, setW] = useState(640);
+  const uid = useRef(`ac${Math.random().toString(36).slice(2, 8)}`).current;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(Math.max(280, el.clientWidth)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const pad = { l: 34, r: 12, t: 12, b: 26 };
+  const iw = W - pad.l - pad.r;
+  const ih = height - pad.t - pad.b;
+  const max = niceMax(Math.max(0, ...data.flatMap((d) => series.map((s) => Number(d[s.key] ?? 0)))));
+  const step = data.length > 1 ? iw / (data.length - 1) : 0;
+  const px = (i) => pad.l + (data.length > 1 ? step * i : iw / 2);
+  const y = (v) => pad.t + ih - (v / max) * ih;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * max);
+  const labelEvery = Math.ceil(data.length / Math.max(2, Math.floor(iw / 72)));
+  const colors = ['var(--series-1)', 'var(--series-3)', 'var(--series-2)', 'var(--series-4)'];
+
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const rel = e.clientX - r.left - pad.l;
+    setHover(Math.max(0, Math.min(data.length - 1, Math.round(rel / (step || 1)))));
+  };
+
+  const tipLeft = hover !== null ? Math.min(Math.max(px(hover), 70), W - 70) : 0;
+  const tipTop = hover !== null ? y(Math.max(...series.map((s) => Number(data[hover][s.key] ?? 0)))) : 0;
+
+  return (
+    <div className="chart area-chart" ref={ref}>
+      <svg width={W} height={height} viewBox={`0 0 ${W} ${height}`} role="img" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <defs>
+          {series.map((s, k) => (
+            <linearGradient key={s.key} id={`${uid}-g${k}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={colors[k]} stopOpacity={k === 0 ? 0.32 : 0.22} />
+              <stop offset="100%" stopColor={colors[k]} stopOpacity="0" />
+            </linearGradient>
+          ))}
+          <filter id={`${uid}-glow`} x="-10%" y="-30%" width="120%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <g className="grid">
+          {ticks.map((t) => (
+            <line key={t} x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} strokeDasharray={t === 0 ? undefined : '3 5'} />
+          ))}
+        </g>
+        <g className="axis">
+          {ticks.map((t) => (
+            <text key={t} x={pad.l - 8} y={y(t) + 4} textAnchor="end">
+              {format(Math.round(t))}
+            </text>
+          ))}
+          {data.map((d, i) =>
+            i % labelEvery === 0 ? (
+              <text key={i} x={px(i)} y={height - 6} textAnchor={i === 0 ? 'start' : 'middle'}>
+                {shortDay(String(d[x]))}
+              </text>
+            ) : null,
+          )}
+        </g>
+        {[...series].reverse().map((s, ri) => {
+          const k = series.length - 1 - ri;
+          const pts = data.map((d, i) => [px(i), y(Number(d[s.key] ?? 0))]);
+          const line = smoothPath(pts);
+          const area = pts.length > 1 ? `${line}L${pts[pts.length - 1][0]},${y(0)}L${pts[0][0]},${y(0)}Z` : '';
+          return (
+            <g key={s.key}>
+              {area && <path d={area} fill={`url(#${uid}-g${k})`} />}
+              <path d={line} fill="none" stroke={colors[k]} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" filter={`url(#${uid}-glow)`} />
+            </g>
+          );
+        })}
+        {hover !== null && (
+          <g>
+            <line x1={px(hover)} x2={px(hover)} y1={pad.t} y2={pad.t + ih} stroke="var(--border-strong)" strokeDasharray="4 4" />
+            {series.map((s, k) => (
+              <g key={s.key}>
+                <circle cx={px(hover)} cy={y(Number(data[hover][s.key] ?? 0))} r={9} fill={colors[k]} opacity={0.18} />
+                <circle cx={px(hover)} cy={y(Number(data[hover][s.key] ?? 0))} r={4.5} fill={colors[k]} stroke="var(--surface)" strokeWidth={2} />
+              </g>
+            ))}
+          </g>
+        )}
+        <rect x={pad.l} y={pad.t} width={iw} height={ih} fill="transparent" />
+      </svg>
+      {hover !== null && (
+        <div className="chart-tip" style={{ left: tipLeft, top: tipTop }}>
+          <div className="fw-semibold" style={{ marginBottom: 4 }}>
+            {shortDay(String(data[hover][x]))}
+          </div>
+          {series.map((s, k) => (
+            <div key={s.key}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 99, background: colors[k], marginRight: 6 }} />
+              <span className="k">{s.label}</span> {format(Number(data[hover][s.key] ?? 0))}
+            </div>
+          ))}
+          {series.length > 1 && Number(data[hover][series[0].key]) > 0 && (
+            <div style={{ marginTop: 4 }}>
+              <span className="k">Success rate</span> {Math.round((Number(data[hover][series[1].key] ?? 0) / Number(data[hover][series[0].key])) * 100)}%
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tiny trend line for KPI tiles. */
+export function Sparkline({ values, color = 'var(--series-1)', width = 96, height = 32 }) {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(1, ...values);
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * width, height - 3 - (v / max) * (height - 8)]);
+  const line = smoothPath(pts);
+  const id = useRef(`sp${Math.random().toString(36).slice(2, 8)}`).current;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line}L${width},${height}L0,${height}Z`} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
