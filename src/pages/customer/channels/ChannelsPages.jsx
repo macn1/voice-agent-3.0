@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, ExternalLink, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Send, Trash2, Undo2, Unplug } from 'lucide-react';
+import { Bot, BookOpen, ExternalLink, Hand, Inbox as InboxIcon, MessageCircle, MessageSquare, Plus, Search, Send, Sparkles, Trash2, Undo2, Unplug, UserRound } from 'lucide-react';
 import {
   useConnectWhatsappMutation,
   useConversationHandoffMutation,
@@ -718,6 +718,8 @@ export function InboxPage() {
   const toast = useToast();
   const [filter, setFilter] = useState('');
   const list = useListConversationsQuery({ status: filter || undefined }, { pollingInterval: 10000 });
+  const allQ = useListConversationsQuery({}, { pollingInterval: 10000 });
+  const [search, setSearch] = useState('');
   const [active, setActive] = useState(null);
   const msgs = useListConversationMessagesQuery(active?.id, { skip: !active, pollingInterval: 10000 });
   const templates = useListMessageTemplatesQuery();
@@ -733,6 +735,18 @@ export function InboxPage() {
 
   const windowClosed = active?.window_expires_at ? Date.parse(active.window_expires_at) < Date.now() : false;
   const update = (c) => setActive(c); // the list refetches via cache invalidation
+  const all = asList(allQ.data);
+  const counts = { open: all.filter((c) => c.status === 'open').length, human: all.filter((c) => c.status === 'human').length };
+  const unread = all.reduce((n, c) => n + Number(c.unread_count ?? 0), 0);
+  const initials = (n = '?') =>
+    String(n)
+      .replace(/[^\p{L}\p{N} ]/gu, '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase() || '#';
   const empty = !filter && (list.isError || (list.isSuccess && asList(list.data).length === 0));
 
   if (empty) {
@@ -763,63 +777,89 @@ export function InboxPage() {
         title="Inbox"
         description="WhatsApp conversations. Agents reply automatically; take over any time and hand back when done."
       />
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="ib-stats">
+        {[
+          { k: 'total', icon: MessageSquare, label: 'Conversations', value: all.length, tone: 'blue' },
+          { k: 'open', icon: Bot, label: 'With the AI agent', value: counts.open, tone: 'green' },
+          { k: 'human', icon: UserRound, label: 'With your team', value: counts.human, tone: 'orange' },
+          { k: 'unread', icon: Sparkles, label: 'Unread messages', value: unread, tone: 'amber' },
+        ].map((t) => (
+          <div key={t.k} className={`ib-stat tone-${t.tone}`}>
+            <span className="ib-stat-icon">
+              <t.icon size={17} />
+            </span>
+            <div>
+              <b>{number(t.value)}</b>
+              <span>{t.label}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="card ib-shell">
         <div className="inbox">
           <div className="inbox-list">
-            <div style={{ padding: 12, borderBottom: '1px solid var(--divider)' }}>
-              <Select
-                value={filter}
-                options={[
-                  { value: 'open', label: 'With the agent' },
-                  { value: 'human', label: 'With staff' },
-                  { value: 'closed', label: 'Closed' },
-                ]}
-                placeholder="All conversations"
-                onChange={(e) => setFilter(e.target.value)}
-              />
+            <div className="ib-list-head">
+              <div className="ib-search">
+                <Search size={15} />
+                <input placeholder="Search name or number" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="ib-pills">
+                {[
+                  ['', 'All'],
+                  ['open', 'AI agent'],
+                  ['human', 'Staff'],
+                  ['closed', 'Closed'],
+                ].map(([v, l]) => (
+                  <button key={v} type="button" className={filter === v ? 'on' : ''} onClick={() => setFilter(v)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
             <Async state={list}>
-              {(cs) =>
-                cs.length ? (
-                  <>
-                    {cs.map((c) => (
-                      <button key={c.id} className={`inbox-item ${active?.id === c.id ? 'active' : ''}`} onClick={() => setActive(c)}>
-                        <div className="row between">
-                          <b className="text-body-sm">{c.contact_name ?? c.contact_address}</b>
-                          {c.unread_count > 0 && <span className="badge orange plain">{c.unread_count}</span>}
-                        </div>
-                        <div
-                          className="muted small"
-                          style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {c.last_message}
-                        </div>
-                        <div className="row between" style={{ marginTop: 4 }}>
-                          <Badge tone={c.status === 'human' ? 'blue' : ''}>
-                            {c.status === 'human' ? 'With staff' : c.status === 'open' ? 'With agent' : titleCase(c.status)}
-                          </Badge>
-                          <span className="muted text-overline">{dateTime(c.last_message_at)}</span>
-                        </div>
+              {(cs) => {
+                const q = search.trim().toLowerCase();
+                const shown = cs.filter((c) => `${c.contact_name ?? ''} ${c.contact_address ?? ''}`.toLowerCase().includes(q));
+                return shown.length ? (
+                  <div className="ib-items">
+                    {shown.map((c) => (
+                      <button key={c.id} className={`inbox-item ib-item ${active?.id === c.id ? 'active' : ''}`} onClick={() => setActive(c)}>
+                        <span className={`ib-avatar st-${c.status}`}>{initials(c.contact_name ?? c.contact_address)}</span>
+                        <span className="ib-item-body">
+                          <span className="ib-item-top">
+                            <b>{c.contact_name ?? c.contact_address}</b>
+                            <time>{dateTime(c.last_message_at)}</time>
+                          </span>
+                          <span className="ib-item-msg">{c.last_message}</span>
+                          <span className="ib-item-foot">
+                            <span className={`ib-tag st-${c.status}`}>
+                              {c.status === 'human' ? 'With staff' : c.status === 'open' ? 'AI agent' : titleCase(c.status)}
+                            </span>
+                            {c.unread_count > 0 && <span className="ib-unread">{c.unread_count}</span>}
+                          </span>
+                        </span>
                       </button>
                     ))}
-                  </>
+                  </div>
                 ) : (
                   <EmptyState title="No conversations" />
-                )
-              }
+                );
+              }}
             </Async>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 560 }}>
+          <div className="ib-main">
             {active ? (
               <>
-                <div className="card-head">
-                  <div>
-                    <h2>{active.contact_name ?? active.contact_address}</h2>
-                    <div className="card-sub mono">{active.contact_address}</div>
+                <div className="card-head ib-chat-head">
+                  <div className="ib-chat-who">
+                    <span className={`ib-avatar lg st-${active.status}`}>{initials(active.contact_name ?? active.contact_address)}</span>
+                    <div>
+                      <h2>{active.contact_name ?? active.contact_address}</h2>
+                      <div className="card-sub mono">{active.contact_address}</div>
+                    </div>
+                    <span className={`ib-live st-${active.status}`}>
+                      <i /> {active.status === 'human' ? 'You are live' : active.status === 'open' ? 'AI agent replying' : 'Closed'}
+                    </span>
                   </div>
                   {active.status === 'human' ? (
                     <Button
@@ -850,15 +890,7 @@ export function InboxPage() {
                     </Button>
                   )}
                 </div>
-                <div
-                  className="chat"
-                  style={{
-                    flex: 1,
-                    padding: 20,
-                    overflowY: 'auto',
-                    maxHeight: 460,
-                  }}
-                >
+                <div className="chat ib-chat">
                   <Async state={msgs}>
                     {(ms) => (
                       <>
@@ -881,7 +913,7 @@ export function InboxPage() {
                     )}
                   </Async>
                 </div>
-                <div style={{ padding: 16, borderTop: '1px solid var(--divider)' }}>
+                <div className="ib-composer">
                   {windowClosed ? (
                     <div className="row wrap" style={{ gap: 8 }}>
                       <span className="muted small" style={{ flex: 1 }}>
@@ -928,7 +960,7 @@ export function InboxPage() {
                     </div>
                   ) : (
                     <form
-                      className="row"
+                      className="row ib-form"
                       onSubmit={async (e) => {
                         e.preventDefault();
                         if (!text.trim()) return;
@@ -953,7 +985,13 @@ export function InboxPage() {
                 </div>
               </>
             ) : (
-              <EmptyState icon={<MessageSquare />} title="Pick a conversation" />
+              <div className="ib-pick">
+                <span className="ib-pick-orb">
+                  <MessageSquare size={26} />
+                </span>
+                <h3>Select a conversation</h3>
+                <p>Pick a chat on the left to read it, take over from the AI agent, or hand it back.</p>
+              </div>
             )}
           </div>
         </div>
